@@ -1,0 +1,13 @@
+# Node.js specific
+/client/node_modules/
+/server/node_modules/
+npm-debug.log*
+yarn-debug.log*
+
+# claude related files
+/.claude/
+
+#others
+/server/package-lock.json
+/client/package-lock.json
+/server/logs/
