@@ -98,9 +98,8 @@ export const executeQuery = async (query, params = {}) => {
     // Add parameters to request
     Object.keys(params).forEach(key => {
       const value = params[key];
-      if (value !== undefined && value !== null) {
-        request.input(key, value);
-      }
+      // Always bind parameters, including null values
+      request.input(key, value);
     });
 
     const result = await request.query(query);
@@ -132,7 +131,7 @@ export const executeProcedure = async (procedureName, params = {}) => {
       if (param && typeof param === 'object' && param.type && param.value !== undefined) {
         // Typed parameter
         request.input(key, param.type, param.value);
-      } else if (param !== undefined && param !== null) {
+      } else if (param !== undefined) {
         // Auto-detect type
         request.input(key, param);
       }

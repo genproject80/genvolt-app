@@ -313,16 +313,10 @@ export const logout = asyncHandler(async (req, res) => {
 export const getMe = asyncHandler(async (req, res) => {
   const user = req.user;
 
-  // Get user permissions
-  const permissions = await user.getPermissions();
-
   res.json({
     success: true,
     data: {
-      user: {
-        ...user.toPublic(),
-        permissions
-      }
+      user: user.toPublic()
     }
   });
 });

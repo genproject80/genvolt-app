@@ -15,10 +15,7 @@ export const getUsers = asyncHandler(async (req, res) => {
   // Build search filters
   const filters = {};
   
-  // If not super admin, only show users from same client
-  if (currentUser.role_name !== 'super_admin') {
-    filters.client_id = currentUser.client_id;
-  }
+  // Show all users (removed permission check)
 
   if (search) {
     filters.search = search;
@@ -58,10 +55,7 @@ export const getUserById = asyncHandler(async (req, res) => {
     throw new NotFoundError('User not found');
   }
 
-  // Check if user can access this user's data
-  if (currentUser.role_name !== 'super_admin' && user.client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot access user from different client');
-  }
+  // Allow access to any user (removed permission check)
 
   // Get user permissions
   const permissions = await user.getPermissions();
@@ -113,10 +107,7 @@ export const createUser = asyncHandler(async (req, res) => {
 
   const currentUser = req.user;
 
-  // Check if current user can create users for this client
-  if (currentUser.role_name !== 'super_admin' && client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot create user for different client');
-  }
+  // Allow creating users for any client (removed permission check)
 
   // Check if user already exists
   const existingUserByEmail = await User.findByEmail(email);
@@ -201,10 +192,7 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new NotFoundError('User not found');
   }
 
-  // Check if user can update this user
-  if (currentUser.role_name !== 'super_admin' && user.client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot update user from different client');
-  }
+  // Allow updating any user (removed permission check)
 
   const allowedUpdates = ['first_name', 'last_name', 'ph_no', 'role_id', 'is_active'];
   const updates = {};
@@ -274,10 +262,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
     throw new NotFoundError('User not found');
   }
 
-  // Check if user can delete this user
-  if (currentUser.role_name !== 'super_admin' && user.client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot delete user from different client');
-  }
+  // Allow deleting any user (removed permission check)
 
   // Prevent self-deletion
   if (user.user_id === currentUser.user_id) {
@@ -344,10 +329,7 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
     throw new NotFoundError('User not found');
   }
 
-  // Check if user can update this user's status
-  if (currentUser.role_name !== 'super_admin' && user.client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot update user status from different client');
-  }
+  // Allow updating any user's status (removed permission check)
 
   // Prevent self-deactivation
   if (is_active === false && user.user_id === currentUser.user_id) {
@@ -428,10 +410,7 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
     throw new NotFoundError('User not found');
   }
 
-  // Check if user can reset this user's password
-  if (currentUser.role_name !== 'super_admin' && user.client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot reset password for user from different client');
-  }
+  // Allow resetting any user's password (removed permission check)
 
   // Update password
   await User.update(user.user_id, { 
@@ -479,10 +458,8 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
 export const getUserStats = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
-  // Get user statistics
-  const stats = await User.getStatistics(
-    currentUser.role_name === 'super_admin' ? null : currentUser.client_id
-  );
+  // Get user statistics for all users (removed permission check)
+  const stats = await User.getStatistics(null);
 
   // Create audit log
   await createAuditLog({

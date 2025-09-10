@@ -1,53 +1,133 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useClient } from '../../context/ClientContext';
+import AddClientModal from '../../components/modals/AddClientModal';
+import DeleteClientModal from '../../components/modals/DeleteClientModal';
 
 const ClientManagement = () => {
-  // Sample client data
-  const clients = [
-    { 
-      id: 1, 
-      name: 'Acme Corporation', 
-      email: 'contact@acme.com', 
-      contactPerson: 'John Smith',
-      phone: '+1 (555) 123-4567',
-      address: '123 Business Ave, NY 10001',
-      status: 'Active', 
-      deviceCount: 25,
-      createdDate: '2024-01-10'
-    },
-    { 
-      id: 2, 
-      name: 'Tech Solutions Ltd', 
-      email: 'info@techsolutions.com', 
-      contactPerson: 'Sarah Johnson',
-      phone: '+1 (555) 987-6543',
-      address: '456 Tech Park, CA 90210',
-      status: 'Active', 
-      deviceCount: 12,
-      createdDate: '2024-01-08'
-    },
-    { 
-      id: 3, 
-      name: 'Global Industries', 
-      email: 'admin@global.com', 
-      contactPerson: 'Mike Davis',
-      phone: '+1 (555) 456-7890',
-      address: '789 Industrial Blvd, TX 75201',
-      status: 'Inactive', 
-      deviceCount: 8,
-      createdDate: '2024-01-05'
-    },
-  ];
+  const { 
+    clients, 
+    loading, 
+    error, 
+    pagination, 
+    getAllClients, 
+    getClientStats,
+    updateClient,
+    deleteClient,
+    clearError 
+  } = useClient();
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [clientStats, setClientStats] = useState({
+    totalClients: 0,
+    activeClients: 0,
+    totalDevices: 0,
+    avgDevicesPerClient: 0
+  });
+
+  useEffect(() => {
+    const loadData = async () => {
+      await getAllClients({ includeInactive: true });
+      const stats = await getClientStats();
+      if (stats) {
+        setClientStats(stats);
+      }
+    };
+    loadData();
+  }, [getAllClients, getClientStats]);
+
+  const filteredClients = clients.filter(client => {
+    const matchesSearch = searchTerm === '' || 
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === '' ||
+      (statusFilter === 'active' && client.is_active) ||
+      (statusFilter === 'inactive' && !client.is_active);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleAddClient = () => {
+    setShowAddModal(true);
+  };
+
+  const handleEditClient = (client) => {
+    setSelectedClient(client);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteClient = (client) => {
+    setSelectedClient(client);
+    setShowDeleteModal(true);
+  };
+
+  const handleAddSuccess = async () => {
+    await getAllClients({ includeInactive: true });
+    const stats = await getClientStats();
+    if (stats) {
+      setClientStats(stats);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    setShowEditModal(false);
+    setSelectedClient(null);
+    await getAllClients({ includeInactive: true });
+    const stats = await getClientStats();
+    if (stats) {
+      setClientStats(stats);
+    }
+  };
+
+  const handleDeleteSuccess = async () => {
+    setShowDeleteModal(false);
+    setSelectedClient(null);
+    await getAllClients({ includeInactive: true });
+    const stats = await getClientStats();
+    if (stats) {
+      setClientStats(stats);
+    }
+  };
+
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString();
+  };
 
   return (
     <div className="space-y-6">
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+          <span className="block sm:inline">{error}</span>
+          <button
+            className="absolute top-0 bottom-0 right-0 px-4 py-3"
+            onClick={clearError}
+          >
+            <span className="sr-only">Dismiss</span>
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Header with Add Button */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Client Management</h2>
           <p className="text-sm text-gray-600 mt-1">Manage client organizations and their details</p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+        <button 
+          onClick={handleAddClient}
+          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
           <PlusIcon className="w-5 h-5 mr-2" />
           Add Client
         </button>
@@ -64,7 +144,7 @@ const ClientManagement = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Total Clients</h3>
-              <p className="text-2xl font-bold text-blue-600">3</p>
+              <p className="text-2xl font-bold text-blue-600">{clientStats.totalClients}</p>
             </div>
           </div>
         </div>
@@ -78,7 +158,7 @@ const ClientManagement = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Active Clients</h3>
-              <p className="text-2xl font-bold text-green-600">2</p>
+              <p className="text-2xl font-bold text-green-600">{clientStats.activeClients}</p>
             </div>
           </div>
         </div>
@@ -92,7 +172,7 @@ const ClientManagement = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Total Devices</h3>
-              <p className="text-2xl font-bold text-purple-600">45</p>
+              <p className="text-2xl font-bold text-purple-600">{clientStats.totalDevices}</p>
             </div>
           </div>
         </div>
@@ -106,7 +186,7 @@ const ClientManagement = () => {
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Avg Devices/Client</h3>
-              <p className="text-2xl font-bold text-orange-600">15</p>
+              <p className="text-2xl font-bold text-orange-600">{clientStats.avgDevicesPerClient}</p>
             </div>
           </div>
         </div>
@@ -118,10 +198,16 @@ const ClientManagement = () => {
           <input
             type="text"
             placeholder="Search clients..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-        <select className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        <select 
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
           <option value="">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -154,50 +240,72 @@ const ClientManagement = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {clients.map((client) => (
-              <tr key={client.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{client.name}</div>
-                    <div className="text-sm text-gray-500">{client.email}</div>
-                    <div className="text-xs text-gray-400">Created: {client.createdDate}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{client.contactPerson}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div>
-                    <div className="text-sm text-gray-900">{client.phone}</div>
-                    <div className="text-xs text-gray-500">{client.address}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                    {client.deviceCount} devices
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    client.status === 'Active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {client.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
-                    <button className="text-indigo-600 hover:text-indigo-900">
-                      <PencilIcon className="w-4 h-4" />
-                    </button>
-                    <button className="text-red-600 hover:text-red-900">
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                  Loading clients...
                 </td>
               </tr>
-            ))}
+            ) : filteredClients.length === 0 ? (
+              <tr>
+                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                  No clients found
+                </td>
+              </tr>
+            ) : (
+              filteredClients.map((client) => (
+                <tr key={client.client_id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{client.name}</div>
+                      <div className="text-sm text-gray-500">{client.email}</div>
+                      <div className="text-xs text-gray-400">Created: {formatDate(client.created_at)}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{client.contact_person || 'N/A'}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div>
+                      <div className="text-sm text-gray-900">{client.phone || 'N/A'}</div>
+                      <div className="text-xs text-gray-500">{client.Address || 'No address provided'}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                      {client.device_count || 0} devices
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      client.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {client.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleEditClient(client)}
+                        className="text-indigo-600 hover:text-indigo-900" 
+                        title="Edit Client"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteClient(client)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Delete Client"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -205,8 +313,9 @@ const ClientManagement = () => {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-700">
-          Showing <span className="font-medium">1</span> to <span className="font-medium">3</span> of{' '}
-          <span className="font-medium">3</span> results
+          Showing <span className="font-medium">{Math.min(1, filteredClients.length)}</span> to{' '}
+          <span className="font-medium">{filteredClients.length}</span> of{' '}
+          <span className="font-medium">{filteredClients.length}</span> results
         </div>
         <div className="flex space-x-2">
           <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
@@ -217,6 +326,30 @@ const ClientManagement = () => {
           </button>
         </div>
       </div>
+
+      {/* Add Client Modal */}
+      <AddClientModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
+      />
+
+      {/* Edit Client Modal */}
+      <AddClientModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleEditSuccess}
+        client={selectedClient}
+        mode="edit"
+      />
+
+      {/* Delete Client Modal */}
+      <DeleteClientModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onSuccess={handleDeleteSuccess}
+        client={selectedClient}
+      />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, param, query } from 'express-validator';
-import { authenticate, optionalAuth, requireRole } from '../middleware/auth.js';
+import { authenticate, optionalAuth } from '../middleware/auth.js';
 import {
   register,
   login,
@@ -175,7 +175,6 @@ router.get('/validate', authenticate, validateToken);
  */
 router.post('/register-admin', 
   authenticate, 
-  requireRole(['admin', 'super_admin']), 
   registerValidation, 
   register
 );

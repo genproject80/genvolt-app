@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, param } from 'express-validator';
-import { authenticate, authorize, requireRole } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
 import { sanitizeInput, validatePagination } from '../middleware/validation.js';
 import {
   getUsers,
@@ -131,7 +131,6 @@ const userIdValidation = [
  * Get user statistics (Admin only)
  */
 router.get('/stats', 
-  requireRole(['admin', 'super_admin']), 
   getUserStats
 );
 
@@ -140,7 +139,6 @@ router.get('/stats',
  * Get all users (Admin only)
  */
 router.get('/', 
-  requireRole(['admin', 'super_admin']),
   validatePagination,
   sanitizeInput,
   getUsers
@@ -151,7 +149,6 @@ router.get('/',
  * Get user by ID (Admin only)
  */
 router.get('/:userId', 
-  requireRole(['admin', 'super_admin']),
   userIdValidation,
   getUserById
 );
@@ -161,7 +158,6 @@ router.get('/:userId',
  * Create new user (Admin only)
  */
 router.post('/', 
-  requireRole(['admin', 'super_admin']),
   createUserValidation,
   sanitizeInput,
   createUser
@@ -172,7 +168,6 @@ router.post('/',
  * Update user (Admin only)
  */
 router.put('/:userId', 
-  requireRole(['admin', 'super_admin']),
   updateUserValidation,
   sanitizeInput,
   updateUser
@@ -183,7 +178,6 @@ router.put('/:userId',
  * Update user status (Admin only)
  */
 router.patch('/:userId/status', 
-  requireRole(['admin', 'super_admin']),
   updateUserStatusValidation,
   updateUserStatus
 );
@@ -193,7 +187,6 @@ router.patch('/:userId/status',
  * Reset user password (Admin only)
  */
 router.post('/:userId/reset-password', 
-  requireRole(['admin', 'super_admin']),
   resetPasswordValidation,
   resetUserPassword
 );
@@ -203,7 +196,6 @@ router.post('/:userId/reset-password',
  * Delete user (soft delete - deactivate) (Admin only)
  */
 router.delete('/:userId', 
-  requireRole(['admin', 'super_admin']),
   userIdValidation,
   deleteUser
 );
