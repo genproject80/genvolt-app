@@ -139,27 +139,27 @@ router.post('/',
   createRole
 );
 
-// Update role (requires Edit_role permission)
-router.put('/:id', 
-  requirePermission('Edit_role'),
-  updateRoleValidation, 
+// Update role (requires Edit Role permission)
+router.put('/:id',
+  requirePermission('Edit Role'),
+  updateRoleValidation,
   updateRole
 );
 
-// Delete role (requires Edit_role permission)
-router.delete('/:id', 
-  requirePermission('Edit_role'),
-  roleIdValidation, 
+// Delete role (requires Edit Role permission)
+router.delete('/:id',
+  requirePermission('Edit Role'),
+  roleIdValidation,
   deleteRole
 );
 
 // Get role permissions
 router.get('/:id/permissions', roleIdValidation, getRolePermissions);
 
-// Update role permissions (requires Edit_role permission)
-router.put('/:id/permissions', 
-  requirePermission('Edit_role'),
-  updateRolePermissionsValidation, 
+// Update role permissions (requires Edit Role permission)
+router.put('/:id/permissions',
+  requirePermission('Edit Role'),
+  updateRolePermissionsValidation,
   updateRolePermissions
 );
 

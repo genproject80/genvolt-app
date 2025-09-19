@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useClient } from '../../context/ClientContext';
+import { useClientPermissions } from '../../hooks/useClientPermissions';
+import AccessDeniedModal from '../common/AccessDeniedModal';
 
 const AddClientModal = ({ isOpen, onClose, onSuccess, client = null, mode = 'add' }) => {
   const { createClient, updateClient, getClientHierarchy, clientHierarchy, loading, error } = useClient();
+  const { canCreateClient, canEditClient } = useClientPermissions();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -197,6 +200,20 @@ const AddClientModal = ({ isOpen, onClose, onSuccess, client = null, mode = 'add
   };
 
   if (!isOpen) return null;
+
+  // Check permissions - prevent unauthorized access
+  const canPerformAction = mode === 'edit' ? canEditClient : canCreateClient;
+
+  if (!canPerformAction) {
+    return (
+      <AccessDeniedModal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Access Denied"
+        message={`You don't have permission to ${mode} clients.`}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -436,8 +453,9 @@ const AddClientModal = ({ isOpen, onClose, onSuccess, client = null, mode = 'add
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || loading}
+              disabled={isSubmitting || loading || !canPerformAction}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              title={!canPerformAction ? `You don't have permission to ${mode} clients` : ''}
             >
               {isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Creating...') : (mode === 'edit' ? 'Update Client' : 'Create Client')}
             </button>

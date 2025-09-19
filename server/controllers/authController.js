@@ -1,4 +1,5 @@
 import { User } from '../models/User.js';
+import { Permission } from '../models/Permission.js';
 import { generateTokenPair, verifyRefreshToken, getJWTCookieOptions, blacklistToken, getTokenExpiration } from '../utils/jwt.js';
 import { logger, logAuth, logSecurity } from '../utils/logger.js';
 import { asyncHandler, ValidationError, AuthenticationError, ConflictError } from '../middleware/errorHandler.js';
@@ -461,6 +462,43 @@ export const validateToken = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get current user permissions
+ * GET /api/auth/permissions
+ */
+export const getUserPermissions = asyncHandler(async (req, res) => {
+  const user = req.user;
+
+  try {
+    // Get user's role permissions
+    const permissions = await Permission.getRolePermissions(user.role_id);
+    const permissionNames = permissions.map(p => p.permission_name);
+
+    // Create audit log
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'PERMISSION_CHECK',
+      action: 'PERMISSIONS_VIEWED',
+      message: 'User viewed their permissions',
+      target_type: 'USER',
+      target_id: user.user_id,
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
+    });
+
+    res.json({
+      success: true,
+      message: 'User permissions retrieved successfully',
+      data: {
+        permissions: permissionNames
+      }
+    });
+  } catch (error) {
+    logger.error('getUserPermissions error:', error);
+    throw error;
+  }
+});
+
 export default {
   register,
   login,
@@ -469,5 +507,6 @@ export default {
   getMe,
   updateMe,
   changePassword,
-  validateToken
+  validateToken,
+  getUserPermissions
 };

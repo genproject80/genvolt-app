@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
-import { 
-  XMarkIcon, 
-  CogIcon, 
+import {
+  XMarkIcon,
+  CogIcon,
   MagnifyingGlassIcon,
   CheckIcon,
   MinusIcon
 } from '@heroicons/react/24/outline';
 import { useRole } from '../../context/RoleContext';
 import { permissionService } from '../../services/permissionService';
+import { useRolePermissions } from '../../hooks/usePermissions';
 
 const PermissionModal = ({ isOpen, onClose, role = null, onSuccess }) => {
   const { updateRolePermissions, loading, error } = useRole();
+  const { canEditRole } = useRolePermissions();
   
   const [rolePermissions, setRolePermissions] = useState([]);
   const [allPermissions, setAllPermissions] = useState([]);
@@ -161,6 +163,60 @@ const PermissionModal = ({ isOpen, onClose, role = null, onSuccess }) => {
       onClose();
     }
   };
+
+  // Check permissions - prevent unauthorized access
+  if (!canEditRole) {
+    return (
+      <Transition appear show={isOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={handleClose}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-center align-middle shadow-xl transition-all">
+                  <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                    <XMarkIcon className="w-6 h-6 text-red-600" />
+                  </div>
+                  <Dialog.Title as="h3" className="text-lg font-medium text-gray-900 mb-2">
+                    Access Denied
+                  </Dialog.Title>
+                  <p className="text-sm text-gray-500 mb-6">
+                    You don't have permission to manage role permissions.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  >
+                    OK
+                  </button>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+    );
+  }
 
   return (
     <Transition appear show={isOpen} as={Fragment}>

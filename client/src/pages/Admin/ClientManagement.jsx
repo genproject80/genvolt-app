@@ -1,21 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useClient } from '../../context/ClientContext';
+import { useClientPermissions } from '../../hooks/useClientPermissions';
 import AddClientModal from '../../components/modals/AddClientModal';
 import DeleteClientModal from '../../components/modals/DeleteClientModal';
 
 const ClientManagement = () => {
-  const { 
-    clients, 
-    loading, 
-    error, 
-    pagination, 
-    getAllClients, 
+  const {
+    clients,
+    loading,
+    error,
+    pagination,
+    getAllClients,
     getClientStats,
     updateClient,
     deleteClient,
-    clearError 
+    clearError
   } = useClient();
+
+  const {
+    canViewClient,
+    canCreateClient,
+    canEditClient,
+    canDeleteClient,
+    loading: permissionLoading
+  } = useClientPermissions();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -100,6 +109,23 @@ const ClientManagement = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Show access denied message if user cannot view clients
+  if (!canViewClient) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
+          <p className="text-gray-500">You don't have permission to view client information.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Error Display */}
@@ -124,13 +150,15 @@ const ClientManagement = () => {
           <h2 className="text-xl font-semibold text-gray-900">Client Management</h2>
           <p className="text-sm text-gray-600 mt-1">Manage client organizations and their details</p>
         </div>
-        <button 
-          onClick={handleAddClient}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Add Client
-        </button>
+        {canCreateClient && (
+          <button
+            onClick={handleAddClient}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            Add Client
+          </button>
+        )}
       </div>
 
       {/* Client Statistics */}
@@ -287,20 +315,27 @@ const ClientManagement = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleEditClient(client)}
-                        className="text-indigo-600 hover:text-indigo-900" 
-                        title="Edit Client"
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteClient(client)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete Client"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                      {canEditClient && (
+                        <button
+                          onClick={() => handleEditClient(client)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="Edit Client"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDeleteClient && (
+                        <button
+                          onClick={() => handleDeleteClient(client)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Client"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {!canEditClient && !canDeleteClient && (
+                        <span className="text-gray-400 text-xs">No actions available</span>
+                      )}
                     </div>
                   </td>
                 </tr>

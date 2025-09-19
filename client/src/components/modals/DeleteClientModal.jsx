@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useClient } from '../../context/ClientContext';
+import { useClientPermissions } from '../../hooks/useClientPermissions';
+import AccessDeniedModal from '../common/AccessDeniedModal';
 
 const DeleteClientModal = ({ isOpen, onClose, onSuccess, client }) => {
   const { deleteClient, loading } = useClient();
+  const { canDeleteClient } = useClientPermissions();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -35,6 +38,18 @@ const DeleteClientModal = ({ isOpen, onClose, onSuccess, client }) => {
   };
 
   if (!isOpen || !client) return null;
+
+  // Check permissions - prevent unauthorized access
+  if (!canDeleteClient) {
+    return (
+      <AccessDeniedModal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Access Denied"
+        message="You don't have permission to delete clients."
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -119,8 +134,9 @@ const DeleteClientModal = ({ isOpen, onClose, onSuccess, client }) => {
             </button>
             <button
               onClick={handleDelete}
-              disabled={isDeleting || loading}
+              disabled={isDeleting || loading || !canDeleteClient}
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 flex items-center"
+              title={!canDeleteClient ? "You don't have permission to delete clients" : ''}
             >
               {isDeleting ? (
                 <>

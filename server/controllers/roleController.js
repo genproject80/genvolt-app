@@ -178,11 +178,6 @@ export const updateRole = asyncHandler(async (req, res) => {
       throw new NotFoundError('Role not found');
     }
 
-    // Check if it's a system role
-    const systemRoles = ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'CLIENT_ADMIN', 'CLIENT_USER'];
-    if (systemRoles.includes(existingRole.role_name)) {
-      throw new ValidationError('Cannot modify system roles');
-    }
 
     // Check if new role name already exists (excluding current role)
     if (role_name !== existingRole.role_name) {
@@ -232,11 +227,6 @@ export const deleteRole = asyncHandler(async (req, res) => {
       throw new NotFoundError('Role not found');
     }
 
-    // Check if it's a system role
-    const systemRoles = ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'CLIENT_ADMIN', 'CLIENT_USER'];
-    if (systemRoles.includes(role.role_name)) {
-      throw new ValidationError('Cannot delete system roles');
-    }
 
     // Check if role has assigned users
     const roleUsers = await Role.getRoleUsers(roleId);
@@ -325,10 +315,6 @@ export const updateRolePermissions = asyncHandler(async (req, res) => {
       throw new NotFoundError('Role not found');
     }
 
-    // Check if it's SYSTEM_ADMIN role
-    if (role.role_name === 'SYSTEM_ADMIN') {
-      throw new ValidationError('Cannot modify SYSTEM_ADMIN role permissions');
-    }
 
     // Validate permission IDs
     if (permission_ids.length > 0) {

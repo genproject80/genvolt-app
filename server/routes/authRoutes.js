@@ -9,7 +9,8 @@ import {
   getMe,
   updateMe,
   changePassword,
-  validateToken
+  validateToken,
+  getUserPermissions
 } from '../controllers/authController.js';
 
 const router = express.Router();
@@ -166,6 +167,12 @@ router.put('/change-password', authenticate, changePasswordValidation, changePas
  * Validate current token
  */
 router.get('/validate', authenticate, validateToken);
+
+/**
+ * GET /api/auth/permissions
+ * Get current user's permissions
+ */
+router.get('/permissions', authenticate, getUserPermissions);
 
 // Admin only routes
 

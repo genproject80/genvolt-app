@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClientProvider } from './context/ClientContext';
 import { RoleProvider } from './context/RoleContext';
+import { PermissionProvider } from './context/PermissionContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -91,15 +92,17 @@ const AppRoutes = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <ClientProvider>
-        <RoleProvider>
-          <Router>
-            <div className="App">
-              <AppRoutes />
-            </div>
-          </Router>
-        </RoleProvider>
-      </ClientProvider>
+      <PermissionProvider>
+        <ClientProvider>
+          <RoleProvider>
+            <Router>
+              <div className="App">
+                <AppRoutes />
+              </div>
+            </Router>
+          </RoleProvider>
+        </ClientProvider>
+      </PermissionProvider>
     </AuthProvider>
   );
 };

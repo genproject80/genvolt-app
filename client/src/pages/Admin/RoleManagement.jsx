@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRole } from '../../context/RoleContext';
-import { 
-  PlusIcon, 
+import { useRolePermissions } from '../../hooks/usePermissions';
+import {
+  PlusIcon,
   MagnifyingGlassIcon,
   UsersIcon,
   ShieldCheckIcon,
@@ -29,6 +30,8 @@ const RoleManagement = () => {
     deleteRole,
     clearError
   } = useRole();
+
+  const { canCreateRole, canEditRole, loading: permissionLoading } = useRolePermissions();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -160,13 +163,15 @@ const RoleManagement = () => {
           </p>
         </div>
         <div className="mt-4 sm:mt-0">
-          <button
-            onClick={handleCreateRole}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-            New Role
-          </button>
+          {canCreateRole && (
+            <button
+              onClick={handleCreateRole}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+              New Role
+            </button>
+          )}
         </div>
       </div>
 
@@ -266,7 +271,7 @@ const RoleManagement = () => {
             <p className="mt-1 text-sm text-gray-500">
               {searchTerm ? 'Try adjusting your search criteria' : 'Get started by creating a new role.'}
             </p>
-            {!searchTerm && (
+            {!searchTerm && canCreateRole && (
               <div className="mt-6">
                 <button
                   onClick={handleCreateRole}
@@ -314,21 +319,25 @@ const RoleManagement = () => {
                       >
                         <EyeIcon className="h-5 w-5" />
                       </button>
-                      <button
-                        onClick={() => handleManagePermissions(role)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        title="Manage Permissions"
-                      >
-                        <CogIcon className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => handleEditRole(role)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        title="Edit Role"
-                      >
-                        <PencilIcon className="h-5 w-5" />
-                      </button>
-                      {!['SYSTEM_ADMIN', 'SUPER_ADMIN', 'CLIENT_ADMIN', 'CLIENT_USER'].includes(role.role_name) && (
+                      {canEditRole && (
+                        <button
+                          onClick={() => handleManagePermissions(role)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="Manage Permissions"
+                        >
+                          <CogIcon className="h-5 w-5" />
+                        </button>
+                      )}
+                      {canEditRole && (
+                        <button
+                          onClick={() => handleEditRole(role)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="Edit Role"
+                        >
+                          <PencilIcon className="h-5 w-5" />
+                        </button>
+                      )}
+                      {canEditRole && (
                         <button
                           onClick={() => handleDeleteRole(role)}
                           className="text-red-600 hover:text-red-900"

@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, param, query } from 'express-validator';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permissionCheck.js';
 import {
   getAllClients,
   getClientById,
@@ -161,72 +162,82 @@ const queryValidation = [
 // All client routes require authentication
 router.use(authenticate);
 
-// Public client routes (accessible by all authenticated users)
+// Protected client routes (require specific permissions)
 
 /**
  * GET /api/clients/hierarchy
- * Get client hierarchy for dropdown
+ * Get client hierarchy for dropdown (requires View Client permission)
  */
-router.get('/hierarchy', getClientHierarchy);
+router.get('/hierarchy',
+  requirePermission('View Client'),
+  getClientHierarchy
+);
 
 /**
  * GET /api/clients/stats
- * Get client statistics
+ * Get client statistics (requires View Client permission)
  */
-router.get('/stats', 
+router.get('/stats',
+  requirePermission('View Client'),
   getClientStats
 );
 
 /**
  * POST /api/clients/check-email
- * Check if email is available
+ * Check if email is available (requires View Client permission)
  */
-router.post('/check-email', 
+router.post('/check-email',
+  requirePermission('View Client'),
   emailCheckValidation,
   checkEmailAvailability
 );
 
 /**
  * GET /api/clients
- * Get all clients
+ * Get all clients (requires View Client permission)
  */
-router.get('/', 
+router.get('/',
+  requirePermission('View Client'),
   queryValidation,
   getAllClients
 );
 
 /**
  * GET /api/clients/:id
- * Get client by ID
+ * Get client by ID (requires View Client permission)
  */
-router.get('/:id', 
+router.get('/:id',
+  requirePermission('View Client'),
   clientIdValidation,
   getClientById
 );
 
 /**
  * POST /api/clients
- * Create a new client
+ * Create a new client (requires Create Client permission)
  */
-router.post('/', 
+router.post('/',
+  requirePermission('Create Client'),
   createClientValidation,
   createClient
 );
 
 /**
  * PUT /api/clients/:id
- * Update an existing client
+ * Update an existing client (requires Edit Client permission)
  */
-router.put('/:id', 
+router.put('/:id',
+  requirePermission('Edit Client'),
   updateClientValidation,
   updateClient
 );
 
 /**
  * DELETE /api/clients/:id
- * Delete a client (soft delete)
+ * Delete a client (requires Delete Client permission)
  */
-router.delete('/:id', 
+router.delete('/:id',
+  requirePermission('Delete Client'),
   clientIdValidation,
   deleteClient
 );

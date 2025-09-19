@@ -162,7 +162,7 @@ export const requireSystemAdmin = () => {
 
       // Check if user is SYSTEM_ADMIN role
       const isSystemAdmin = await Permission.roleHasPermission(user.role_id, 'Create Role') &&
-                           await Permission.roleHasPermission(user.role_id, 'Edit_role') &&
+                           await Permission.roleHasPermission(user.role_id, 'Edit Role') &&
                            await Permission.roleHasPermission(user.role_id, 'Create User') &&
                            await Permission.roleHasPermission(user.role_id, 'Edit User') &&
                            await Permission.roleHasPermission(user.role_id, 'Delete User');

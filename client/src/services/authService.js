@@ -342,7 +342,7 @@ export const authService = {
   getTokenInfo() {
     try {
       const { accessToken } = JWTUtils.getStoredTokens();
-      
+
       if (!accessToken) {
         return null;
       }
@@ -360,6 +360,25 @@ export const authService = {
     } catch (error) {
       console.error('Failed to get token info:', error);
       return null;
+    }
+  },
+
+  /**
+   * Get current user permissions
+   * @returns {Promise<Object>} User permissions response
+   */
+  async getUserPermissions() {
+    try {
+      const response = await api.get('/auth/permissions');
+      return response.data;
+    } catch (error) {
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Failed to fetch user permissions');
+      } else if (error.request) {
+        throw new Error('Network error. Please check your connection.');
+      } else {
+        throw new Error(error.message || 'Failed to fetch user permissions');
+      }
     }
   }
 };
