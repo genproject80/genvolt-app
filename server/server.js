@@ -19,6 +19,8 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
+import roleRoutes from './routes/roleRoutes.js';
+import permissionRoutes from './routes/permissionRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -120,6 +122,8 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/permissions', permissionRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -130,7 +134,9 @@ app.get('/api', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
-      clients: '/api/clients'
+      clients: '/api/clients',
+      roles: '/api/roles',
+      permissions: '/api/permissions'
     }
   });
 });

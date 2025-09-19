@@ -32,8 +32,7 @@ const AdminPanel = () => {
       id: 'roles',
       name: 'Role Management',
       icon: ShieldCheckIcon,
-      component: RoleManagement,
-      disabled: true
+      component: RoleManagement
     },
     {
       id: 'sessions',

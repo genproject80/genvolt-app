@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClientProvider } from './context/ClientContext';
+import { RoleProvider } from './context/RoleContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -91,11 +92,13 @@ const App = () => {
   return (
     <AuthProvider>
       <ClientProvider>
-        <Router>
-          <div className="App">
-            <AppRoutes />
-          </div>
-        </Router>
+        <RoleProvider>
+          <Router>
+            <div className="App">
+              <AppRoutes />
+            </div>
+          </Router>
+        </RoleProvider>
       </ClientProvider>
     </AuthProvider>
   );
