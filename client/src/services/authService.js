@@ -26,17 +26,25 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor to handle auth errors and rate limiting
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   async (error) => {
     const originalRequest = error.config;
-    
+
+    // Handle rate limiting
+    if (error.response?.status === 429) {
+      console.warn('Rate limit exceeded. Please wait before making more requests.');
+      const retryAfter = error.response.headers['retry-after'] || 60;
+      const errorMessage = `Too many requests. Please wait ${retryAfter} seconds before trying again.`;
+      return Promise.reject(new Error(errorMessage));
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       try {
         // Try to refresh token
         const { refreshToken } = JWTUtils.getStoredTokens();
@@ -50,15 +58,20 @@ api.interceptors.response.use(
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
       }
-      
+
       // If refresh fails, clear tokens and redirect to login
       JWTUtils.clearTokens();
       window.location.href = '/login';
     }
-    
+
     return Promise.reject(error);
   }
 );
+
+// Cache to prevent multiple simultaneous validation calls
+let validationPromise = null;
+let lastValidationTime = 0;
+const VALIDATION_CACHE_TIME = 5000; // 5 seconds
 
 export const authService = {
   async login(email, password, rememberMe = false) {
@@ -171,32 +184,54 @@ export const authService = {
         throw new Error('Token is required');
       }
 
-      // Real API call to validate token
-      const response = await api.get('/auth/validate', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      const { data } = response.data;
-      const { user } = data;
+      // Check if we have a recent validation in progress or recently completed
+      const now = Date.now();
+      if (validationPromise && (now - lastValidationTime) < VALIDATION_CACHE_TIME) {
+        return await validationPromise;
+      }
 
-      // Transform user data to match frontend format
-      return {
-        id: user.user_id,
-        email: user.email,
-        name: `${user.first_name} ${user.last_name}`,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        role: user.role_name || 'user',
-        avatar: null
-      };
-      
+      // Create new validation promise
+      validationPromise = this._performValidation(token);
+      lastValidationTime = now;
+
+      const result = await validationPromise;
+
+      // Clear the promise after successful completion
+      setTimeout(() => {
+        validationPromise = null;
+      }, VALIDATION_CACHE_TIME);
+
+      return result;
     } catch (error) {
+      // Clear promise on error
+      validationPromise = null;
       // Clear invalid tokens
       JWTUtils.clearTokens();
       throw new Error(error.message || 'Token validation failed');
     }
+  },
+
+  async _performValidation(token) {
+    // Real API call to validate token
+    const response = await api.get('/auth/validate', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const { data } = response.data;
+    const { user } = data;
+
+    // Transform user data to match frontend format
+    return {
+      id: user.user_id,
+      email: user.email,
+      name: `${user.first_name} ${user.last_name}`,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role_name || 'user',
+      avatar: null
+    };
   },
 
   async logout() {

@@ -1,21 +1,83 @@
 import { User } from '../models/User.js';
+import { Role } from '../models/Role.js';
 import { logger, logAuth, logSecurity } from '../utils/logger.js';
 import { asyncHandler, ValidationError, AuthenticationError, ConflictError, NotFoundError, AuthorizationError } from '../middleware/errorHandler.js';
 import { createAuditLog, ACTIVITY_TYPES, AUDIT_ACTIONS, TARGET_TYPES } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
 
 /**
- * Get all users (Admin only)
+ * Helper function to check if current user can access target user
+ * @param {Object} currentUser - Current authenticated user
+ * @param {Object} targetUser - Target user being accessed
+ * @returns {boolean} Whether access is allowed
+ */
+const canAccessUser = (currentUser, targetUser) => {
+  // System/Super admins can access all users
+  if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name)) {
+    return true;
+  }
+
+  // CLIENT_ADMIN can only access users within their client
+  if (currentUser.role_name === 'CLIENT_ADMIN') {
+    return currentUser.client_id === targetUser.client_id;
+  }
+
+  // CLIENT_USER can only access their own data
+  return currentUser.user_id === targetUser.user_id;
+};
+
+/**
+ * Helper function to validate role assignment permissions
+ * @param {Object} currentUser - Current authenticated user
+ * @param {string} targetRoleName - Role name being assigned
+ * @param {number} targetClientId - Client ID for the user being created/updated
+ * @returns {Promise<boolean>} Whether role assignment is allowed
+ */
+const canAssignRole = async (currentUser, targetRoleName, targetClientId) => {
+  try {
+    // Data-driven permission check - get user's permissions from database
+    const permissions = await currentUser.getPermissions?.() || [];
+
+    // Check if user has 'Edit User' permission (needed to assign roles)
+    const hasEditUserPermission = permissions.includes('Edit User') ||
+                                 permissions.includes('Create User');
+
+    if (!hasEditUserPermission) {
+      return false;
+    }
+
+    // CLIENT_ADMIN can only create users within their own client (business rule)
+    if (currentUser.role_name === 'CLIENT_ADMIN' && targetClientId !== currentUser.client_id) {
+      return false;
+    }
+
+    // If user has the required permissions, allow role assignment
+    // All other restrictions are data-driven based on role_permission table
+    return true;
+  } catch (error) {
+    logger.error('Error checking role assignment permissions:', error);
+    return false;
+  }
+};
+
+/**
+ * Get all users with hierarchical access control
  * GET /api/users
  */
 export const getUsers = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = '', sortBy = 'created_at', sortOrder = 'desc' } = req.query;
   const currentUser = req.user;
 
-  // Build search filters
+  // Build search filters with hierarchical access control
   const filters = {};
-  
-  // Show all users (removed permission check)
+
+  // Apply client-scoped filtering based on role
+  if (currentUser.role_name === 'CLIENT_ADMIN') {
+    filters.client_id = currentUser.client_id;
+  } else if (currentUser.role_name === 'CLIENT_USER') {
+    filters.user_id = currentUser.user_id;
+  }
+  // SYSTEM_ADMIN and SUPER_ADMIN can see all users (no additional filters)
 
   if (search) {
     filters.search = search;
@@ -42,7 +104,7 @@ export const getUsers = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get user by ID
+ * Get user by ID with hierarchical access control
  * GET /api/users/:userId
  */
 export const getUserById = asyncHandler(async (req, res) => {
@@ -50,12 +112,15 @@ export const getUserById = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
   const user = await User.findById(parseInt(userId));
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // Allow access to any user (removed permission check)
+  // Check hierarchical access control
+  if (!canAccessUser(currentUser, user)) {
+    throw new AuthorizationError('Access denied to this user');
+  }
 
   // Get user permissions
   const permissions = await user.getPermissions();
@@ -84,7 +149,7 @@ export const getUserById = asyncHandler(async (req, res) => {
 });
 
 /**
- * Create new user (Admin only)
+ * Create new user with hierarchical validation
  * POST /api/users
  */
 export const createUser = asyncHandler(async (req, res) => {
@@ -94,20 +159,35 @@ export const createUser = asyncHandler(async (req, res) => {
     throw new ValidationError('Validation failed', errors.array());
   }
 
-  const { 
-    client_id, 
-    first_name, 
-    last_name, 
-    email, 
-    ph_no, 
-    password, 
-    user_name, 
-    role_id 
+  const {
+    client_id,
+    first_name,
+    last_name,
+    email,
+    ph_no,
+    password,
+    user_name,
+    role_id
   } = req.body;
 
   const currentUser = req.user;
 
-  // Allow creating users for any client (removed permission check)
+  // Validate client access for CLIENT_ADMIN
+  if (currentUser.role_name === 'CLIENT_ADMIN' && client_id !== currentUser.client_id) {
+    throw new AuthorizationError('Cannot create users for other clients');
+  }
+
+  // Validate role assignment permissions
+  if (role_id) {
+    const targetRole = await Role.findById(role_id);
+    if (!targetRole) {
+      throw new ValidationError('Invalid role specified');
+    }
+
+    if (!(await canAssignRole(currentUser, targetRole.role_name, client_id))) {
+      throw new AuthorizationError(`Cannot assign role ${targetRole.role_name}`);
+    }
+  }
 
   // Check if user already exists
   const existingUserByEmail = await User.findByEmail(email);
@@ -173,7 +253,7 @@ export const createUser = asyncHandler(async (req, res) => {
 });
 
 /**
- * Update user (Admin only)
+ * Update user with hierarchical validation
  * PUT /api/users/:userId
  */
 export const updateUser = asyncHandler(async (req, res) => {
@@ -187,14 +267,17 @@ export const updateUser = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
   const user = await User.findById(parseInt(userId));
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // Allow updating any user (removed permission check)
+  // Check hierarchical access control
+  if (!canAccessUser(currentUser, user)) {
+    throw new AuthorizationError('Access denied to this user');
+  }
 
-  const allowedUpdates = ['first_name', 'last_name', 'ph_no', 'role_id', 'is_active'];
+  const allowedUpdates = ['first_name', 'last_name', 'ph_no', 'role_id', 'client_id', 'is_active'];
   const updates = {};
 
   // Filter allowed updates
@@ -206,6 +289,23 @@ export const updateUser = asyncHandler(async (req, res) => {
 
   if (Object.keys(updates).length === 0) {
     throw new ValidationError('No valid fields provided for update');
+  }
+
+  // Validate role assignment if role is being updated
+  if (updates.role_id && updates.role_id !== user.role_id) {
+    const targetRole = await Role.findById(updates.role_id);
+    if (!targetRole) {
+      throw new ValidationError('Invalid role specified');
+    }
+
+    if (!(await canAssignRole(currentUser, targetRole.role_name, user.client_id))) {
+      throw new AuthorizationError(`Cannot assign role ${targetRole.role_name}`);
+    }
+
+    // Prevent self-role modification
+    if (user.user_id === currentUser.user_id) {
+      throw new ValidationError('Cannot modify your own role');
+    }
   }
 
   // Prevent self-deactivation
@@ -249,7 +349,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 });
 
 /**
- * Delete user (Admin only)
+ * Delete user with hierarchical validation
  * DELETE /api/users/:userId
  */
 export const deleteUser = asyncHandler(async (req, res) => {
@@ -257,12 +357,15 @@ export const deleteUser = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
   const user = await User.findById(parseInt(userId));
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // Allow deleting any user (removed permission check)
+  // Check hierarchical access control
+  if (!canAccessUser(currentUser, user)) {
+    throw new AuthorizationError('Access denied to this user');
+  }
 
   // Prevent self-deletion
   if (user.user_id === currentUser.user_id) {
@@ -270,10 +373,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
   }
 
   // Soft delete user by deactivating
-  const updatedUser = await User.update(user.user_id, { 
-    is_active: false,
-    deactivated_at: new Date(),
-    deactivated_by_user_id: currentUser.user_id
+  const updatedUser = await User.update(user.user_id, {
+    is_active: false
   }, currentUser.user_id);
 
   // Log user deletion
@@ -309,7 +410,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
 });
 
 /**
- * Activate/Deactivate user (Admin only)
+ * Activate/Deactivate user with hierarchical validation
  * PATCH /api/users/:userId/status
  */
 export const updateUserStatus = asyncHandler(async (req, res) => {
@@ -324,12 +425,15 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
   const user = await User.findById(parseInt(userId));
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // Allow updating any user's status (removed permission check)
+  // Check hierarchical access control
+  if (!canAccessUser(currentUser, user)) {
+    throw new AuthorizationError('Access denied to this user');
+  }
 
   // Prevent self-deactivation
   if (is_active === false && user.user_id === currentUser.user_id) {
@@ -337,15 +441,8 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
   }
 
   // Update user status
-  const updates = { 
-    is_active,
-    ...(is_active ? { 
-      activated_at: new Date(),
-      activated_by_user_id: currentUser.user_id
-    } : { 
-      deactivated_at: new Date(),
-      deactivated_by_user_id: currentUser.user_id
-    })
+  const updates = {
+    is_active
   };
 
   const updatedUser = await User.update(user.user_id, updates, currentUser.user_id);
@@ -390,7 +487,7 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
 });
 
 /**
- * Reset user password (Admin only)
+ * Reset user password with hierarchical validation
  * POST /api/users/:userId/reset-password
  */
 export const resetUserPassword = asyncHandler(async (req, res) => {
@@ -405,12 +502,15 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
   const user = await User.findById(parseInt(userId));
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // Allow resetting any user's password (removed permission check)
+  // Check hierarchical access control
+  if (!canAccessUser(currentUser, user)) {
+    throw new AuthorizationError('Access denied to this user');
+  }
 
   // Update password
   await User.update(user.user_id, { 
@@ -452,14 +552,19 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get user statistics (Admin only)
+ * Get user statistics with hierarchical filtering
  * GET /api/users/stats
  */
 export const getUserStats = asyncHandler(async (req, res) => {
   const currentUser = req.user;
 
-  // Get user statistics for all users (removed permission check)
-  const stats = await User.getStatistics(null);
+  // Apply client-scoped filtering for statistics
+  let clientFilter = null;
+  if (currentUser.role_name === 'CLIENT_ADMIN') {
+    clientFilter = currentUser.client_id;
+  }
+
+  const stats = await User.getStatistics(clientFilter);
 
   // Create audit log
   await createAuditLog({

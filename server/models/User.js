@@ -22,6 +22,10 @@ export class User {
     this.created_at = userData.created_at;
     this.updated_at = userData.updated_at;
     this.updated_by_user_id = userData.updated_by_user_id;
+
+    // Include joined data from roles and clients tables
+    this.role_name = userData.role_name;
+    this.client_name = userData.client_name;
   }
 
   /**
@@ -483,6 +487,11 @@ export class User {
         params.client_id = filters.client_id;
       }
 
+      if (filters.user_id) {
+        conditions.push('u.user_id = @user_id');
+        params.user_id = filters.user_id;
+      }
+
       if (filters.is_active !== undefined) {
         conditions[0] = 'u.is_active = @is_active';
         params.is_active = filters.is_active;
@@ -573,6 +582,43 @@ export class User {
     } catch (error) {
       logger.error('Error finding users', { error: error.message, filters, page, limit });
       throw new Error('Failed to fetch users');
+    }
+  }
+
+  /**
+   * Find users by role within client scope
+   * @param {number} roleId - Role ID to filter by
+   * @param {number|null} clientId - Client ID to filter by (null for all clients)
+   * @returns {Promise<User[]>} Array of users
+   */
+  static async findByRoleAndClient(roleId, clientId = null) {
+    try {
+      const params = { roleId };
+      const clientFilter = clientId ? 'AND u.client_id = @clientId' : '';
+
+      if (clientId) {
+        params.clientId = clientId;
+      }
+
+      const query = `
+        SELECT
+          u.user_id, u.client_id, u.first_name, u.last_name, u.email,
+          u.ph_no, u.user_name, u.is_active, u.role_id,
+          u.created_by_user_id, u.created_at, u.updated_at, u.updated_by_user_id,
+          c.name as client_name,
+          r.role_name
+        FROM [user] u
+        LEFT JOIN client c ON u.client_id = c.client_id
+        LEFT JOIN role r ON u.role_id = r.role_id
+        WHERE u.role_id = @roleId AND u.is_active = 1 ${clientFilter}
+        ORDER BY u.created_at DESC
+      `;
+
+      const result = await executeQuery(query, params);
+      return result.recordset.map(row => new User(row));
+    } catch (error) {
+      logger.error('Error finding users by role and client:', error);
+      throw error;
     }
   }
 

@@ -211,10 +211,10 @@ export class Permission {
         INNER JOIN permissions p ON rp.permission_id = p.permission_id
         WHERE rp.role_id = @roleId AND p.permission_name = @permissionName
       `;
-      
+
       logDB('Permission.roleHasPermission', query, { roleId, permissionName });
       const result = await executeQuery(query, { roleId, permissionName });
-      
+
       return result.recordset[0].count > 0;
     } catch (error) {
       logger.error('Permission.roleHasPermission error:', error);

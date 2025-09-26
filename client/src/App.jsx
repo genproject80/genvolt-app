@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClientProvider } from './context/ClientContext';
 import { RoleProvider } from './context/RoleContext';
 import { PermissionProvider } from './context/PermissionContext';
+import { UserProvider } from './context/UserContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -95,11 +96,13 @@ const App = () => {
       <PermissionProvider>
         <ClientProvider>
           <RoleProvider>
-            <Router>
-              <div className="App">
-                <AppRoutes />
-              </div>
-            </Router>
+            <UserProvider>
+              <Router>
+                <div className="App">
+                  <AppRoutes />
+                </div>
+              </Router>
+            </UserProvider>
           </RoleProvider>
         </ClientProvider>
       </PermissionProvider>

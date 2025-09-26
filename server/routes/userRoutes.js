@@ -2,6 +2,7 @@ import express from 'express';
 import { body, param } from 'express-validator';
 import { authenticate } from '../middleware/auth.js';
 import { sanitizeInput, validatePagination } from '../middleware/validation.js';
+import { requirePermission } from '../middleware/permissionCheck.js';
 import {
   getUsers,
   getUserById,
@@ -42,10 +43,8 @@ const createUserValidation = [
     .matches(/^\+?[\d\s\-\(\)]{10,15}$/)
     .withMessage('Phone number must be valid'),
   body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
+    .isLength({ min: 1 })
+    .withMessage('Password is required'),
   body('user_name')
     .trim()
     .isLength({ min: 3, max: 30 })
@@ -76,7 +75,8 @@ const updateUserValidation = [
     .isLength({ min: 1, max: 50 })
     .withMessage('Last name must be between 1-50 characters'),
   body('ph_no')
-    .optional()
+    .optional({ nullable: true })
+    .if((value) => value !== null && value !== undefined && value !== '')
     .matches(/^\+?[\d\s\-\(\)]{10,15}$/)
     .withMessage('Phone number must be valid'),
   body('role_id')
@@ -109,10 +109,8 @@ const resetPasswordValidation = [
     .isInt({ min: 1 })
     .withMessage('User ID must be a positive integer'),
   body('newPassword')
-    .isLength({ min: 8 })
-    .withMessage('New password must be at least 8 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-    .withMessage('New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
+    .isLength({ min: 1 })
+    .withMessage('New password is required')
 ];
 
 /**
@@ -128,17 +126,19 @@ const userIdValidation = [
 
 /**
  * GET /api/users/stats
- * Get user statistics (Admin only)
+ * Get user statistics (requires View User permission)
  */
-router.get('/stats', 
+router.get('/stats',
+  requirePermission('View User'),
   getUserStats
 );
 
 /**
  * GET /api/users
- * Get all users (Admin only)
+ * Get all users (requires View User permission)
  */
-router.get('/', 
+router.get('/',
+  requirePermission('View User'),
   validatePagination,
   sanitizeInput,
   getUsers
@@ -146,18 +146,20 @@ router.get('/',
 
 /**
  * GET /api/users/:userId
- * Get user by ID (Admin only)
+ * Get user by ID (requires View User permission)
  */
-router.get('/:userId', 
+router.get('/:userId',
+  requirePermission('View User'),
   userIdValidation,
   getUserById
 );
 
 /**
  * POST /api/users
- * Create new user (Admin only)
+ * Create new user (requires Create User permission)
  */
-router.post('/', 
+router.post('/',
+  requirePermission('Create User'),
   createUserValidation,
   sanitizeInput,
   createUser
@@ -165,9 +167,10 @@ router.post('/',
 
 /**
  * PUT /api/users/:userId
- * Update user (Admin only)
+ * Update user (requires Edit User permission)
  */
-router.put('/:userId', 
+router.put('/:userId',
+  requirePermission('Edit User'),
   updateUserValidation,
   sanitizeInput,
   updateUser
@@ -175,27 +178,30 @@ router.put('/:userId',
 
 /**
  * PATCH /api/users/:userId/status
- * Update user status (Admin only)
+ * Update user status (requires Edit User permission)
  */
-router.patch('/:userId/status', 
+router.patch('/:userId/status',
+  requirePermission('Edit User'),
   updateUserStatusValidation,
   updateUserStatus
 );
 
 /**
  * POST /api/users/:userId/reset-password
- * Reset user password (Admin only)
+ * Reset user password (requires Edit User permission)
  */
-router.post('/:userId/reset-password', 
+router.post('/:userId/reset-password',
+  requirePermission('Edit User'),
   resetPasswordValidation,
   resetUserPassword
 );
 
 /**
  * DELETE /api/users/:userId
- * Delete user (soft delete - deactivate) (Admin only)
+ * Delete user (soft delete - deactivate) (requires Delete User permission)
  */
-router.delete('/:userId', 
+router.delete('/:userId',
+  requirePermission('Delete User'),
   userIdValidation,
   deleteUser
 );

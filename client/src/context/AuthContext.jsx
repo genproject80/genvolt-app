@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       try {
         const { accessToken, isAuthenticated: storedAuth } = JWTUtils.getStoredTokens();
-        
+
         if (storedAuth && accessToken) {
           // Check if token is still valid
           if (!JWTUtils.isTokenExpired(accessToken)) {
@@ -42,13 +42,14 @@ export const AuthProvider = ({ children }) => {
                 throw new Error('Token refresh failed');
               }
             } catch (refreshError) {
-              console.warn('Token refresh failed:', refreshError);
+              console.warn('🔐 AuthContext: Token refresh failed:', refreshError);
               JWTUtils.clearTokens();
             }
           }
+        } else {
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('🔐 AuthContext: Auth initialization error:', error);
         JWTUtils.clearTokens();
       } finally {
         setLoading(false);
@@ -83,20 +84,34 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    console.log('🚪 AuthContext: Logout function called');
     try {
       // Call API to invalidate token on server
+      console.log('🚪 AuthContext: Calling authService.logout()...');
       await authService.logout();
-      
+      console.log('🚪 AuthContext: authService.logout() completed');
+
       // Clear state
+      console.log('🚪 AuthContext: Clearing authentication state...');
       setUser(null);
       setIsAuthenticated(false);
-      
+
+      // Redirect to login page
+      console.log('🚪 AuthContext: Redirecting to /login...');
+      window.location.href = '/login';
+
       return { success: true };
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('🚪 AuthContext: Logout error:', error);
       // Even if server logout fails, clear local state
+      console.log('🚪 AuthContext: Error occurred, clearing state anyway...');
       setUser(null);
       setIsAuthenticated(false);
+
+      // Redirect to login page
+      console.log('🚪 AuthContext: Redirecting to /login after error...');
+      window.location.href = '/login';
+
       return { success: true };
     }
   };

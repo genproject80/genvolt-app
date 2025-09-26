@@ -11,7 +11,7 @@ export const requirePermission = (requiredPermission) => {
   return async (req, res, next) => {
     try {
       const user = req.user;
-      
+
       if (!user) {
         logSecurity(`Permission check failed - No user in request for permission: ${requiredPermission}`);
         throw new AuthorizationError('User not authenticated');
@@ -32,7 +32,7 @@ export const requirePermission = (requiredPermission) => {
 
       // Log successful permission check
       logger.debug(`Permission granted - User ${user.id} has permission: ${requiredPermission}`);
-      
+
       next();
     } catch (error) {
       if (error instanceof AuthorizationError) {

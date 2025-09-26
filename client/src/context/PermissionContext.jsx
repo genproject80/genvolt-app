@@ -36,7 +36,7 @@ export const PermissionProvider = ({ children }) => {
       const response = await authService.getUserPermissions();
       setUserPermissions(response.data.permissions || []);
     } catch (error) {
-      console.error('Failed to fetch user permissions:', error);
+      console.error('🔑 PermissionContext: Failed to fetch user permissions:', error);
       setError(error.message || 'Failed to fetch permissions');
       setUserPermissions([]);
     } finally {
@@ -107,6 +107,12 @@ export const PermissionProvider = ({ children }) => {
   const canEditClient = hasPermission('Edit Client');
   const canDeleteClient = hasPermission('Delete Client');
 
+  // Convenience permission checks for user management
+  const canViewUser = hasPermission('View User');
+  const canCreateUser = hasPermission('Create User');
+  const canEditUser = hasPermission('Edit User');
+  const canDeleteUser = hasPermission('Delete User');
+
   const value = {
     // State
     userPermissions,
@@ -130,7 +136,13 @@ export const PermissionProvider = ({ children }) => {
     canViewClient,
     canCreateClient,
     canEditClient,
-    canDeleteClient
+    canDeleteClient,
+
+    // Convenience flags for user management
+    canViewUser,
+    canCreateUser,
+    canEditUser,
+    canDeleteUser
   };
 
   return (

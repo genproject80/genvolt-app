@@ -80,7 +80,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(compression());
 app.use(cookieParser());
-app.use(limiter);
+// Temporarily disable rate limiting for debugging
+// app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

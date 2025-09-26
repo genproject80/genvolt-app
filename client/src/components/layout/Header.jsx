@@ -8,18 +8,24 @@ const Header = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
+    console.log('🚪 Header: Logout button clicked');
     setIsLoggingOut(true);
     try {
+      console.log('🚪 Header: Calling logout function...');
       await logout();
+      console.log('🚪 Header: Logout completed successfully');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('🚪 Header: Logout error:', error);
     } finally {
+      console.log('🚪 Header: Setting isLoggingOut to false');
       setIsLoggingOut(false);
     }
   };
 
   const toggleDropdown = () => {
+    console.log('🔽 Header: Dropdown toggle clicked. Current state:', isDropdownOpen);
     setIsDropdownOpen(!isDropdownOpen);
+    console.log('🔽 Header: Dropdown state will be:', !isDropdownOpen);
   };
 
   return (
@@ -70,14 +76,20 @@ const Header = () => {
 
             {/* Dropdown Menu */}
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                 <div className="px-4 py-2 border-b border-gray-100">
                   <div className="text-sm font-medium text-gray-900">{user?.name || 'Admin Demo'}</div>
                   <div className="text-sm text-gray-500">{user?.email || 'admin@demo.com'}</div>
                 </div>
-                
+
                 <button
-                  onClick={handleLogout}
+                  onClick={(e) => {
+                    console.log('🚪 Header: Sign out button clicked!', e);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDropdownOpen(false); // Close dropdown first
+                    handleLogout();
+                  }}
                   disabled={isLoggingOut}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
@@ -92,8 +104,11 @@ const Header = () => {
       {/* Click outside to close dropdown */}
       {isDropdownOpen && (
         <div
-          className="fixed inset-0 z-10"
-          onClick={() => setIsDropdownOpen(false)}
+          className="fixed inset-0 z-40"
+          onClick={() => {
+            console.log('🔽 Header: Clicking outside to close dropdown');
+            setIsDropdownOpen(false);
+          }}
         />
       )}
     </header>
