@@ -5,9 +5,12 @@ import { ClientProvider } from './context/ClientContext';
 import { RoleProvider } from './context/RoleContext';
 import { PermissionProvider } from './context/PermissionContext';
 import { UserProvider } from './context/UserContext';
+import { DashboardProvider } from './context/DashboardContext';
+import { DeviceDetailProvider } from './context/DeviceDetailContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
+import DeviceDetailPage from './pages/Dashboard/DeviceDetailPage';
 import Reports from './pages/Reports/Reports';
 import AdminPanel from './pages/Admin/AdminPanel';
 import LoadingSpinner from './components/common/LoadingSpinner';
@@ -48,15 +51,26 @@ const AppRoutes = () => {
       />
       
       {/* Protected Routes - All wrapped in Layout */}
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <Layout>
               <DashboardHome />
             </Layout>
           </ProtectedRoute>
-        } 
+        }
+      />
+
+      <Route
+        path="/dashboard/device/:entryId"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DeviceDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
       />
       
       <Route 
@@ -97,11 +111,15 @@ const App = () => {
         <ClientProvider>
           <RoleProvider>
             <UserProvider>
-              <Router>
-                <div className="App">
-                  <AppRoutes />
-                </div>
-              </Router>
+              <DashboardProvider>
+                <DeviceDetailProvider>
+                  <Router>
+                    <div className="App">
+                      <AppRoutes />
+                    </div>
+                  </Router>
+                </DeviceDetailProvider>
+              </DashboardProvider>
             </UserProvider>
           </RoleProvider>
         </ClientProvider>

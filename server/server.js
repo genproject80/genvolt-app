@@ -21,9 +21,13 @@ import userRoutes from './routes/userRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
 import roleRoutes from './routes/roleRoutes.js';
 import permissionRoutes from './routes/permissionRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
+import hierarchyFilterRoutes from './routes/hierarchyFilterRoutes.js';
+import iotDataRoutes from './routes/iotDataRoutes.js';
+import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Rate limiting
 const limiter = rateLimit({
@@ -119,12 +123,22 @@ app.get('/health', async (req, res) => {
   res.status(200).json(health);
 });
 
+// Debug logging for all API requests
+app.use('/api', (req, res, next) => {
+  console.log(`API Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
+app.use('/api/dashboards', dashboardRoutes);
+app.use('/api/hierarchy-filters', hierarchyFilterRoutes);
+app.use('/api/iot-data', iotDataRoutes);
+app.use('/api/device-details', deviceDetailRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -137,7 +151,11 @@ app.get('/api', (req, res) => {
       users: '/api/users',
       clients: '/api/clients',
       roles: '/api/roles',
-      permissions: '/api/permissions'
+      permissions: '/api/permissions',
+      dashboards: '/api/dashboards',
+      hierarchyFilters: '/api/hierarchy-filters',
+      iotData: '/api/iot-data',
+      deviceDetails: '/api/device-details'
     }
   });
 });
