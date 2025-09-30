@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../../context/DashboardContext';
+import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const HKMIStatusBadge = ({ status }) => {
@@ -166,6 +167,7 @@ const Pagination = ({ pagination, onPageChange }) => {
 
 const IoTDataTable = ({ className = "" }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     iotData,
     iotDataLoading,
@@ -182,12 +184,21 @@ const IoTDataTable = ({ className = "" }) => {
   const [sortOrder, setSortOrder] = useState('DESC');
   const [isExporting, setIsExporting] = useState(false);
 
+  // Check if user has permission to view device details
+  const canViewDeviceDetails = useMemo(() => {
+    console.log('User object:', user);
+    console.log('User role:', user?.role);
+    const hasPermission = user?.role === 'SYSTEM_ADMIN' || user?.role === 'SUPER_ADMIN';
+    console.log('Can view device details:', hasPermission);
+    return hasPermission;
+  }, [user?.role]);
+
   // Handle row click to navigate to device detail page
   const handleRowClick = useCallback((row) => {
-    if (row.Entry_ID) {
+    if (canViewDeviceDetails && row.Entry_ID) {
       navigate(`/dashboard/device/${row.Entry_ID}`);
     }
-  }, [navigate]);
+  }, [navigate, canViewDeviceDetails]);
 
   // Table columns configuration matching HKMI dashboard
   const columns = useMemo(() => [
@@ -463,9 +474,17 @@ const IoTDataTable = ({ className = "" }) => {
               iotData.map((row, index) => (
                 <tr
                   key={row.Entry_ID || index}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+                  className={`transition-colors duration-150 ${
+                    canViewDeviceDetails
+                      ? 'hover:bg-gray-50 cursor-pointer'
+                      : 'cursor-default'
+                  }`}
                   onClick={() => handleRowClick(row)}
-                  title={`Click to view details for device ${row.Device_ID}`}
+                  title={
+                    canViewDeviceDetails
+                      ? `Click to view details for device ${row.Device_ID}`
+                      : 'You do not have permission to view device details'
+                  }
                 >
                   {columns.map((column) => (
                     <td key={column.key} className={`px-4 py-3 text-sm text-gray-900 ${column.width}`}>
