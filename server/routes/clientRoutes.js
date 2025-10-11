@@ -6,11 +6,13 @@ import {
   getAllClients,
   getClientById,
   getClientHierarchy,
+  getClientHierarchyForTransfer,
   createClient,
   updateClient,
   deleteClient,
   getClientStats,
-  checkEmailAvailability
+  checkEmailAvailability,
+  debugClients
 } from '../controllers/clientController.js';
 
 const router = express.Router();
@@ -165,12 +167,30 @@ router.use(authenticate);
 // Protected client routes (require specific permissions)
 
 /**
+ * GET /api/clients/debug
+ * Debug client filtering (requires View Client permission)
+ */
+router.get('/debug',
+  requirePermission('View Client'),
+  debugClients
+);
+
+/**
  * GET /api/clients/hierarchy
  * Get client hierarchy for dropdown (requires View Client permission)
  */
 router.get('/hierarchy',
   requirePermission('View Client'),
   getClientHierarchy
+);
+
+/**
+ * GET /api/clients/hierarchy-for-transfer
+ * Get client hierarchy for device transfer dropdown (requires View Client permission)
+ */
+router.get('/hierarchy-for-transfer',
+  requirePermission('View Client'),
+  getClientHierarchyForTransfer
 );
 
 /**

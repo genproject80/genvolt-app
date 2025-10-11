@@ -10,7 +10,24 @@ import { validationResult } from 'express-validator';
  */
 export const getAllClients = asyncHandler(async (req, res) => {
   const { includeInactive = false, limit, offset, page } = req.query;
-  
+
+  console.log('🚨 GET ALL CLIENTS ENDPOINT CALLED 🚨');
+  console.log('👤 Current user details:', {
+    user_id: req.user.user_id,
+    client_id: req.user.client_id,
+    role: req.user.role_name,
+    first_name: req.user.first_name,
+    last_name: req.user.last_name
+  });
+
+  logger.info('📋 Getting all clients (might be used for dropdown)', {
+    currentUserId: req.user.user_id,
+    currentUserClientId: req.user.client_id,
+    userRole: req.user.role_name,
+    includeInactive,
+    endpoint: 'GET /api/clients'
+  });
+
   try {
     // Calculate pagination
     const pageSize = limit ? parseInt(limit) : 50;
@@ -23,14 +40,69 @@ export const getAllClients = asyncHandler(async (req, res) => {
       offset: offsetValue
     };
 
-    const clients = await Client.findAll(options);
-    const totalCount = await Client.getCount(options);
+    let clients;
+    let totalCount;
+
+    // Apply role-based filtering for client dropdown
+    if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(req.user.role_name)) {
+      // SYSTEM_ADMIN and SUPER_ADMIN see all clients
+      logger.info('🔓 SYSTEM_ADMIN/SUPER_ADMIN - showing all clients', {
+        userRole: req.user.role_name,
+        userId: req.user.user_id
+      });
+      clients = await Client.findAll(options);
+      totalCount = await Client.getCount(options);
+    } else if (req.user.role_name === 'CLIENT_ADMIN' && req.user.client_id) {
+      // CLIENT_ADMIN sees their own client + immediate children
+      logger.info('👥 CLIENT_ADMIN - showing user client and immediate children', {
+        userClientId: req.user.client_id,
+        userRole: req.user.role_name,
+        userId: req.user.user_id
+      });
+
+      const clientsForDropdown = await Client.getClientsForDropdown(
+        req.user.client_id,
+        req.user.role_name,
+        null
+      );
+
+      // Apply pagination to the filtered results
+      const startIndex = offsetValue;
+      const endIndex = offsetValue + pageSize;
+      clients = clientsForDropdown.slice(startIndex, endIndex).map(clientData => new Client(clientData));
+      totalCount = clientsForDropdown.length;
+
+      logger.info('📋 Filtered client results', {
+        userClientId: req.user.client_id,
+        totalClients: clientsForDropdown.length,
+        paginatedCount: clients.length,
+        clientNames: clients.map(c => c.name)
+      });
+    } else {
+      // Default: no clients
+      logger.warn('⚠️ User has no access to clients', {
+        userRole: req.user.role_name,
+        userClientId: req.user.client_id,
+        userId: req.user.user_id
+      });
+      clients = [];
+      totalCount = 0;
+    }
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_VIEW', 'Viewed client list', 'client', null, {
-      includeInactive: options.includeInactive,
-      limit: pageSize,
-      page: currentPage
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'DATA_ACCESSED',
+      message: 'Clients list accessed',
+      target_type: 'CLIENT',
+      details: JSON.stringify({
+        includeInactive: options.includeInactive,
+        limit: pageSize,
+        page: currentPage
+      }),
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
     });
 
     res.json({
@@ -68,8 +140,16 @@ export const getClientById = asyncHandler(async (req, res) => {
   }
 
   // Create audit log
-  await createAuditLog(req.user.id, 'CLIENT_VIEW', 'Viewed client details', 'client', client.client_id, {
-    clientName: client.name
+  await createAuditLog({
+    user_id: req.user.user_id,
+    activity_type: 'CLIENT_MANAGEMENT',
+    action: 'DATA_ACCESSED',
+    message: 'Client details viewed',
+    target_type: 'CLIENT',
+    target_id: client.client_id,
+    details: JSON.stringify({ clientName: client.name }),
+    ip_address: req.ip,
+    user_agent: req.get('User-Agent')
   });
 
   res.json({
@@ -80,16 +160,103 @@ export const getClientById = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get client hierarchy for dropdown
+ * Test endpoint to debug client filtering
+ * GET /api/clients/debug
+ */
+export const debugClients = asyncHandler(async (req, res) => {
+  const currentUser = req.user;
+
+  console.log('🔧 DEBUG CLIENTS ENDPOINT');
+
+  // Test direct SQL query
+  const { executeQuery } = await import('../config/database.js');
+
+  const testQuery = `
+    SELECT client_id, name, parent_id, is_active
+    FROM client
+    WHERE parent_id = @parentClientId AND is_active = 1
+    ORDER BY name ASC
+  `;
+
+  const result = await executeQuery(testQuery, { parentClientId: currentUser.client_id });
+
+  console.log(`🔍 Direct SQL test for parent_id = ${currentUser.client_id}:`);
+  console.log('Results:', result.recordset);
+
+  res.json({
+    success: true,
+    data: {
+      userClientId: currentUser.client_id,
+      queryResults: result.recordset,
+      rawSQL: testQuery
+    }
+  });
+});
+
+/**
+ * Get client hierarchy for dropdown - only immediate child clients
  * GET /api/clients/hierarchy
  */
 export const getClientHierarchy = asyncHandler(async (req, res) => {
   const { excludeClientId } = req.query;
-  
+  const currentUser = req.user;
+
+  console.log('🚨 CLIENT HIERARCHY ENDPOINT CALLED 🚨');
+  console.log('👤 Current user details:', {
+    user_id: currentUser.user_id,
+    client_id: currentUser.client_id,
+    role: currentUser.role_name,
+    first_name: currentUser.first_name,
+    last_name: currentUser.last_name
+  });
+
+  logger.info('🏢 Getting client hierarchy for dropdown', {
+    currentUserId: currentUser.user_id,
+    currentUserClientId: currentUser.client_id,
+    userRole: currentUser.role_name,
+    excludeClientId,
+    endpoint: 'GET /api/clients/hierarchy'
+  });
+
   try {
-    const hierarchy = await Client.getClientHierarchy(
-      excludeClientId ? parseInt(excludeClientId) : null
-    );
+    let hierarchy;
+
+    // Role-based filtering for client hierarchy dropdown
+    if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name)) {
+      // SYSTEM_ADMIN and SUPER_ADMIN see all clients
+      logger.info('🔓 SYSTEM_ADMIN/SUPER_ADMIN - showing all clients', {
+        userRole: currentUser.role_name,
+        userId: currentUser.user_id
+      });
+      hierarchy = await Client.getClientHierarchy(
+        excludeClientId ? parseInt(excludeClientId) : null
+      );
+    } else if (currentUser.role_name === 'CLIENT_ADMIN' && currentUser.client_id) {
+      // CLIENT_ADMIN sees their own client + immediate children
+      logger.info('👥 CLIENT_ADMIN - showing user client and immediate children', {
+        userClientId: currentUser.client_id,
+        userRole: currentUser.role_name,
+        userId: currentUser.user_id
+      });
+      hierarchy = await Client.getClientsForDropdown(
+        currentUser.client_id,
+        currentUser.role_name,
+        excludeClientId ? parseInt(excludeClientId) : null
+      );
+    } else {
+      // Default: empty array
+      logger.warn('⚠️ User has no access to client hierarchy', {
+        userRole: currentUser.role_name,
+        userClientId: currentUser.client_id,
+        userId: currentUser.user_id
+      });
+      hierarchy = [];
+    }
+
+    logger.info('📋 Client hierarchy result', {
+      clientCount: hierarchy.length,
+      clientNames: hierarchy.map(c => c.name)
+    });
 
     res.json({
       success: true,
@@ -98,6 +265,81 @@ export const getClientHierarchy = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to get client hierarchy:', error);
+    throw error;
+  }
+});
+
+/**
+ * Get client hierarchy for device transfer - only immediate children for CLIENT_ADMIN
+ * GET /api/clients/hierarchy-for-transfer
+ */
+export const getClientHierarchyForTransfer = asyncHandler(async (req, res) => {
+  const { excludeClientId } = req.query;
+  const currentUser = req.user;
+
+  console.log('🚨 CLIENT HIERARCHY FOR TRANSFER ENDPOINT CALLED 🚨');
+  console.log('👤 Current user details:', {
+    user_id: currentUser.user_id,
+    client_id: currentUser.client_id,
+    role: currentUser.role_name,
+    first_name: currentUser.first_name,
+    last_name: currentUser.last_name
+  });
+
+  logger.info('🔄 Getting client hierarchy for device transfer', {
+    currentUserId: currentUser.user_id,
+    currentUserClientId: currentUser.client_id,
+    userRole: currentUser.role_name,
+    excludeClientId,
+    endpoint: 'GET /api/clients/hierarchy-for-transfer'
+  });
+
+  try {
+    let hierarchy;
+
+    // Role-based filtering for device transfer
+    if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name)) {
+      // SYSTEM_ADMIN and SUPER_ADMIN see all clients
+      logger.info('🔓 SYSTEM_ADMIN/SUPER_ADMIN - showing all clients for transfer', {
+        userRole: currentUser.role_name,
+        userId: currentUser.user_id
+      });
+      hierarchy = await Client.getClientHierarchy(
+        excludeClientId ? parseInt(excludeClientId) : null
+      );
+    } else if (currentUser.role_name === 'CLIENT_ADMIN' && currentUser.client_id) {
+      // CLIENT_ADMIN sees ONLY immediate children (not their own client)
+      logger.info('👥 CLIENT_ADMIN - showing only immediate children for transfer', {
+        userClientId: currentUser.client_id,
+        userRole: currentUser.role_name,
+        userId: currentUser.user_id
+      });
+      hierarchy = await Client.getImmediateChildClients(
+        currentUser.client_id,
+        excludeClientId ? parseInt(excludeClientId) : null
+      );
+    } else {
+      // Default: empty array
+      logger.warn('⚠️ User has no access to transfer clients', {
+        userRole: currentUser.role_name,
+        userClientId: currentUser.client_id,
+        userId: currentUser.user_id
+      });
+      hierarchy = [];
+    }
+
+    logger.info('📋 Client hierarchy for transfer result', {
+      clientCount: hierarchy.length,
+      clientNames: hierarchy.map(c => c.name)
+    });
+
+    res.json({
+      success: true,
+      message: 'Client hierarchy for transfer retrieved successfully',
+      data: { clients: hierarchy }
+    });
+  } catch (error) {
+    logger.error('Failed to get client hierarchy for transfer:', error);
     throw error;
   }
 });
@@ -164,18 +406,28 @@ export const createClient = asyncHandler(async (req, res) => {
       is_active: is_active !== undefined ? is_active : true
     };
 
-    const newClient = await Client.create(clientData, req.user.id);
+    const newClient = await Client.create(clientData, req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_CREATE', 'Created new client', 'client', newClient.client_id, {
-      clientName: newClient.name,
-      clientEmail: newClient.email
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_CREATED',
+      message: 'Created new client',
+      target_type: 'CLIENT',
+      target_id: newClient.client_id,
+      details: JSON.stringify({
+        clientName: newClient.name,
+        clientEmail: newClient.email
+      }),
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
     });
 
     logAuth('client_created', {
       clientId: newClient.client_id,
       clientName: newClient.name,
-      createdBy: req.user.id,
+      createdBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -266,18 +518,28 @@ export const updateClient = asyncHandler(async (req, res) => {
       is_active: is_active !== undefined ? is_active : existingClient.is_active
     };
 
-    const updatedClient = await Client.update(parseInt(id), clientData, req.user.id);
+    const updatedClient = await Client.update(parseInt(id), clientData, req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_UPDATE', 'Updated client', 'client', updatedClient.client_id, {
-      clientName: updatedClient.name,
-      changes: clientData
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_UPDATED',
+      message: 'Updated client',
+      target_type: 'CLIENT',
+      target_id: updatedClient.client_id,
+      details: JSON.stringify({
+        clientName: updatedClient.name,
+        changes: clientData
+      }),
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
     });
 
     logAuth('client_updated', {
       clientId: updatedClient.client_id,
       clientName: updatedClient.name,
-      updatedBy: req.user.id,
+      updatedBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -311,17 +573,27 @@ export const deleteClient = asyncHandler(async (req, res) => {
   }
 
   try {
-    await Client.delete(parseInt(id), req.user.id);
+    await Client.delete(parseInt(id), req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_DELETE', 'Deleted client', 'client', parseInt(id), {
-      clientName: existingClient.name
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_DELETED',
+      message: 'Deleted client',
+      target_type: 'CLIENT',
+      target_id: parseInt(id),
+      details: JSON.stringify({
+        clientName: existingClient.name
+      }),
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
     });
 
     logSecurity('client_deleted', {
       clientId: parseInt(id),
       clientName: existingClient.name,
-      deletedBy: req.user.id,
+      deletedBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -360,7 +632,16 @@ export const getClientStats = asyncHandler(async (req, res) => {
     };
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_STATS', 'Viewed client statistics', 'client', null, stats);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'DATA_ACCESSED',
+      message: 'Viewed client statistics',
+      target_type: 'CLIENT',
+      details: JSON.stringify(stats),
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
+    });
 
     res.json({
       success: true,

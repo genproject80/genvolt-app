@@ -5,6 +5,7 @@ import { ClientProvider } from './context/ClientContext';
 import { RoleProvider } from './context/RoleContext';
 import { PermissionProvider } from './context/PermissionContext';
 import { UserProvider } from './context/UserContext';
+import { DeviceProvider } from './context/DeviceContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -97,11 +98,13 @@ const App = () => {
         <ClientProvider>
           <RoleProvider>
             <UserProvider>
-              <Router>
-                <div className="App">
-                  <AppRoutes />
-                </div>
-              </Router>
+              <DeviceProvider>
+                <Router>
+                  <div className="App">
+                    <AppRoutes />
+                  </div>
+                </Router>
+              </DeviceProvider>
             </UserProvider>
           </RoleProvider>
         </ClientProvider>

@@ -99,6 +99,21 @@ export const clientService = {
   },
 
   /**
+   * Get client hierarchy for device transfer dropdown
+   * @param {number} excludeClientId - Client ID to exclude from results
+   * @returns {Promise<Object>} API response with client hierarchy for transfer
+   */
+  async getClientHierarchyForTransfer(excludeClientId = null) {
+    try {
+      const params = excludeClientId ? { excludeClientId } : {};
+      const response = await api.get('/hierarchy-for-transfer', { params });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  },
+
+  /**
    * Create a new client
    * @param {Object} clientData - Client data to create
    * @returns {Promise<Object>} API response with created client

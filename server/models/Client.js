@@ -301,6 +301,134 @@ export class Client {
   }
 
   /**
+   * Get immediate child clients only (for regular users)
+   * @param {number} parentClientId - Parent client ID (user's client)
+   * @param {number} excludeClientId - Client ID to exclude (for edit scenarios)
+   * @returns {Promise<Object[]>} Array of immediate child client objects for dropdown
+   */
+  static async getImmediateChildClients(parentClientId, excludeClientId = null) {
+    try {
+      let query = `
+        SELECT
+          client_id,
+          name,
+          parent_id,
+          (SELECT name FROM client pc WHERE pc.client_id = c.parent_id) as parent_name
+        FROM client c
+        WHERE is_active = 1
+        AND parent_id = @parentClientId
+      `;
+
+      const params = { parentClientId };
+
+      if (excludeClientId) {
+        query += ` AND client_id != @excludeClientId`;
+        params.excludeClientId = excludeClientId;
+      }
+
+      query += ` ORDER BY name ASC`;
+
+      logDB('info', 'Getting immediate child clients', {
+        parentClientId,
+        excludeClientId,
+        sql: query
+      });
+
+      console.log(`🔍 SQL Query for parent_id ${parentClientId}:`, query);
+      console.log('🔍 SQL Params:', params);
+
+      const result = await executeQuery(query, params);
+
+      console.log(`🔍 Query returned ${result.recordset.length} children for parent_id ${parentClientId}`);
+      result.recordset.forEach(child => {
+        console.log(`  - ${child.name} (id: ${child.client_id}, parent_id: ${child.parent_id})`);
+      });
+
+      logDB('info', 'Immediate child clients result', {
+        parentClientId,
+        childCount: result.recordset.length,
+        children: result.recordset.map(c => ({ id: c.client_id, name: c.name }))
+      });
+
+      return result.recordset;
+    } catch (error) {
+      logDB('error', 'Failed to get immediate child clients', {
+        parentClientId,
+        excludeClientId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get clients for dropdown based on user role
+   * @param {number} userClientId - User's client ID
+   * @param {string} userRole - User's role name
+   * @param {number} excludeClientId - Client ID to exclude (for edit scenarios)
+   * @returns {Promise<Object[]>} Array of client objects for dropdown
+   */
+  static async getClientsForDropdown(userClientId, userRole, excludeClientId = null) {
+    try {
+      // SYSTEM_ADMIN and SUPER_ADMIN see all clients
+      if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
+        logDB('info', 'Getting all clients for SYSTEM_ADMIN/SUPER_ADMIN', { userRole });
+        return await Client.getClientHierarchy(excludeClientId);
+      }
+
+      // CLIENT_ADMIN sees their own client + immediate children
+      if (userRole === 'CLIENT_ADMIN' && userClientId) {
+        logDB('info', 'Getting user client + children for CLIENT_ADMIN', {
+          userRole,
+          userClientId
+        });
+
+        // Get immediate children
+        const children = await Client.getImmediateChildClients(userClientId, excludeClientId);
+
+        // Get user's own client (if not excluded)
+        let userClient = null;
+        if (!excludeClientId || excludeClientId !== userClientId) {
+          userClient = await Client.findById(userClientId);
+        }
+
+        // Combine: user's client + children, sorted by name
+        const allClients = userClient
+          ? [{
+              client_id: userClient.client_id,
+              name: userClient.name,
+              parent_id: userClient.parent_id,
+              parent_name: null
+            }, ...children]
+          : children;
+
+        const sortedClients = allClients.sort((a, b) => a.name.localeCompare(b.name));
+
+        logDB('info', 'Clients for dropdown result', {
+          userClientId,
+          userRole,
+          totalClients: sortedClients.length,
+          clients: sortedClients.map(c => ({ id: c.client_id, name: c.name }))
+        });
+
+        return sortedClients;
+      }
+
+      // Default: return empty array
+      logDB('warn', 'No clients available for dropdown', { userRole, userClientId });
+      return [];
+    } catch (error) {
+      logDB('error', 'Failed to get clients for dropdown', {
+        userClientId,
+        userRole,
+        excludeClientId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get client count
    * @param {Object} options - Query options
    * @returns {Promise<number>} Total count of clients
@@ -308,9 +436,9 @@ export class Client {
   static async getCount(options = {}) {
     try {
       const { includeInactive = false } = options;
-      
+
       let query = `SELECT COUNT(*) as total FROM client`;
-      
+
       if (!includeInactive) {
         query += ` WHERE is_active = 1`;
       }

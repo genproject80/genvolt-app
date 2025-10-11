@@ -38,7 +38,7 @@ const canAssignRole = async (currentUser, targetRoleName, targetClientId) => {
     // Data-driven permission check - get user's permissions from database
     const permissions = await currentUser.getPermissions?.() || [];
 
-    // Check if user has 'Edit User' permission (needed to assign roles)
+    // Check if user has 'Edit User' or 'Create User' permission (needed to assign roles)
     const hasEditUserPermission = permissions.includes('Edit User') ||
                                  permissions.includes('Create User');
 
@@ -46,12 +46,8 @@ const canAssignRole = async (currentUser, targetRoleName, targetClientId) => {
       return false;
     }
 
-    // CLIENT_ADMIN can only create users within their own client (business rule)
-    if (currentUser.role_name === 'CLIENT_ADMIN' && targetClientId !== currentUser.client_id) {
-      return false;
-    }
-
     // If user has the required permissions, allow role assignment
+    // Permission-based access control - no client restrictions
     // All other restrictions are data-driven based on role_permission table
     return true;
   } catch (error) {
@@ -171,11 +167,6 @@ export const createUser = asyncHandler(async (req, res) => {
   } = req.body;
 
   const currentUser = req.user;
-
-  // Validate client access for CLIENT_ADMIN
-  if (currentUser.role_name === 'CLIENT_ADMIN' && client_id !== currentUser.client_id) {
-    throw new AuthorizationError('Cannot create users for other clients');
-  }
 
   // Validate role assignment permissions
   if (role_id) {

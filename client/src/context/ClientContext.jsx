@@ -74,9 +74,9 @@ export const ClientProvider = ({ children }) => {
   const getClientHierarchy = useCallback(async (excludeClientId = null) => {
     try {
       setError(null);
-      
+
       const response = await clientService.getClientHierarchy(excludeClientId);
-      
+
       if (response.success) {
         setClientHierarchy(response.data.clients);
         return response.data.clients;
@@ -86,6 +86,25 @@ export const ClientProvider = ({ children }) => {
     } catch (err) {
       setError(err.message);
       console.error('Failed to fetch client hierarchy:', err);
+      return [];
+    }
+  }, []);
+
+  const getClientHierarchyForTransfer = useCallback(async (excludeClientId = null) => {
+    try {
+      setError(null);
+
+      const response = await clientService.getClientHierarchyForTransfer(excludeClientId);
+
+      if (response.success) {
+        setClientHierarchy(response.data.clients);
+        return response.data.clients;
+      } else {
+        throw new Error(response.message || 'Failed to fetch client hierarchy for transfer');
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to fetch client hierarchy for transfer:', err);
       return [];
     }
   }, []);
@@ -228,6 +247,7 @@ export const ClientProvider = ({ children }) => {
     getAllClients,
     getClientById,
     getClientHierarchy,
+    getClientHierarchyForTransfer,
     createClient,
     updateClient,
     deleteClient,

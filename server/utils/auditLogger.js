@@ -12,7 +12,8 @@ export const ACTIVITY_TYPES = {
   DATA_ACCESS: 'DATA_ACCESS',
   CONFIGURATION: 'CONFIGURATION',
   SECURITY: 'SECURITY',
-  SYSTEM: 'SYSTEM'
+  SYSTEM: 'SYSTEM',
+  PERMISSION_CHECK: 'PERMISSION_CHECK'
 };
 
 /**
@@ -50,6 +51,9 @@ export const AUDIT_ACTIONS = {
   DATA_ACCESSED: 'DATA_ACCESSED',
   DATA_EXPORTED: 'DATA_EXPORTED',
   REPORT_GENERATED: 'REPORT_GENERATED',
+
+  // Permission Check
+  PERMISSIONS_VIEWED: 'PERMISSIONS_VIEWED',
   
   // Configuration
   CONFIG_UPDATED: 'CONFIG_UPDATED',
@@ -133,7 +137,7 @@ export const createAuditLog = async (auditData) => {
     }
 
     const query = `
-      INSERT INTO AUDIT_LOGS (
+      INSERT INTO audit_log (
         user_id, 
         activity_type, 
         action, 
@@ -277,7 +281,7 @@ export const getAuditLogs = async (filters = {}, page = 1, limit = 50, sortBy = 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM AUDIT_LOGS al
+      FROM audit_log al
       ${whereClause}
     `;
 
@@ -295,8 +299,8 @@ export const getAuditLogs = async (filters = {}, page = 1, limit = 50, sortBy = 
         u.last_name,
         u.email,
         u.user_name
-      FROM AUDIT_LOGS al
-      LEFT JOIN USERS u ON al.user_id = u.user_id
+      FROM audit_log al
+      LEFT JOIN [user] u ON al.user_id = u.user_id
       ${whereClause}
       ORDER BY al.${validSortBy} ${validSortOrder}
       OFFSET @offset ROWS
@@ -390,7 +394,7 @@ export const getAuditLogStats = async (filters = {}) => {
         COUNT(DISTINCT DATE(created_at)) as active_days,
         MIN(created_at) as earliest_log,
         MAX(created_at) as latest_log
-      FROM AUDIT_LOGS
+      FROM audit_log
       ${whereClause}
     `;
 
@@ -403,7 +407,7 @@ export const getAuditLogStats = async (filters = {}) => {
         activity_type,
         COUNT(*) as count,
         COUNT(DISTINCT user_id) as unique_users
-      FROM AUDIT_LOGS
+      FROM audit_log
       ${whereClause}
       GROUP BY activity_type
       ORDER BY count DESC
@@ -418,7 +422,7 @@ export const getAuditLogStats = async (filters = {}) => {
         CAST(created_at as DATE) as date,
         COUNT(*) as count,
         COUNT(DISTINCT user_id) as unique_users
-      FROM AUDIT_LOGS
+      FROM audit_log
       WHERE created_at >= DATEADD(day, -30, GETDATE())
         ${conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : ''}
       GROUP BY CAST(created_at as DATE)
@@ -465,7 +469,7 @@ export const cleanupAuditLogs = async (daysToKeep = 365) => {
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
     const query = `
-      DELETE FROM AUDIT_LOGS 
+      DELETE FROM audit_log 
       WHERE created_at < @cutoffDate
     `;
 

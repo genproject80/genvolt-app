@@ -21,6 +21,7 @@ import userRoutes from './routes/userRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
 import roleRoutes from './routes/roleRoutes.js';
 import permissionRoutes from './routes/permissionRoutes.js';
+import deviceRoutes from './routes/deviceRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -125,6 +126,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
+app.use('/api/devices', deviceRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -137,7 +139,8 @@ app.get('/api', (req, res) => {
       users: '/api/users',
       clients: '/api/clients',
       roles: '/api/roles',
-      permissions: '/api/permissions'
+      permissions: '/api/permissions',
+      devices: '/api/devices'
     }
   });
 });
