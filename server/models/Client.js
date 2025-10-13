@@ -277,9 +277,9 @@ export class Client {
   static async getClientHierarchy(excludeClientId = null) {
     try {
       let query = `
-        SELECT 
-          client_id, 
-          name, 
+        SELECT
+          client_id,
+          name,
           parent_id,
           (SELECT name FROM client pc WHERE pc.client_id = c.parent_id) as parent_name
         FROM client c
@@ -296,6 +296,94 @@ export class Client {
       return result.recordset;
     } catch (error) {
       logDB('error', 'Failed to get client hierarchy', { excludeClientId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all descendant clients (children hierarchy) for a given client
+   * @param {number} parentClientId - Parent client ID to get descendants for
+   * @returns {Promise<Object[]>} Array of descendant client objects
+   */
+  static async getDescendantClients(parentClientId) {
+    try {
+      // Use recursive CTE to get all descendants
+      const query = `
+        WITH ClientHierarchy AS (
+          -- Base case: direct children
+          SELECT
+            client_id,
+            name,
+            parent_id,
+            email,
+            1 as level
+          FROM client
+          WHERE parent_id = @parentClientId AND is_active = 1
+
+          UNION ALL
+
+          -- Recursive case: children of children
+          SELECT
+            c.client_id,
+            c.name,
+            c.parent_id,
+            c.email,
+            ch.level + 1 as level
+          FROM client c
+          INNER JOIN ClientHierarchy ch ON c.parent_id = ch.client_id
+          WHERE c.is_active = 1
+        )
+        SELECT
+          client_id,
+          name,
+          parent_id,
+          email,
+          level
+        FROM ClientHierarchy
+        ORDER BY level, name ASC
+      `;
+
+      const result = await executeQuery(query, { parentClientId });
+
+      logDB('debug', 'Retrieved descendant clients', {
+        parentClientId,
+        count: result.recordset.length
+      });
+
+      return result.recordset;
+    } catch (error) {
+      logDB('error', 'Failed to get descendant clients', {
+        parentClientId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if target client is a descendant of parent client
+   * @param {number} parentClientId - Parent client ID
+   * @param {number} targetClientId - Target client ID to check
+   * @returns {Promise<boolean>} True if target is a descendant of parent
+   */
+  static async isDescendant(parentClientId, targetClientId) {
+    try {
+      const descendants = await Client.getDescendantClients(parentClientId);
+      const isDescendant = descendants.some(client => client.client_id === targetClientId);
+
+      logDB('debug', 'Checking if client is descendant', {
+        parentClientId,
+        targetClientId,
+        isDescendant
+      });
+
+      return isDescendant;
+    } catch (error) {
+      logDB('error', 'Failed to check descendant relationship', {
+        parentClientId,
+        targetClientId,
+        error: error.message
+      });
       throw error;
     }
   }

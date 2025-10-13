@@ -99,6 +99,19 @@ export const clientService = {
   },
 
   /**
+   * Get descendant clients (children hierarchy) for current user's client
+   * @returns {Promise<Object>} API response with descendant clients
+   */
+  async getDescendantClients() {
+    try {
+      const response = await api.get('/descendants');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  },
+
+  /**
    * Create a new client
    * @param {Object} clientData - Client data to create
    * @returns {Promise<Object>} API response with created client

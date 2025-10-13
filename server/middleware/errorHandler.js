@@ -182,7 +182,7 @@ export const errorHandler = (err, req, res, next) => {
     response.error = 'Database Error';
     response.code = 'DATABASE_ERROR';
     response.statusCode = 500;
-    
+
     if (error.code === 'ER_DUP_ENTRY') {
       response.message = 'Duplicate entry found';
       response.statusCode = 409;
@@ -192,6 +192,24 @@ export const errorHandler = (err, req, res, next) => {
     } else {
       response.message = 'Database operation failed';
     }
+  } else if (error.code === 'INVALID_HIERARCHY_TRANSFER') {
+    // Device transfer hierarchy validation errors
+    response.error = 'Transfer Not Allowed';
+    response.message = error.message;
+    response.code = error.code;
+    response.statusCode = 400;
+  } else if (error.code === 'DEVICE_ALREADY_TRANSFERRED') {
+    // Device already transferred error
+    response.error = 'Transfer Not Allowed';
+    response.message = error.message;
+    response.code = error.code;
+    response.statusCode = 400;
+  } else if (error.message && error instanceof Error) {
+    // Generic Error objects with custom messages - preserve the message
+    response.error = 'Bad Request';
+    response.message = error.message;
+    response.code = error.code || 'ERROR';
+    response.statusCode = 400;
   }
 
   // Set status code

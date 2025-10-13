@@ -7,6 +7,7 @@ import { PermissionProvider } from './context/PermissionContext';
 import { UserProvider } from './context/UserContext';
 import { DashboardProvider } from './context/DashboardContext';
 import { DeviceDetailProvider } from './context/DeviceDetailContext';
+import { DeviceProvider } from './context/DeviceContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -111,15 +112,17 @@ const App = () => {
         <ClientProvider>
           <RoleProvider>
             <UserProvider>
-              <DashboardProvider>
-                <DeviceDetailProvider>
-                  <Router>
-                    <div className="App">
-                      <AppRoutes />
-                    </div>
-                  </Router>
-                </DeviceDetailProvider>
-              </DashboardProvider>
+              <DeviceProvider>
+                <DashboardProvider>
+                  <DeviceDetailProvider>
+                    <Router>
+                      <div className="App">
+                        <AppRoutes />
+                      </div>
+                    </Router>
+                  </DeviceDetailProvider>
+                </DashboardProvider>
+              </DeviceProvider>
             </UserProvider>
           </RoleProvider>
         </ClientProvider>

@@ -74,12 +74,20 @@ export const ClientProvider = ({ children }) => {
   const getClientHierarchy = useCallback(async (excludeClientId = null) => {
     try {
       setError(null);
-      
-      const response = await clientService.getClientHierarchy(excludeClientId);
-      
+
+      // Use getDescendantClients to get hierarchical clients (user's client + descendants)
+      const response = await clientService.getDescendantClients();
+
       if (response.success) {
-        setClientHierarchy(response.data.clients);
-        return response.data.clients;
+        let clients = response.data.clients;
+
+        // Exclude the specified client if provided (for edit mode)
+        if (excludeClientId) {
+          clients = clients.filter(client => client.client_id !== parseInt(excludeClientId));
+        }
+
+        setClientHierarchy(clients);
+        return clients;
       } else {
         throw new Error(response.message || 'Failed to fetch client hierarchy');
       }
