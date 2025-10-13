@@ -42,13 +42,17 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
           clientsData = clientsResponse.data;
         }
 
-        // Filter out the current client if device is assigned to one
+        // Filter to show only descendants, not the user's own client (level 0)
+        // Also exclude the client that currently owns this device
+        let descendantsOnly = clientsData.filter(client => client.level && client.level > 0);
+
+        // Filter out the current device owner from the list
         if (device?.client_id) {
-          clientsData = clientsData.filter(client => client.client_id !== device.client_id);
+          descendantsOnly = descendantsOnly.filter(client => client.client_id !== device.client_id);
         }
 
-        setClients(clientsData);
-        console.log('✅ TransferDeviceModal: Loaded descendant clients:', clientsData);
+        setClients(descendantsOnly);
+        console.log('✅ TransferDeviceModal: Loaded descendant clients (excluding own and current owner):', descendantsOnly);
       } else {
         console.warn('⚠️ TransferDeviceModal: Failed to load descendant clients:', clientsResponse);
         setError('Failed to load clients data');
