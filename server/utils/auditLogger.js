@@ -43,6 +43,7 @@ export const AUDIT_ACTIONS = {
   DEVICE_CREATED: 'DEVICE_CREATED',
   DEVICE_UPDATED: 'DEVICE_UPDATED',
   DEVICE_DELETED: 'DEVICE_DELETED',
+  DEVICE_TRANSFERRED: 'DEVICE_TRANSFERRED',
   DEVICE_ACTIVATED: 'DEVICE_ACTIVATED',
   DEVICE_DEACTIVATED: 'DEVICE_DEACTIVATED',
   
@@ -133,29 +134,29 @@ export const createAuditLog = async (auditData) => {
     }
 
     const query = `
-      INSERT INTO AUDIT_LOGS (
-        user_id, 
-        activity_type, 
-        action, 
-        message, 
-        target_type, 
-        target_id, 
-        details, 
-        ip_address, 
-        user_agent, 
+      INSERT INTO audit_log (
+        user_id,
+        activity_type,
+        action,
+        message,
+        target_type,
+        target_id,
+        details,
+        ip_address,
+        user_agent,
         created_at
       )
       OUTPUT INSERTED.*
       VALUES (
-        @user_id, 
-        @activity_type, 
-        @action, 
-        @message, 
-        @target_type, 
-        @target_id, 
-        @details, 
-        @ip_address, 
-        @user_agent, 
+        @user_id,
+        @activity_type,
+        @action,
+        @message,
+        @target_type,
+        @target_id,
+        @details,
+        @ip_address,
+        @user_agent,
         @timestamp
       )
     `;
@@ -277,7 +278,7 @@ export const getAuditLogs = async (filters = {}, page = 1, limit = 50, sortBy = 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM AUDIT_LOGS al
+      FROM audit_log al
       ${whereClause}
     `;
 
@@ -289,14 +290,14 @@ export const getAuditLogs = async (filters = {}, page = 1, limit = 50, sortBy = 
     request.input('limit', limit);
 
     const dataQuery = `
-      SELECT 
+      SELECT
         al.*,
         u.first_name,
         u.last_name,
         u.email,
         u.user_name
-      FROM AUDIT_LOGS al
-      LEFT JOIN USERS u ON al.user_id = u.user_id
+      FROM audit_log al
+      LEFT JOIN [user] u ON al.user_id = u.user_id
       ${whereClause}
       ORDER BY al.${validSortBy} ${validSortOrder}
       OFFSET @offset ROWS
@@ -383,14 +384,14 @@ export const getAuditLogStats = async (filters = {}) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const statsQuery = `
-      SELECT 
+      SELECT
         COUNT(*) as total_logs,
         COUNT(DISTINCT user_id) as unique_users,
         COUNT(DISTINCT activity_type) as activity_types,
-        COUNT(DISTINCT DATE(created_at)) as active_days,
+        COUNT(DISTINCT CAST(created_at AS DATE)) as active_days,
         MIN(created_at) as earliest_log,
         MAX(created_at) as latest_log
-      FROM AUDIT_LOGS
+      FROM audit_log
       ${whereClause}
     `;
 
@@ -399,11 +400,11 @@ export const getAuditLogStats = async (filters = {}) => {
 
     // Get activity type breakdown
     const activityQuery = `
-      SELECT 
+      SELECT
         activity_type,
         COUNT(*) as count,
         COUNT(DISTINCT user_id) as unique_users
-      FROM AUDIT_LOGS
+      FROM audit_log
       ${whereClause}
       GROUP BY activity_type
       ORDER BY count DESC
@@ -414,14 +415,14 @@ export const getAuditLogStats = async (filters = {}) => {
 
     // Get daily activity for the last 30 days
     const dailyQuery = `
-      SELECT 
-        CAST(created_at as DATE) as date,
+      SELECT
+        CAST(created_at AS DATE) as date,
         COUNT(*) as count,
         COUNT(DISTINCT user_id) as unique_users
-      FROM AUDIT_LOGS
+      FROM audit_log
       WHERE created_at >= DATEADD(day, -30, GETDATE())
         ${conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : ''}
-      GROUP BY CAST(created_at as DATE)
+      GROUP BY CAST(created_at AS DATE)
       ORDER BY date DESC
     `;
 
@@ -465,7 +466,7 @@ export const cleanupAuditLogs = async (daysToKeep = 365) => {
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
     const query = `
-      DELETE FROM AUDIT_LOGS 
+      DELETE FROM audit_log
       WHERE created_at < @cutoffDate
     `;
 

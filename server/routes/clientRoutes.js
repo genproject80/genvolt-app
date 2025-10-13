@@ -6,6 +6,7 @@ import {
   getAllClients,
   getClientById,
   getClientHierarchy,
+  getDescendantClients,
   createClient,
   updateClient,
   deleteClient,
@@ -171,6 +172,15 @@ router.use(authenticate);
 router.get('/hierarchy',
   requirePermission('View Client'),
   getClientHierarchy
+);
+
+/**
+ * GET /api/clients/descendants
+ * Get descendant clients (children hierarchy) for current user's client (requires View Client permission)
+ */
+router.get('/descendants',
+  requirePermission('View Client'),
+  getDescendantClients
 );
 
 /**

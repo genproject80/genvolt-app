@@ -25,6 +25,7 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import hierarchyFilterRoutes from './routes/hierarchyFilterRoutes.js';
 import iotDataRoutes from './routes/iotDataRoutes.js';
 import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
+import deviceRoutes from './routes/deviceRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -58,20 +59,32 @@ app.use(helmet({
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // In development, allow any localhost origin
+    if (origin && origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
+
+    // Fallback: check against allowed origins
     const allowedOrigins = [
       process.env.CORS_ORIGIN || 'http://localhost:3008',
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
-      'http://localhost:3007'
+      'http://localhost:3003',
+      'http://localhost:3004',
+      'http://localhost:3005',
+      'http://localhost:3006',
+      'http://localhost:3007',
+      'http://localhost:3009'
     ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -139,6 +152,7 @@ app.use('/api/dashboards', dashboardRoutes);
 app.use('/api/hierarchy-filters', hierarchyFilterRoutes);
 app.use('/api/iot-data', iotDataRoutes);
 app.use('/api/device-details', deviceDetailRoutes);
+app.use('/api/devices', deviceRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -155,7 +169,8 @@ app.get('/api', (req, res) => {
       dashboards: '/api/dashboards',
       hierarchyFilters: '/api/hierarchy-filters',
       iotData: '/api/iot-data',
-      deviceDetails: '/api/device-details'
+      deviceDetails: '/api/device-details',
+      devices: '/api/devices'
     }
   });
 });

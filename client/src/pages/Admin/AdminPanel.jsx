@@ -45,8 +45,7 @@ const AdminPanel = () => {
       id: 'devices',
       name: 'Device Management',
       icon: ComputerDesktopIcon,
-      component: DeviceManagement,
-      disabled: true
+      component: DeviceManagement
     }
   ];
 

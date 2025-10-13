@@ -222,8 +222,8 @@ export const DashboardProvider = ({ children }) => {
   // Fetch IoT data with current filters
   const fetchIoTData = useCallback(async (options = {}) => {
     const {
-      page = iotDataPagination.page,
-      limit = iotDataPagination.limit,
+      page = 1,
+      limit = 20,
       search = '',
       sortField = 'Timestamp',
       sortOrder = 'DESC'
@@ -251,7 +251,14 @@ export const DashboardProvider = ({ children }) => {
       const response = await makeAuthenticatedRequest(`/iot-data/sick?${params}`);
 
       setIotData(response.data || []);
-      setIotDataPagination(response.meta || {});
+      setIotDataPagination(response.meta || {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrevious: false
+      });
 
       return response;
     } catch (err) {
@@ -261,7 +268,7 @@ export const DashboardProvider = ({ children }) => {
     } finally {
       setIotDataLoading(false);
     }
-  }, [filteredDeviceIds, iotDataPagination.page, iotDataPagination.limit]);
+  }, [filteredDeviceIds]);
 
   // Fetch statistics for current filters
   const fetchStatistics = useCallback(async () => {
@@ -380,12 +387,12 @@ export const DashboardProvider = ({ children }) => {
     if (isAuthenticated && activeDashboard) {
       updateFilterOptions();
     }
-  }, [hierarchyFilters.sden, hierarchyFilters.den, hierarchyFilters.aen, isAuthenticated, activeDashboard]);
+  }, [hierarchyFilters.sden, hierarchyFilters.den, hierarchyFilters.aen, isAuthenticated, activeDashboard?.id, updateFilterOptions]);
 
-  // Auto-fetch IoT data when filters or pagination changes
+  // Auto-fetch IoT data when filtered devices change (not pagination - that's manual)
   useEffect(() => {
-    if (isAuthenticated && activeDashboard && (filteredDeviceIds.length > 0 || Object.values(hierarchyFilters).some(Boolean))) {
-      fetchIoTData();
+    if (isAuthenticated && activeDashboard && filteredDeviceIds.length > 0) {
+      fetchIoTData({ page: 1 }); // Reset to page 1 when filters change
     } else if (!activeDashboard) {
       // Clear data when no dashboard is selected
       setIotData([]);
@@ -393,7 +400,8 @@ export const DashboardProvider = ({ children }) => {
       setFilteredDeviceIds([]);
       setStatistics(null);
     }
-  }, [filteredDeviceIds, iotDataPagination.page, iotDataPagination.limit, isAuthenticated, activeDashboard]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredDeviceIds.length, isAuthenticated, activeDashboard?.id]);
 
   // Auto-fetch statistics when filtered devices change
   useEffect(() => {

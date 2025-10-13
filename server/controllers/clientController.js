@@ -85,7 +85,7 @@ export const getClientById = asyncHandler(async (req, res) => {
  */
 export const getClientHierarchy = asyncHandler(async (req, res) => {
   const { excludeClientId } = req.query;
-  
+
   try {
     const hierarchy = await Client.getClientHierarchy(
       excludeClientId ? parseInt(excludeClientId) : null
@@ -98,6 +98,62 @@ export const getClientHierarchy = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to get client hierarchy:', error);
+    throw error;
+  }
+});
+
+/**
+ * Get descendant clients (children hierarchy) for current user's client
+ * GET /api/clients/descendants
+ */
+export const getDescendantClients = asyncHandler(async (req, res) => {
+  try {
+    const currentUser = req.user;
+
+    // Check if user has a client_id
+    if (!currentUser.client_id) {
+      // If user has no client_id (SYSTEM_ADMIN, SUPER_ADMIN), return all clients
+      const allClients = await Client.findAll({ includeInactive: false });
+      return res.json({
+        success: true,
+        message: 'All clients retrieved successfully',
+        data: { clients: allClients.map(c => ({ client_id: c.client_id, name: c.name, email: c.email, parent_id: c.parent_id })) }
+      });
+    }
+
+    // Get descendant clients for the user's client
+    const descendants = await Client.getDescendantClients(currentUser.client_id);
+
+    // Get user's own client to include in the list
+    const userClient = await Client.findById(currentUser.client_id);
+
+    // Combine user's client and descendants
+    const clients = [
+      {
+        client_id: userClient.client_id,
+        name: userClient.name,
+        email: userClient.email,
+        parent_id: userClient.parent_id,
+        level: 0 // User's own client
+      },
+      ...descendants
+    ];
+
+    logger.info('Retrieved hierarchical clients for user', {
+      userId: currentUser.user_id,
+      clientId: currentUser.client_id,
+      clientName: userClient.name,
+      descendantCount: descendants.length,
+      totalCount: clients.length
+    });
+
+    res.json({
+      success: true,
+      message: 'Hierarchical clients retrieved successfully',
+      data: { clients }
+    });
+  } catch (error) {
+    logger.error('Failed to get descendant clients:', error);
     throw error;
   }
 });

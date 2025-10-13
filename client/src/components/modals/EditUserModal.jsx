@@ -54,9 +54,10 @@ const EditUserModal = ({ isOpen, onClose, user, onSuccess }) => {
     try {
       setLoadingData(true);
 
+      // Load roles and hierarchical clients (descendants only)
       const [rolesResponse, clientsResponse] = await Promise.all([
         roleService.getAllRoles({ limit: 100 }),
-        clientService.getAllClients({ limit: 100 })
+        clientService.getDescendantClients() // Fetch only user's client and descendants
       ]);
 
 
