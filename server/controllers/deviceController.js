@@ -184,19 +184,30 @@ export const createDevice = asyncHandler(async (req, res) => {
   const device = await Device.create(deviceData);
 
   // If device is assigned to a different client than the logged-in user's client,
-  // create a transfer record in client_device table
+  // create transfer record(s) in client_device table with hierarchy chain
   if (device.client_id && currentUser.client_id && device.client_id !== currentUser.client_id) {
-    logger.info('Creating client_device record for initial assignment:', {
+    logger.info('Device assigned to different client. Creating transfer history:', {
       seller_id: currentUser.client_id,
       buyer_id: device.client_id,
       device_id: device.id
     });
 
-    await Device.createClientDeviceRecord(
-      currentUser.client_id,  // seller_id (logged-in user's client)
-      device.client_id,        // buyer_id (assigned client)
-      device.id                // device primary key
-    );
+    // Check if target is a descendant and create the complete hierarchy chain
+    const isTargetDescendant = await Client.isDescendant(currentUser.client_id, device.client_id);
+
+    if (isTargetDescendant) {
+      // Create the complete transfer chain for hierarchical assignment
+      logger.info('Target client is a descendant. Creating complete transfer chain...');
+      await Device.createMissingTransferChain(device.id, currentUser.client_id, device.client_id);
+    } else {
+      // Direct assignment to non-descendant (e.g., sibling) - create single record
+      logger.info('Target client is not a descendant. Creating direct transfer record.');
+      await Device.createClientDeviceRecord(
+        currentUser.client_id,  // seller_id (logged-in user's client)
+        device.client_id,        // buyer_id (assigned client)
+        device.id                // device primary key
+      );
+    }
   }
 
   // Log device creation
