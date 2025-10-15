@@ -389,6 +389,87 @@ export class Client {
   }
 
   /**
+   * Get the hierarchy path from parent client to target child client
+   * @param {number} parentClientId - Starting client ID
+   * @param {number} targetClientId - Target client ID
+   * @returns {Promise<Array|null>} Array of client IDs representing the path from parent to target, or null if no path exists
+   */
+  static async getHierarchyPath(parentClientId, targetClientId) {
+    try {
+      // Use recursive CTE to build the path from target back to parent
+      const query = `
+        WITH ClientPath AS (
+          -- Start with the target client
+          SELECT
+            client_id,
+            parent_id,
+            name,
+            CAST(client_id AS VARCHAR(MAX)) as path,
+            0 as level
+          FROM client
+          WHERE client_id = @targetClientId
+
+          UNION ALL
+
+          -- Recursively get parent clients
+          SELECT
+            c.client_id,
+            c.parent_id,
+            c.name,
+            CAST(c.client_id AS VARCHAR(MAX)) + ',' + cp.path as path,
+            cp.level + 1 as level
+          FROM client c
+          INNER JOIN ClientPath cp ON c.client_id = cp.parent_id
+          WHERE c.client_id IS NOT NULL
+        )
+        SELECT
+          client_id,
+          parent_id,
+          name,
+          path,
+          level
+        FROM ClientPath
+        WHERE client_id = @parentClientId
+      `;
+
+      const result = await executeQuery(query, { parentClientId, targetClientId });
+
+      if (result.recordset.length === 0) {
+        // No path found - target is not a descendant of parent
+        logDB('debug', 'No hierarchy path found - target is not a descendant of parent', {
+          parentClientId,
+          targetClientId
+        });
+        return null;
+      }
+
+      const record = result.recordset[0];
+
+      // Parse the path string into an array of client IDs
+      const pathString = record.path;
+      const pathIds = pathString.split(',').map(id => parseInt(id));
+
+      // The path is already in parent-to-child order (e.g., "1,2,4,7")
+      // No need to reverse
+
+      logDB('debug', 'Retrieved hierarchy path', {
+        parentClientId,
+        targetClientId,
+        path: pathIds
+      });
+
+      return pathIds;
+    } catch (error) {
+      logDB('error', 'Failed to get hierarchy path', {
+        parentClientId,
+        targetClientId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get client count
    * @param {Object} options - Query options
    * @returns {Promise<number>} Total count of clients
