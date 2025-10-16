@@ -40,7 +40,8 @@ export const getDevices = asyncHandler(async (req, res) => {
     sortOrder = 'desc',
     Model,
     startDate,
-    endDate
+    endDate,
+    client_id  // New parameter: filter by specific client_id
   } = req.query;
 
   const currentUser = req.user;
@@ -48,22 +49,48 @@ export const getDevices = asyncHandler(async (req, res) => {
   // Build search filters with hierarchical access control
   const filters = {};
 
-  // Apply client-scoped filtering based on role
-  if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
-    // Get all descendant clients to include devices from child clients
-    const descendants = await Client.getDescendantClients(currentUser.client_id);
-    const descendantIds = descendants.map(client => client.client_id);
+  // If client_id is provided in query, filter by that specific client
+  if (client_id) {
+    const selectedClientId = parseInt(client_id);
 
-    // Include user's own client and all descendants
-    filters.client_ids = [currentUser.client_id, ...descendantIds];
+    // Verify user has access to the selected client
+    if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
+      // Check if selected client is the user's own client or a descendant
+      const descendants = await Client.getDescendantClients(currentUser.client_id);
+      const descendantIds = descendants.map(client => client.client_id);
+      const accessibleClientIds = [currentUser.client_id, ...descendantIds];
 
-    logger.info('Filtering devices for hierarchical access:', {
-      userClientId: currentUser.client_id,
-      descendantCount: descendantIds.length,
-      totalClientIds: filters.client_ids.length
+      if (!accessibleClientIds.includes(selectedClientId)) {
+        throw new AuthorizationError('Access denied to selected client');
+      }
+    }
+
+    // Filter by the specific selected client only
+    filters.client_id = selectedClientId;
+
+    logger.info('Filtering devices for specific client:', {
+      selectedClientId,
+      requestedBy: currentUser.user_id
     });
+  } else {
+    // No specific client selected - apply default hierarchical filtering
+    // Apply client-scoped filtering based on role
+    if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
+      // Get all descendant clients to include devices from child clients
+      const descendants = await Client.getDescendantClients(currentUser.client_id);
+      const descendantIds = descendants.map(client => client.client_id);
+
+      // Include user's own client and all descendants
+      filters.client_ids = [currentUser.client_id, ...descendantIds];
+
+      logger.info('Filtering devices for hierarchical access:', {
+        userClientId: currentUser.client_id,
+        descendantCount: descendantIds.length,
+        totalClientIds: filters.client_ids.length
+      });
+    }
+    // SYSTEM_ADMIN and SUPER_ADMIN can see all devices (no additional filters)
   }
-  // SYSTEM_ADMIN and SUPER_ADMIN can see all devices (no additional filters)
 
   if (search) {
     filters.search = search;

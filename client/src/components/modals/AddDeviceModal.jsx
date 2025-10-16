@@ -186,15 +186,15 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
       title="Add New Device"
       size="md"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {errors.submit && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-700">{errors.submit}</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+            <p className="text-xs text-red-700">{errors.submit}</p>
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Device ID *
           </label>
           <input
@@ -203,18 +203,18 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.device_id}
             onChange={handleChange}
             placeholder="Enter unique device ID"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.device_id ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.device_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.device_id}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.device_id}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Machine ID
           </label>
           <input
@@ -223,18 +223,18 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.machin_id}
             onChange={handleChange}
             placeholder="Enter machine ID (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.machin_id ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.machin_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.machin_id}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.machin_id}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Model
           </label>
           <input
@@ -243,25 +243,25 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.Model}
             onChange={handleChange}
             placeholder="Enter device model (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.Model ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.Model && (
-            <p className="text-sm text-red-600 mt-1">{errors.Model}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.Model}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Client
           </label>
           <select
             name="client_id"
             value={formData.client_id}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.client_id ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
@@ -274,12 +274,12 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             ))}
           </select>
           {errors.client_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.client_id}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.client_id}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Conversion Logic
           </label>
           <input
@@ -288,18 +288,18 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.conversionLogic_ld}
             onChange={handleChange}
             placeholder="Enter conversion logic (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.conversionLogic_ld ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.conversionLogic_ld && (
-            <p className="text-sm text-red-600 mt-1">{errors.conversionLogic_ld}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.conversionLogic_ld}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Transaction Table ID
           </label>
           <input
@@ -308,18 +308,18 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.TransactionTableID}
             onChange={handleChange}
             placeholder="Enter transaction table ID (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.TransactionTableID ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.TransactionTableID && (
-            <p className="text-sm text-red-600 mt-1">{errors.TransactionTableID}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.TransactionTableID}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Transaction Table Name
           </label>
           <input
@@ -328,28 +328,28 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             value={formData.TransactionTableName}
             onChange={handleChange}
             placeholder="Enter transaction table name (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
               errors.TransactionTableName ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={loading || loadingData}
           />
           {errors.TransactionTableName && (
-            <p className="text-sm text-red-600 mt-1">{errors.TransactionTableName}</p>
+            <p className="text-xs text-red-600 mt-0.5">{errors.TransactionTableName}</p>
           )}
         </div>
 
-        <div className="flex justify-end space-x-3 pt-4">
+        <div className="flex justify-end space-x-2 pt-2 border-t border-gray-200 mt-3">
           <button
             type="button"
             onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             disabled={loading || loadingData}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className="px-3 py-1.5 text-sm font-medium text-white bg-primary-600 border border-transparent rounded hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             disabled={loading || loadingData}
           >
             {loading && <LoadingSpinner size="sm" inline className="mr-2" />}

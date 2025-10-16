@@ -3,6 +3,7 @@ import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, ArrowsRightLe
 import { useDevice } from '../../context/DeviceContext';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import { useAuth } from '../../context/AuthContext';
+import { clientService } from '../../services/clientService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AddDeviceModal from '../../components/modals/AddDeviceModal';
 import EditDeviceModal from '../../components/modals/EditDeviceModal';
@@ -35,6 +36,9 @@ const DeviceManagement = () => {
   // Local state for filters and search
   const [searchTerm, setSearchTerm] = useState('');
   const [modelFilter, setModelFilter] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState(''); // New state for client filter
+  const [clients, setClients] = useState([]); // New state for clients list
+  const [loadingClients, setLoadingClients] = useState(false); // New state for loading clients
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -48,6 +52,41 @@ const DeviceManagement = () => {
 
   // Check if user has access
   const hasAccess = canViewDevice;
+
+  // Load clients on component mount
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        setLoadingClients(true);
+        const response = await clientService.getDescendantClients();
+
+        if (response && response.success) {
+          let clientsData = [];
+
+          if (response.data?.clients && Array.isArray(response.data.clients)) {
+            clientsData = response.data.clients;
+          } else if (response.data?.data && Array.isArray(response.data.data)) {
+            clientsData = response.data.data;
+          } else if (response.clients && Array.isArray(response.clients)) {
+            clientsData = response.clients;
+          } else if (Array.isArray(response.data)) {
+            clientsData = response.data;
+          }
+
+          // Include all clients (user's own + descendants)
+          setClients(clientsData);
+        }
+      } catch (err) {
+        console.error('Failed to load clients:', err);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+
+    if (hasAccess) {
+      loadClients();
+    }
+  }, [hasAccess]);
 
   // Load devices with current filters - memoized to prevent recreation
   const loadDevices = useCallback(async () => {
@@ -66,6 +105,11 @@ const DeviceManagement = () => {
         sortOrder: 'desc'
       };
 
+      // Add client_id filter if a specific client is selected
+      if (selectedClientId && selectedClientId.trim()) {
+        options.client_id = selectedClientId.trim();
+      }
+
       // Only add non-empty filters
       if (searchTerm && searchTerm.trim()) {
         options.search = searchTerm.trim();
@@ -81,14 +125,38 @@ const DeviceManagement = () => {
     } finally {
       isLoadingDevices.current = false;
     }
-  }, [currentPage, searchTerm, modelFilter, getAllDevices]);
+  }, [currentPage, searchTerm, modelFilter, selectedClientId, getAllDevices]);
 
-  // Load devices on component mount and when filters change
+  // Initialize selectedClientId with logged-in user's client_id on mount
+  // and load devices for logged-in user's client automatically
   useEffect(() => {
-    if (hasAccess) {
-      loadDevices();
+    if (hasAccess && currentUser && currentUser.client_id) {
+      const userClientId = currentUser.client_id.toString();
+      setSelectedClientId(userClientId);
+
+      // Automatically load devices for logged-in user's client on initial mount
+      const loadInitialDevices = async () => {
+        try {
+          isLoadingDevices.current = true;
+          const options = {
+            page: 1,
+            limit: 10,
+            sortBy: 'onboarding_date',
+            sortOrder: 'desc',
+            client_id: userClientId
+          };
+          await getAllDevices(options);
+        } catch (err) {
+          console.error('Failed to load initial devices:', err);
+        } finally {
+          isLoadingDevices.current = false;
+        }
+      };
+
+      loadInitialDevices();
     }
-  }, [loadDevices, hasAccess]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccess, currentUser]);
 
   // Load device stats only once on component mount
   useEffect(() => {
@@ -97,6 +165,12 @@ const DeviceManagement = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess]);
+
+  // Handle Show Device button click
+  const handleShowDevices = () => {
+    setCurrentPage(1); // Reset to first page
+    loadDevices();
+  };
 
   // Handle search
   const handleSearch = (value) => {
@@ -226,24 +300,61 @@ const DeviceManagement = () => {
         </div>
       )}
 
-      {/* Search and Filter */}
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Search devices..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
+      {/* Client Filter, Search and Filter in One Row */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-end space-x-3">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Client
+            </label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              disabled={loadingClients}
+            >
+              <option value="">Select a client</option>
+              {clients.map(client => (
+                <option key={client.client_id} value={client.client_id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <button
+              onClick={handleShowDevices}
+              disabled={!selectedClientId || loading}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              Show Devices
+            </button>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Search Devices
+            </label>
+            <input
+              type="text"
+              placeholder="Search devices..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+          <div className="w-64">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Filter By Model
+            </label>
+            <input
+              type="text"
+              placeholder="Filter by model..."
+              value={modelFilter}
+              onChange={(e) => handleModelFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Filter by model..."
-          value={modelFilter}
-          onChange={(e) => handleModelFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        />
       </div>
 
       {/* Devices Table */}
