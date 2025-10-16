@@ -14,12 +14,16 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
 
-  // Load clients data when modal opens
+  // Load clients data and populate machine ID when modal opens
   useEffect(() => {
     if (isOpen) {
       loadClients();
+      // Pre-populate machine ID if device has one
+      if (device?.machin_id) {
+        setMachineId(device.machin_id);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, device]);
 
   const loadClients = async () => {
     try {
