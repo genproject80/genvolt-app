@@ -102,6 +102,7 @@ export const authService = {
         firstName: user.first_name,
         lastName: user.last_name,
         role: user.role_name || 'user',
+        client_id: user.client_id,
         avatar: null
       };
 
@@ -230,6 +231,7 @@ export const authService = {
       firstName: user.first_name,
       lastName: user.last_name,
       role: user.role_name || 'user',
+      client_id: user.client_id,
       avatar: null
     };
   },

@@ -40,7 +40,8 @@ export const getDevices = asyncHandler(async (req, res) => {
     sortOrder = 'desc',
     Model,
     startDate,
-    endDate
+    endDate,
+    client_id  // New parameter: filter by specific client_id
   } = req.query;
 
   const currentUser = req.user;
@@ -48,22 +49,48 @@ export const getDevices = asyncHandler(async (req, res) => {
   // Build search filters with hierarchical access control
   const filters = {};
 
-  // Apply client-scoped filtering based on role
-  if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
-    // Get all descendant clients to include devices from child clients
-    const descendants = await Client.getDescendantClients(currentUser.client_id);
-    const descendantIds = descendants.map(client => client.client_id);
+  // If client_id is provided in query, filter by that specific client
+  if (client_id) {
+    const selectedClientId = parseInt(client_id);
 
-    // Include user's own client and all descendants
-    filters.client_ids = [currentUser.client_id, ...descendantIds];
+    // Verify user has access to the selected client
+    if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
+      // Check if selected client is the user's own client or a descendant
+      const descendants = await Client.getDescendantClients(currentUser.client_id);
+      const descendantIds = descendants.map(client => client.client_id);
+      const accessibleClientIds = [currentUser.client_id, ...descendantIds];
 
-    logger.info('Filtering devices for hierarchical access:', {
-      userClientId: currentUser.client_id,
-      descendantCount: descendantIds.length,
-      totalClientIds: filters.client_ids.length
+      if (!accessibleClientIds.includes(selectedClientId)) {
+        throw new AuthorizationError('Access denied to selected client');
+      }
+    }
+
+    // Filter by the specific selected client only
+    filters.client_id = selectedClientId;
+
+    logger.info('Filtering devices for specific client:', {
+      selectedClientId,
+      requestedBy: currentUser.user_id
     });
+  } else {
+    // No specific client selected - apply default hierarchical filtering
+    // Apply client-scoped filtering based on role
+    if (currentUser.role_name === 'CLIENT_ADMIN' || currentUser.role_name === 'CLIENT_USER') {
+      // Get all descendant clients to include devices from child clients
+      const descendants = await Client.getDescendantClients(currentUser.client_id);
+      const descendantIds = descendants.map(client => client.client_id);
+
+      // Include user's own client and all descendants
+      filters.client_ids = [currentUser.client_id, ...descendantIds];
+
+      logger.info('Filtering devices for hierarchical access:', {
+        userClientId: currentUser.client_id,
+        descendantCount: descendantIds.length,
+        totalClientIds: filters.client_ids.length
+      });
+    }
+    // SYSTEM_ADMIN and SUPER_ADMIN can see all devices (no additional filters)
   }
-  // SYSTEM_ADMIN and SUPER_ADMIN can see all devices (no additional filters)
 
   if (search) {
     filters.search = search;
@@ -184,19 +211,30 @@ export const createDevice = asyncHandler(async (req, res) => {
   const device = await Device.create(deviceData);
 
   // If device is assigned to a different client than the logged-in user's client,
-  // create a transfer record in client_device table
+  // create transfer record(s) in client_device table with hierarchy chain
   if (device.client_id && currentUser.client_id && device.client_id !== currentUser.client_id) {
-    logger.info('Creating client_device record for initial assignment:', {
+    logger.info('Device assigned to different client. Creating transfer history:', {
       seller_id: currentUser.client_id,
       buyer_id: device.client_id,
       device_id: device.id
     });
 
-    await Device.createClientDeviceRecord(
-      currentUser.client_id,  // seller_id (logged-in user's client)
-      device.client_id,        // buyer_id (assigned client)
-      device.id                // device primary key
-    );
+    // Check if target is a descendant and create the complete hierarchy chain
+    const isTargetDescendant = await Client.isDescendant(currentUser.client_id, device.client_id);
+
+    if (isTargetDescendant) {
+      // Create the complete transfer chain for hierarchical assignment
+      logger.info('Target client is a descendant. Creating complete transfer chain...');
+      await Device.createMissingTransferChain(device.id, currentUser.client_id, device.client_id);
+    } else {
+      // Direct assignment to non-descendant (e.g., sibling) - create single record
+      logger.info('Target client is not a descendant. Creating direct transfer record.');
+      await Device.createClientDeviceRecord(
+        currentUser.client_id,  // seller_id (logged-in user's client)
+        device.client_id,        // buyer_id (assigned client)
+        device.id                // device primary key
+      );
+    }
   }
 
   // Log device creation

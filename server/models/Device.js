@@ -560,6 +560,77 @@ export class Device {
   }
 
   /**
+   * Create missing transfer history chain for hierarchical transfers
+   * @param {number} deviceId - Device primary key ID
+   * @param {number} sellerId - Current owner client ID
+   * @param {number} buyerId - Target client ID
+   * @returns {Promise<Array>} Array of created transfer records
+   */
+  static async createMissingTransferChain(deviceId, sellerId, buyerId) {
+    try {
+      logger.info('Creating missing transfer history chain:', { deviceId, sellerId, buyerId });
+
+      // Get the hierarchy path from seller to buyer
+      const hierarchyPath = await Client.getHierarchyPath(sellerId, buyerId);
+
+      if (!hierarchyPath || hierarchyPath.length < 2) {
+        logger.info('No intermediate transfers needed - direct relationship or no path');
+        return [];
+      }
+
+      logger.info('Hierarchy path found:', hierarchyPath);
+
+      // Check which transfers already exist
+      const existingTransfersQuery = `
+        SELECT seller_id, buyer_id
+        FROM client_device
+        WHERE device_id = @deviceId
+      `;
+      const existingResult = await executeQuery(existingTransfersQuery, { deviceId });
+      const existingTransfers = new Set(
+        existingResult.recordset.map(t => `${t.seller_id}-${t.buyer_id}`)
+      );
+
+      logger.info('Existing transfers:', Array.from(existingTransfers));
+
+      // Create missing transfer records for each step in the chain
+      // Records are created sequentially with slight delays to ensure proper chronological order
+      const createdRecords = [];
+      for (let i = 0; i < hierarchyPath.length - 1; i++) {
+        const currentSeller = hierarchyPath[i];
+        const currentBuyer = hierarchyPath[i + 1];
+        const transferKey = `${currentSeller}-${currentBuyer}`;
+
+        if (!existingTransfers.has(transferKey)) {
+          logger.info(`Creating missing transfer record ${i + 1}/${hierarchyPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
+
+          const record = await Device.createClientDeviceRecord(
+            currentSeller,
+            currentBuyer,
+            deviceId
+          );
+          createdRecords.push(record);
+          existingTransfers.add(transferKey);
+
+          // Add a 10ms delay between records to ensure proper chronological ordering
+          // This ensures transfer_date values are distinct and maintain hierarchy order
+          if (i < hierarchyPath.length - 2) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        } else {
+          logger.info(`Transfer record already exists: ${currentSeller} → ${currentBuyer}`);
+        }
+      }
+
+      logger.info(`Created ${createdRecords.length} missing transfer records`);
+      return createdRecords;
+    } catch (error) {
+      logger.error('Error creating missing transfer chain:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Transfer device to another client
    * @param {number} deviceId - Device ID
    * @param {number} sellerId - Current client ID
@@ -590,6 +661,18 @@ export class Device {
           transfer: null,
           device: await Device.findById(deviceId)
         };
+      }
+
+      // Check if target is a descendant - if yes, create missing transfer chain
+      const isTargetDescendant = await Client.isDescendant(sellerId, buyerId);
+
+      if (isTargetDescendant) {
+        // Target is a descendant - ensure complete transfer history chain exists
+        logger.info('Target is a descendant. Checking and creating missing transfer chain...');
+
+        await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
+
+        logger.info('Transfer chain validated/created. Proceeding with final transfer...');
       }
 
       // Check if there's an existing client_device record for this device
@@ -626,13 +709,21 @@ export class Device {
           logger.info('Applying Rule 1: Checking if target is descendant OR sibling...');
 
           // Check if target is a descendant of current owner
-          const isTargetDescendant = await Client.isDescendant(sellerId, buyerId);
-          logger.info('Is target descendant of current owner?', isTargetDescendant);
+          const isTargetDescendantCheck = await Client.isDescendant(sellerId, buyerId);
+          logger.info('Is target descendant of current owner?', isTargetDescendantCheck);
 
-          if (isTargetDescendant) {
-            // Transferring DOWN the hierarchy - CREATE new entry
-            logger.info('Target is a descendant. Transfer allowed (down hierarchy). Creating new client_device entry.');
-            transferRecord = await Device.createClientDeviceRecord(sellerId, buyerId, deviceId);
+          if (isTargetDescendantCheck) {
+            // Transferring DOWN the hierarchy
+            // The transfer chain was already created above, just fetch the latest record
+            logger.info('Target is a descendant. Transfer allowed (down hierarchy). Chain already created.');
+            const latestRecordQuery = `
+              SELECT TOP 1 *
+              FROM client_device
+              WHERE device_id = @deviceId
+              ORDER BY transfer_date DESC
+            `;
+            const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+            transferRecord = latestResult.recordset[0];
           } else {
             // Not a descendant - check if it's a sibling (same parent)
             const currentOwner = await Client.findById(sellerId);
@@ -707,10 +798,10 @@ export class Device {
           // NO siblings, NO up transfers
           logger.info('Applying Rule 2: Device already transferred down. Checking if target is descendant of current owner (ONLY down allowed)...');
 
-          const isTargetDescendant = await Client.isDescendant(sellerId, buyerId);
-          logger.info('Is target descendant of current owner?', isTargetDescendant);
+          const isTargetDescendantCheck2 = await Client.isDescendant(sellerId, buyerId);
+          logger.info('Is target descendant of current owner?', isTargetDescendantCheck2);
 
-          if (!isTargetDescendant) {
+          if (!isTargetDescendantCheck2) {
             logger.error('Transfer blocked: Device has been transferred down the hierarchy. Can only transfer to descendants, not siblings or up.');
             logger.error('Current owner (sellerId):', sellerId, 'Target (buyerId):', buyerId);
             const error = new Error('Device has been transferred down the hierarchy and can only be transferred to descendant clients, not siblings or parent levels');
@@ -718,15 +809,40 @@ export class Device {
             throw error;
           }
 
-          logger.info('Hierarchy validation passed. Target is a descendant. Creating new transfer record.');
+          logger.info('Hierarchy validation passed. Target is a descendant.');
 
-          // Create a new record to transfer further down the hierarchy
-          transferRecord = await Device.createClientDeviceRecord(sellerId, buyerId, deviceId);
+          // If target is a descendant, the chain was already created at line 673
+          // Just fetch the latest record from the chain instead of creating a duplicate
+          logger.info('Transfer chain already created. Fetching the latest record.');
+          const latestRecordQuery = `
+            SELECT TOP 1 *
+            FROM client_device
+            WHERE device_id = @deviceId
+            ORDER BY transfer_date DESC
+          `;
+          const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+          transferRecord = latestResult.recordset[0];
         }
       } else {
-        // No existing record - create new one
-        logger.info('No existing client_device record. Creating new record.');
-        transferRecord = await Device.createClientDeviceRecord(sellerId, buyerId, deviceId);
+        // No existing record
+        // If target is a descendant, the chain was already created above
+        // Otherwise, create a direct transfer record
+        if (isTargetDescendant) {
+          logger.info('No existing client_device record, but chain was already created for descendant transfer.');
+          // Fetch the latest record from the chain
+          const latestRecordQuery = `
+            SELECT TOP 1 *
+            FROM client_device
+            WHERE device_id = @deviceId
+            ORDER BY transfer_date DESC
+          `;
+          const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+          transferRecord = latestResult.recordset[0];
+        } else {
+          // Not a descendant - create direct transfer (e.g., sibling transfer, first transfer to non-descendant)
+          logger.info('No existing client_device record. Creating new record for non-descendant transfer.');
+          transferRecord = await Device.createClientDeviceRecord(sellerId, buyerId, deviceId);
+        }
       }
 
       // Update device client_id and machine_id
@@ -779,7 +895,7 @@ export class Device {
   /**
    * Get device transfer history
    * @param {number} deviceId - Device ID
-   * @returns {Promise<Array>} Transfer history
+   * @returns {Promise<Array>} Transfer history (ordered from oldest to newest)
    */
   static async getTransferHistory(deviceId) {
     try {
@@ -795,7 +911,7 @@ export class Device {
         INNER JOIN client seller ON cd.seller_id = seller.client_id
         INNER JOIN client buyer ON cd.buyer_id = buyer.client_id
         WHERE cd.device_id = @deviceId
-        ORDER BY cd.transfer_date DESC
+        ORDER BY cd.transfer_date ASC
       `;
 
       const result = await executeQuery(query, { deviceId });
