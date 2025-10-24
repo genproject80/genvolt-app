@@ -21,7 +21,13 @@ export const getIoTData = asyncHandler(async (req, res) => {
     limit = 20,
     search,
     sort_field = 'Timestamp',
-    sort_order = 'DESC'
+    sort_order = 'DESC',
+    sden,
+    den,
+    aen,
+    sse,
+    gsm_filter,
+    avg_gsm
   } = req.query;
 
   const user = req.user;
@@ -44,29 +50,79 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const currentPage = parseInt(page);
     const offset = (currentPage - 1) * pageSize;
 
-    // Build the base query
-    let whereClause = 'WHERE 1 = 1';
+    // Build filter conditions
     const request = pool.request();
+    let hkmiJoinCondition = 'LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id';
 
-    // Apply device ID filtering if provided
-    if (deviceIds.length > 0) {
+    // Apply device ID and hierarchy filtering if provided - use INNER JOIN to ensure hierarchy match
+    // Only apply hierarchy filtering if not using GSM filter (GSM filter works on complete dataset)
+    const hasHierarchyFilters = sden || den || aen || sse;
+
+    if (deviceIds.length > 0 && hasHierarchyFilters) {
       const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
-      whereClause += ` AND Device_ID IN (${placeholders})`;
 
       deviceIds.forEach((deviceId, index) => {
         request.input(`deviceId${index}`, sql.VarChar, deviceId);
       });
+
+      // Build hierarchy filter conditions for JOIN
+      let hierarchyConditions = [`hkmi.device_id IN (${placeholders})`];
+
+      if (sden) {
+        hierarchyConditions.push('hkmi.sden = @sden');
+        request.input('sden', sql.VarChar, sden);
+      }
+      if (den) {
+        hierarchyConditions.push('hkmi.den = @den');
+        request.input('den', sql.VarChar, den);
+      }
+      if (aen) {
+        hierarchyConditions.push('hkmi.aen = @aen');
+        request.input('aen', sql.VarChar, aen);
+      }
+      if (sse) {
+        hierarchyConditions.push('hkmi.sse = @sse');
+        request.input('sse', sql.VarChar, sse);
+      }
+
+      // Change to INNER JOIN with device_id and hierarchy filters
+      hkmiJoinCondition = `INNER JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND ${hierarchyConditions.join(' AND ')}`;
+    } else if (deviceIds.length > 0 && !hasHierarchyFilters) {
+      // GSM filter case: filter by device IDs but no hierarchy conditions
+      const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
+
+      deviceIds.forEach((deviceId, index) => {
+        request.input(`deviceId${index}`, sql.VarChar, deviceId);
+      });
+
+      hkmiJoinCondition = `LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.device_id IN (${placeholders})`;
     }
+
+    // Build WHERE conditions for outer query
+    let outerWhereConditions = [];
 
     // Apply search filtering if provided
     if (search) {
-      whereClause += ` AND (
-        Device_ID LIKE @search OR
-        MessageType LIKE @search OR
-        FaultDescriptions LIKE @search
-      )`;
+      outerWhereConditions.push(`(
+        iot.Device_ID LIKE @search OR
+        iot.MessageType LIKE @search OR
+        iot.FaultDescriptions LIKE @search
+      )`);
       request.input('search', sql.VarChar, `%${search}%`);
     }
+
+    // Apply GSM signal strength filter if provided
+    // Filter shows records with GSM_Signal_Strength BELOW the average (e.g., if avg is 2.71, show records < 2.71)
+    if (gsm_filter === 'below_average' && avg_gsm) {
+      // Parse only the numeric value (e.g., "2.71" from "2.71/5" display format)
+      const avgGsmValue = parseFloat(avg_gsm);
+      outerWhereConditions.push('iot.GSM_Signal_Strength < @avgGsm');
+      request.input('avgGsm', sql.Float, avgGsmValue);
+    }
+
+    const outerWhereClause = outerWhereConditions.length > 0
+      ? 'WHERE ' + outerWhereConditions.join(' AND ')
+      : '';
 
     // Validate sort fields
     const allowedSortFields = [
@@ -78,42 +134,61 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const sortField = allowedSortFields.includes(sort_field) ? sort_field : 'Timestamp';
     const sortOrder = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-    // Count query for pagination
+    // Count query for pagination - count all records that match the query
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM iot_data_sick
-      ${whereClause}
+      FROM iot_data_sick iot
+      INNER JOIN (
+        SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
+        FROM iot_data_sick
+        GROUP BY Device_ID
+      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+      ${hkmiJoinCondition}
+      ${outerWhereClause}
     `;
 
     const countResult = await request.query(countQuery);
     const totalCount = countResult.recordset[0].total;
 
-    // Main data query
+    // Main data query with JOIN to cloud_dashboard_hkmi and only latest record per device
     const dataQuery = `
-      SELECT
-        Entry_ID,
-        CreatedAt,
-        Device_ID,
-        MessageType,
-        HexField,
-        GSM_Signal_Strength,
-        Motor_ON_Time_sec,
-        Motor_OFF_Time_sec,
-        Number_of_Wheels_Configured,
-        Latitude,
-        Longitude,
-        Number_of_Wheels_Detected,
-        Fault_Code,
-        Motor_Current_mA,
-        Timestamp,
-        InsertedAt,
-        Train_Passed,
-        FaultDescriptions,
-        Debug_Value,
-        Motor_OFF_Time_min
-      FROM iot_data_sick
-      ${whereClause}
-      ORDER BY ${sortField} ${sortOrder}
+      SELECT DISTINCT
+        iot.Entry_ID,
+        iot.CreatedAt,
+        iot.Device_ID,
+        iot.MessageType,
+        iot.HexField,
+        iot.GSM_Signal_Strength,
+        iot.Motor_ON_Time_sec,
+        iot.Motor_OFF_Time_sec,
+        iot.Number_of_Wheels_Configured,
+        iot.Latitude,
+        iot.Longitude,
+        iot.Number_of_Wheels_Detected,
+        iot.Fault_Code,
+        iot.Motor_Current_mA,
+        iot.Timestamp,
+        iot.InsertedAt,
+        iot.Train_Passed,
+        iot.FaultDescriptions,
+        iot.Debug_Value,
+        iot.Motor_OFF_Time_min,
+        hkmi.machine_id,
+        hkmi.sden,
+        hkmi.den,
+        hkmi.aen,
+        hkmi.sse,
+        hkmi.curve_number,
+        hkmi.line
+      FROM iot_data_sick iot
+      INNER JOIN (
+        SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
+        FROM iot_data_sick
+        GROUP BY Device_ID
+      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+      ${hkmiJoinCondition}
+      ${outerWhereClause}
+      ORDER BY iot.${sortField} ${sortOrder}
       OFFSET @offset ROWS
       FETCH NEXT @pageSize ROWS ONLY
     `;
@@ -172,7 +247,11 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     device_ids,
     search,
     format = 'json',
-    limit = 10000
+    limit = 10000,
+    sden,
+    den,
+    aen,
+    sse
   } = req.query;
 
   const user = req.user;
@@ -193,52 +272,96 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     // Limit export to prevent server overload
     const maxExportLimit = Math.min(parseInt(limit), 10000);
 
-    let whereClause = 'WHERE 1 = 1';
+    // Build filter conditions
     const request = pool.request();
+    let hkmiJoinCondition = 'LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id';
 
+    // Apply device ID and hierarchy filtering if provided - use INNER JOIN to ensure hierarchy match
     if (deviceIds.length > 0) {
       const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
-      whereClause += ` AND Device_ID IN (${placeholders})`;
 
       deviceIds.forEach((deviceId, index) => {
         request.input(`deviceId${index}`, sql.VarChar, deviceId);
       });
+
+      // Build hierarchy filter conditions for JOIN
+      let hierarchyConditions = [`hkmi.device_id IN (${placeholders})`];
+
+      if (sden) {
+        hierarchyConditions.push('hkmi.sden = @sden');
+        request.input('sden', sql.VarChar, sden);
+      }
+      if (den) {
+        hierarchyConditions.push('hkmi.den = @den');
+        request.input('den', sql.VarChar, den);
+      }
+      if (aen) {
+        hierarchyConditions.push('hkmi.aen = @aen');
+        request.input('aen', sql.VarChar, aen);
+      }
+      if (sse) {
+        hierarchyConditions.push('hkmi.sse = @sse');
+        request.input('sse', sql.VarChar, sse);
+      }
+
+      // Change to INNER JOIN with device_id and hierarchy filters
+      hkmiJoinCondition = `INNER JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND ${hierarchyConditions.join(' AND ')}`;
     }
 
+    // Build WHERE conditions for outer query
+    let outerWhereConditions = [];
+
     if (search) {
-      whereClause += ` AND (
-        Device_ID LIKE @search OR
-        MessageType LIKE @search OR
-        FaultDescriptions LIKE @search
-      )`;
+      outerWhereConditions.push(`(
+        iot.Device_ID LIKE @search OR
+        iot.MessageType LIKE @search OR
+        iot.FaultDescriptions LIKE @search
+      )`);
       request.input('search', sql.VarChar, `%${search}%`);
     }
 
+    const outerWhereClause = outerWhereConditions.length > 0
+      ? 'WHERE ' + outerWhereConditions.join(' AND ')
+      : '';
+
     const exportQuery = `
-      SELECT TOP ${maxExportLimit}
-        Entry_ID,
-        CreatedAt,
-        Device_ID,
-        MessageType,
-        HexField,
-        GSM_Signal_Strength,
-        Motor_ON_Time_sec,
-        Motor_OFF_Time_sec,
-        Number_of_Wheels_Configured,
-        Latitude,
-        Longitude,
-        Number_of_Wheels_Detected,
-        Fault_Code,
-        Motor_Current_mA,
-        Timestamp,
-        InsertedAt,
-        Train_Passed,
-        FaultDescriptions,
-        Debug_Value,
-        Motor_OFF_Time_min
-      FROM iot_data_sick
-      ${whereClause}
-      ORDER BY Timestamp DESC
+      SELECT DISTINCT TOP ${maxExportLimit}
+        iot.Entry_ID,
+        iot.CreatedAt,
+        iot.Device_ID,
+        iot.MessageType,
+        iot.HexField,
+        iot.GSM_Signal_Strength,
+        iot.Motor_ON_Time_sec,
+        iot.Motor_OFF_Time_sec,
+        iot.Number_of_Wheels_Configured,
+        iot.Latitude,
+        iot.Longitude,
+        iot.Number_of_Wheels_Detected,
+        iot.Fault_Code,
+        iot.Motor_Current_mA,
+        iot.Timestamp,
+        iot.InsertedAt,
+        iot.Train_Passed,
+        iot.FaultDescriptions,
+        iot.Debug_Value,
+        iot.Motor_OFF_Time_min,
+        hkmi.machine_id,
+        hkmi.sden,
+        hkmi.den,
+        hkmi.aen,
+        hkmi.sse,
+        hkmi.curve_number,
+        hkmi.line
+      FROM iot_data_sick iot
+      INNER JOIN (
+        SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
+        FROM iot_data_sick
+        GROUP BY Device_ID
+      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+      ${hkmiJoinCondition}
+      ${outerWhereClause}
+      ORDER BY iot.CreatedAt DESC
     `;
 
     const result = await request.query(exportQuery);

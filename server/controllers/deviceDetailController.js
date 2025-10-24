@@ -200,6 +200,7 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
       timeRange = '2h',
       status = 'all',
       search = '',
+      date = '',
       page = 1,
       limit = 20,
       sortField = 'timestamp',
@@ -229,24 +230,67 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
 
     const deviceId = entryResult.recordset[0].Device_ID;
 
-    // Calculate time range filter
+    // Calculate time range filter (use CreatedAt for date-based, InsertedAt for hour-based precision)
     let timeFilter = '';
     const now = new Date();
     switch (timeRange) {
+      case 'all':
+        timeFilter = ''; // No time filter - show all data
+        break;
       case '2h':
-        timeFilter = `AND iot.Timestamp >= DATEADD(HOUR, -2, GETDATE())`;
+        // Use DATEDIFF for hour-based comparison
+        timeFilter = `AND DATEDIFF(HOUR, iot.CreatedAt, GETDATE()) <= 2`;
         break;
       case '24h':
-        timeFilter = `AND iot.Timestamp >= DATEADD(HOUR, -24, GETDATE())`;
+        // Use DATEDIFF for hour-based comparison
+        timeFilter = `AND DATEDIFF(HOUR, iot.CreatedAt, GETDATE()) <= 24`;
         break;
       case '7d':
-        timeFilter = `AND iot.Timestamp >= DATEADD(DAY, -7, GETDATE())`;
+        timeFilter = `AND iot.CreatedAt >= DATEADD(DAY, -7, GETDATE())`;
         break;
       case '30d':
-        timeFilter = `AND iot.Timestamp >= DATEADD(DAY, -30, GETDATE())`;
+        timeFilter = `AND iot.CreatedAt >= DATEADD(DAY, -30, GETDATE())`;
         break;
       default:
-        timeFilter = `AND iot.Timestamp >= DATEADD(HOUR, -2, GETDATE())`;
+        timeFilter = ''; // Default to all data
+    }
+
+    // Handle specific date filter (overrides timeRange if provided)
+    if (date && date.trim() !== '') {
+      // Date filter takes precedence over timeRange filter
+      timeFilter = `AND CAST(iot.CreatedAt AS DATE) = @filterDate`;
+      logger.info(`Date filter applied for: ${date}`);
+    } else {
+      logger.info(`Time filter applied: ${timeFilter}`);
+    }
+
+    // Debug: For hour-based filters, log timestamp comparison details
+    if (!date && (timeRange === '2h' || timeRange === '24h')) {
+      const hours = timeRange === '2h' ? 2 : 24;
+      const debugQuery = `
+        SELECT TOP 5
+          Entry_ID,
+          Device_ID,
+          CreatedAt,
+          InsertedAt,
+          Timestamp,
+          GETDATE() as CurrentServerTime,
+          DATEDIFF(HOUR, CreatedAt, GETDATE()) as HoursAgo,
+          DATEDIFF(MINUTE, CreatedAt, GETDATE()) as MinutesAgo,
+          CASE
+            WHEN DATEDIFF(HOUR, CreatedAt, GETDATE()) <= ${hours} THEN 'PASS'
+            ELSE 'FAIL'
+          END as FilterResult
+        FROM IoT_Data_Sick
+        WHERE Device_ID = @deviceId
+        ORDER BY CreatedAt DESC
+      `;
+
+      const debugResult = await pool.request()
+        .input('deviceId', sql.NVarChar, deviceId)
+        .query(debugQuery);
+
+      logger.info(`Time filter debug for ${timeRange} (${hours} hours):`, JSON.stringify(debugResult.recordset, null, 2));
     }
 
     // Build the query
@@ -254,14 +298,26 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
     const request = pool.request();
     request.input('deviceId', sql.NVarChar, deviceId);
 
+    // Add date parameter if date filter is active
+    if (date && date.trim() !== '') {
+      request.input('filterDate', sql.Date, new Date(date));
+    }
+
     // Add status filter
+    logger.info(`Status filter value: "${status}"`);
     if (status !== 'all') {
       if (status === 'fault') {
-        whereClause += ` AND (iot.Fault_Code IS NOT NULL AND iot.Fault_Code != '' AND iot.Fault_Code != '0')`;
+        const faultCondition = ` AND (iot.Fault_Code IS NOT NULL AND iot.Fault_Code != '' AND iot.Fault_Code != '0')`;
+        whereClause += faultCondition;
+        logger.info(`Applied fault filter: ${faultCondition}`);
       } else if (status === 'active') {
-        whereClause += ` AND iot.Motor_Current_mA > 0`;
+        const activeCondition = ` AND (iot.Fault_Code IS NULL OR iot.Fault_Code = '' OR iot.Fault_Code = '0')`;
+        whereClause += activeCondition;
+        logger.info(`Applied active filter: ${activeCondition}`);
       }
     }
+
+    logger.info(`Final whereClause: ${whereClause}`);
 
     // Add search filter
     if (search) {
@@ -286,14 +342,21 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
     // Get paginated data
     const dataQuery = `
       SELECT
+        iot.Entry_ID,
+        iot.CreatedAt,
         iot.Timestamp,
+        iot.Device_ID,
         iot.Motor_ON_Time_sec,
+        iot.Motor_OFF_Time_sec,
         iot.Train_Passed,
         iot.Motor_Current_mA,
         iot.Fault_Code,
         iot.FaultDescriptions,
-        iot.Entry_ID,
-        iot.GSM_Signal_Strength
+        iot.GSM_Signal_Strength,
+        iot.Number_of_Wheels_Configured,
+        iot.Number_of_Wheels_Detected,
+        iot.Latitude,
+        iot.Longitude
       FROM [IoT_Data_Sick] iot
       ${whereClause}
       ORDER BY iot.${sortField} ${sortOrder}
@@ -303,18 +366,8 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
 
     const dataResult = await request.query(dataQuery);
 
-    // Format the data
-    const formattedData = dataResult.recordset.map(row => ({
-      timestamp: row.Timestamp,
-      runtime: row.Motor_ON_Time_sec ? Math.floor(row.Motor_ON_Time_sec / 60) : 0, // Convert to minutes
-      status: row.Motor_Current_mA > 0 ? 'Active' : 'Inactive',
-      hv_output_voltage: 0, // Not available in schema
-      hv_output_current: row.Motor_Current_mA || 0,
-      genset_signal: row.Train_Passed ? 'On' : 'Off',
-      thermostat: 'N/A', // Not available in schema
-      fault_codes: row.Fault_Code || '',
-      entry_id: row.Entry_ID
-    }));
+    // Return raw data with original column names for frontend compatibility
+    const formattedData = dataResult.recordset;
 
     // Create audit log
     await createAuditLog(user.id, 'DEVICE_HISTORY_VIEW', `Viewed device history for entry ${entryId} (device ${deviceId})`, 'device_history', entryId, {
@@ -323,6 +376,7 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
       time_range: timeRange,
       status_filter: status,
       search_term: search || null,
+      date_filter: date || null,
       page: parseInt(page),
       limit: parseInt(limit)
     });
@@ -342,7 +396,8 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
       filters: {
         timeRange,
         status,
-        search
+        search,
+        date
       }
     });
 

@@ -235,57 +235,75 @@ export const getLevel4Managers = asyncHandler(async (req, res) => {
 
 /**
  * Get filtered device IDs based on hierarchy filters
- * GET /api/hierarchy-filters/devices?sden=value&den=value&aen=value&sse=value&machineId=value
+ * GET /api/hierarchy-filters/devices?sden=value&den=value&aen=value&sse=value&machineId=value&dashboard_id=value
+ * If no filters provided, returns all devices for the dashboard
  */
 export const getFilteredDevices = asyncHandler(async (req, res) => {
-  const { sden, den, aen, sse, machineId } = req.query;
+  const { sden, den, aen, sse, machineId, dashboard_id } = req.query;
   const user = req.user;
 
   try {
     const pool = await getPool();
 
+    // Get the dashboard's client_id to filter devices
+    let dashboardClientId = user.client_id.toString();
+
+    if (dashboard_id) {
+      const dashboardQuery = `
+        SELECT client_id FROM dashboard
+        WHERE id = @dashboardId AND is_active = 1
+      `;
+      const dashboardResult = await pool.request()
+        .input('dashboardId', sql.Int, dashboard_id)
+        .query(dashboardQuery);
+
+      if (dashboardResult.recordset.length > 0) {
+        dashboardClientId = dashboardResult.recordset[0].client_id;
+      }
+    }
+
     let query = `
       SELECT DISTINCT h.device_id, h.machine_id
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
-      WHERE d.client_id = @userClientId
+      WHERE d.client_id = @clientId
     `;
 
     const request = pool.request();
-    request.input('userClientId', sql.NVarChar, user.client_id.toString());
+    request.input('clientId', sql.NVarChar, dashboardClientId);
     const appliedFilters = {};
 
     if (sden) {
-      query += ` AND sden = @sden`;
+      query += ` AND h.sden = @sden`;
       request.input('sden', sql.NVarChar, sden);
       appliedFilters.sden = sden;
     }
 
     if (den) {
-      query += ` AND den = @den`;
+      query += ` AND h.den = @den`;
       request.input('den', sql.NVarChar, den);
       appliedFilters.den = den;
     }
 
     if (aen) {
-      query += ` AND aen = @aen`;
+      query += ` AND h.aen = @aen`;
       request.input('aen', sql.NVarChar, aen);
       appliedFilters.aen = aen;
     }
 
     if (sse) {
-      query += ` AND sse = @sse`;
+      query += ` AND h.sse = @sse`;
       request.input('sse', sql.NVarChar, sse);
       appliedFilters.sse = sse;
     }
 
     if (machineId) {
-      query += ` AND machine_id LIKE @machineId`;
+      query += ` AND h.machine_id LIKE @machineId`;
       request.input('machineId', sql.NVarChar, `%${machineId}%`);
       appliedFilters.machineId = machineId;
     }
 
-    query += ` ORDER BY device_id`;
+    query += ` ORDER BY h.device_id`;
 
     const result = await request.query(query);
 
@@ -363,36 +381,36 @@ export const applyHierarchyFilters = asyncHandler(async (req, res) => {
     const appliedFilters = {};
 
     if (sden) {
-      query += ` AND sden = @sden`;
+      query += ` AND h.sden = @sden`;
       request.input('sden', sql.NVarChar, sden);
       appliedFilters.sden = sden;
     }
 
     if (den) {
-      query += ` AND den = @den`;
+      query += ` AND h.den = @den`;
       request.input('den', sql.NVarChar, den);
       appliedFilters.den = den;
     }
 
     if (aen) {
-      query += ` AND aen = @aen`;
+      query += ` AND h.aen = @aen`;
       request.input('aen', sql.NVarChar, aen);
       appliedFilters.aen = aen;
     }
 
     if (sse) {
-      query += ` AND sse = @sse`;
+      query += ` AND h.sse = @sse`;
       request.input('sse', sql.NVarChar, sse);
       appliedFilters.sse = sse;
     }
 
     if (machineId) {
-      query += ` AND machine_id LIKE @machineId`;
+      query += ` AND h.machine_id LIKE @machineId`;
       request.input('machineId', sql.NVarChar, `%${machineId}%`);
       appliedFilters.machineId = machineId;
     }
 
-    query += ` ORDER BY device_id`;
+    query += ` ORDER BY h.device_id`;
 
     const result = await request.query(query);
 

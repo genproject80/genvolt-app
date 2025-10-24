@@ -43,8 +43,8 @@ router.get('/:entryId/history',
       .withMessage('Entry ID must be a number'),
     query('timeRange')
       .optional()
-      .isIn(['2h', '24h', '7d', '30d'])
-      .withMessage('Time range must be one of: 2h, 24h, 7d, 30d'),
+      .isIn(['all', '2h', '24h', '7d', '30d'])
+      .withMessage('Time range must be one of: all, 2h, 24h, 7d, 30d'),
     query('status')
       .optional()
       .isIn(['all', 'active', 'fault'])
