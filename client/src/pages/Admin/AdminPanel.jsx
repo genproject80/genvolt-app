@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-import { 
+import {
   UsersIcon,
   ShieldCheckIcon,
-  BoltIcon,
   BuildingOfficeIcon,
   ComputerDesktopIcon
 } from '@heroicons/react/24/outline';
 import UserManagement from './UserManagement';
 import RoleManagement from './RoleManagement';
-import Sessions from './Sessions';
 import ClientManagement from './ClientManagement';
 import DeviceManagement from './DeviceManagement';
 
@@ -33,13 +31,6 @@ const AdminPanel = () => {
       name: 'Role Management',
       icon: ShieldCheckIcon,
       component: RoleManagement
-    },
-    {
-      id: 'sessions',
-      name: 'Sessions',
-      icon: BoltIcon,
-      component: Sessions,
-      disabled: true
     },
     {
       id: 'devices',

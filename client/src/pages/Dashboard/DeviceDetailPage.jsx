@@ -72,11 +72,24 @@ const DeviceDetailPage = () => {
   };
 
   const handleHistoryFiltersChange = (newFilters) => {
+    console.log('DeviceDetailPage: handleHistoryFiltersChange called with:', newFilters);
     updateHistoryFilters(newFilters);
   };
 
   const handleHistoryPageChange = (direction) => {
     navigateHistoryPage(direction);
+  };
+
+  const handleHistoryRowClick = async (newEntryId) => {
+    // Update the URL to reflect the new entry
+    navigate(`/dashboard/device/${newEntryId}`, { replace: true });
+
+    // Fetch device details for the new entry
+    try {
+      await fetchDeviceDetail(newEntryId);
+    } catch (err) {
+      console.error('Error loading device data for entry:', newEntryId, err);
+    }
   };
 
   // Determine if device has faults based on fault code
@@ -133,9 +146,11 @@ const DeviceDetailPage = () => {
           </button>
           <div className="ml-6">
             <h1 className="text-2xl font-bold text-gray-900">
-              Entry {entryId}
+              Motor Device {deviceDetail?.device_information?.device_id || 'Loading...'}
             </h1>
-            <p className="text-sm text-gray-500">Detailed device information and diagnostics</p>
+            <p className="text-sm text-gray-500">
+              Entry #{entryId} - {deviceDetail?.device_information?.record_time || 'Detailed device information and diagnostics'}
+            </p>
           </div>
         </div>
         {hasFaults && (
@@ -180,7 +195,8 @@ const DeviceDetailPage = () => {
             historyFilters={historyFilters}
             onHistoryPageChange={handleHistoryPageChange}
             onHistoryFiltersChange={handleHistoryFiltersChange}
-            deviceId={entryId}
+            deviceId={deviceDetail?.device_information?.device_id || entryId}
+            onRowClick={handleHistoryRowClick}
           />
         </div>
       </div>

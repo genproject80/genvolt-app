@@ -165,7 +165,7 @@ const Pagination = ({ pagination, onPageChange }) => {
   );
 };
 
-const IoTDataTable = ({ className = "" }) => {
+const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = false, showDeviceId = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const {
@@ -190,8 +190,8 @@ const IoTDataTable = ({ className = "" }) => {
     console.log('User role:', user?.role);
     const hasPermission = user?.role === 'SYSTEM_ADMIN' || user?.role === 'SUPER_ADMIN';
     console.log('Can view device details:', hasPermission);
-    return hasPermission;
-  }, [user?.role]);
+    return hasPermission && !disableRowClick;
+  }, [user?.role, disableRowClick]);
 
   // Handle row click to navigate to device detail page
   const handleRowClick = useCallback((row) => {
@@ -201,30 +201,48 @@ const IoTDataTable = ({ className = "" }) => {
   }, [navigate, canViewDeviceDetails]);
 
   // Table columns configuration matching HKMI dashboard
-  const columns = useMemo(() => [
-    { key: 'machine_id', label: 'Machine ID', sortable: true, width: 'min-w-48' },
-    { key: 'management_hierarchy', label: 'Management Hierarchy', sortable: false, width: 'min-w-64' },
-    { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'min-w-32' },
-    { key: 'line', label: 'Line', sortable: true, width: 'min-w-20' },
-    { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'min-w-40' },
-    { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'min-w-32' },
-    { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'min-w-32' },
-    { key: 'status', label: 'Status', sortable: true, width: 'min-w-28' },
-    { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'min-w-36' }
-  ], []);
+  const columns = useMemo(() => {
+    const baseColumns = [
+      { key: 'machine_id', label: 'Machine ID', sortable: true, width: 'min-w-48' },
+      { key: 'management_hierarchy', label: 'Management Hierarchy', sortable: false, width: 'min-w-64' },
+      { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'min-w-32' },
+      { key: 'line', label: 'Line', sortable: true, width: 'min-w-20' },
+      { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'min-w-40' },
+      { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'min-w-32' },
+      { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'min-w-32' },
+      { key: 'status', label: 'Status', sortable: true, width: 'min-w-28' },
+      { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'min-w-36' }
+    ];
+
+    // Add Device ID column if showDeviceId is true
+    if (showDeviceId) {
+      baseColumns.splice(1, 0, { key: 'Device_ID', label: 'Device ID', sortable: true, width: 'min-w-32' });
+    }
+
+    return baseColumns;
+  }, [showDeviceId]);
 
   // Format cell value based on column type
   const formatCellValue = useCallback((value, columnKey, row) => {
     switch (columnKey) {
+      case 'Device_ID':
+        return row?.Device_ID || '-';
       case 'machine_id':
+        // Use machine_id from cloud_dashboard_hkmi if available
         return row?.machine_id || row?.Device_ID || '-';
       case 'curve_number':
-        // Extract curve number from machine_id pattern
+        // Use curve_number from cloud_dashboard_hkmi if available, otherwise extract from machine_id
+        if (row?.curve_number) {
+          return row.curve_number;
+        }
         const machineId = row?.machine_id || row?.Device_ID || '';
         const curveMatch = machineId.match(/RTM([^-]+)/);
         return curveMatch ? curveMatch[1] : '-';
       case 'line':
-        // Extract line from machine_id pattern (SL, DN, etc.)
+        // Use line from cloud_dashboard_hkmi if available, otherwise extract from machine_id
+        if (row?.line) {
+          return row.line;
+        }
         const lineMatch = (row?.machine_id || '').match(/-([A-Z]{2})-/);
         return lineMatch ? lineMatch[1] : '-';
       case 'gps_location':
@@ -376,23 +394,25 @@ const IoTDataTable = ({ className = "" }) => {
             </form>
 
             {/* Export Buttons */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => handleExport('csv')}
-                disabled={isExporting || iotDataLoading}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-              >
-                {isExporting && <LoadingSpinner size="sm" className="mr-2" />}
-                Export CSV
-              </button>
-              <button
-                onClick={() => handleExport('json')}
-                disabled={isExporting || iotDataLoading}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-              >
-                Export JSON
-              </button>
-            </div>
+            {!hideExport && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleExport('csv')}
+                  disabled={isExporting || iotDataLoading}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                >
+                  {isExporting && <LoadingSpinner size="sm" className="mr-2" />}
+                  Export CSV
+                </button>
+                <button
+                  onClick={() => handleExport('json')}
+                  disabled={isExporting || iotDataLoading}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                >
+                  Export JSON
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

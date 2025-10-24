@@ -29,6 +29,12 @@ export const DashboardProvider = ({ children }) => {
     machineId: null
   });
 
+  // GSM signal strength filter state (independent of hierarchy filters)
+  const [gsmFilter, setGsmFilter] = useState({
+    enabled: false,
+    avgSignalStrength: null
+  });
+
   // Filter options state
   const [filterOptions, setFilterOptions] = useState({
     sden: [],
@@ -210,6 +216,12 @@ export const DashboardProvider = ({ children }) => {
       setFilteredDevices(response.data.devices || []);
       setFilteredDeviceIds(response.data.device_ids || []);
 
+      // Clear GSM filter when hierarchy filters are applied (mutually exclusive)
+      setGsmFilter({
+        enabled: false,
+        avgSignalStrength: null
+      });
+
       return response.data;
     } catch (err) {
       console.error('Error applying filters:', err);
@@ -244,8 +256,30 @@ export const DashboardProvider = ({ children }) => {
         params.append('device_ids', JSON.stringify(filteredDeviceIds));
       }
 
+      // Pass hierarchy filters to ensure correct hierarchy matching (only if GSM filter is not active)
+      if (!gsmFilter.enabled) {
+        if (hierarchyFilters.sden) {
+          params.append('sden', hierarchyFilters.sden);
+        }
+        if (hierarchyFilters.den) {
+          params.append('den', hierarchyFilters.den);
+        }
+        if (hierarchyFilters.aen) {
+          params.append('aen', hierarchyFilters.aen);
+        }
+        if (hierarchyFilters.sse) {
+          params.append('sse', hierarchyFilters.sse);
+        }
+      }
+
       if (search) {
         params.append('search', search);
+      }
+
+      // Add GSM filter if enabled
+      if (gsmFilter.enabled && gsmFilter.avgSignalStrength !== null) {
+        params.append('gsm_filter', 'below_average');
+        params.append('avg_gsm', gsmFilter.avgSignalStrength.toString());
       }
 
       const response = await makeAuthenticatedRequest(`/iot-data/sick?${params}`);
@@ -268,7 +302,7 @@ export const DashboardProvider = ({ children }) => {
     } finally {
       setIotDataLoading(false);
     }
-  }, [filteredDeviceIds]);
+  }, [filteredDeviceIds, hierarchyFilters, gsmFilter]);
 
   // Fetch statistics for current filters
   const fetchStatistics = useCallback(async () => {
@@ -328,8 +362,63 @@ export const DashboardProvider = ({ children }) => {
     }));
   }, []);
 
+  // Fetch all devices for the dashboard (no filters)
+  const fetchAllDevices = useCallback(async () => {
+    if (!activeDashboard?.id) return;
+
+    try {
+      const pool = await makeAuthenticatedRequest(`/hierarchy-filters/devices?dashboard_id=${activeDashboard.id}`);
+
+      setFilteredDevices(pool.data?.devices || []);
+      setFilteredDeviceIds(pool.data?.device_ids || []);
+
+      return pool.data;
+    } catch (err) {
+      console.error('Error fetching all devices:', err);
+      setFilteredDevices([]);
+      setFilteredDeviceIds([]);
+    }
+  }, [activeDashboard?.id]);
+
+  // Toggle GSM filter
+  const toggleGsmFilter = useCallback(async () => {
+    const willEnable = !gsmFilter.enabled;
+
+    if (willEnable) {
+      // Clear hierarchy filters when enabling GSM filter (mutually exclusive)
+      setHierarchyFilters({
+        sden: null,
+        den: null,
+        aen: null,
+        sse: null,
+        machineId: null
+      });
+
+      // Fetch all devices (no hierarchy filters)
+      await fetchAllDevices();
+    }
+
+    // Get the numeric value only (in case it's a string or has "/5" appended)
+    const avgValue = statistics?.overall_stats?.avg_signal_strength;
+    const numericAvgValue = avgValue ? parseFloat(avgValue) : null;
+
+    setGsmFilter(prev => ({
+      ...prev,
+      enabled: !prev.enabled,
+      avgSignalStrength: prev.enabled ? null : numericAvgValue
+    }));
+  }, [statistics?.overall_stats?.avg_signal_strength, filteredDeviceIds, gsmFilter, hierarchyFilters, fetchAllDevices]);
+
+  // Clear GSM filter
+  const clearGsmFilter = useCallback(() => {
+    setGsmFilter({
+      enabled: false,
+      avgSignalStrength: null
+    });
+  }, []);
+
   // Clear all filters
-  const clearFilters = useCallback(() => {
+  const clearFilters = useCallback(async () => {
     setHierarchyFilters({
       sden: null,
       den: null,
@@ -337,9 +426,15 @@ export const DashboardProvider = ({ children }) => {
       sse: null,
       machineId: null
     });
-    setFilteredDevices([]);
-    setFilteredDeviceIds([]);
-  }, []);
+
+    setGsmFilter({
+      enabled: false,
+      avgSignalStrength: null
+    });
+
+    // Fetch all devices again (no filters)
+    await fetchAllDevices();
+  }, [fetchAllDevices]);
 
   // Reset IoT data pagination
   const resetPagination = useCallback(() => {
@@ -368,6 +463,12 @@ export const DashboardProvider = ({ children }) => {
         machineId: null
       });
 
+      // Clear GSM filter
+      setGsmFilter({
+        enabled: false,
+        avgSignalStrength: null
+      });
+
       // Clear all data
       setFilteredDevices([]);
       setFilteredDeviceIds([]);
@@ -379,8 +480,11 @@ export const DashboardProvider = ({ children }) => {
         ...prev,
         page: 1
       }));
+
+      // Fetch all devices for initial load
+      fetchAllDevices();
     }
-  }, [activeDashboard?.id]);
+  }, [activeDashboard?.id, fetchAllDevices]);
 
   // Load filter options when dashboard changes or filters change
   useEffect(() => {
@@ -390,8 +494,9 @@ export const DashboardProvider = ({ children }) => {
   }, [hierarchyFilters.sden, hierarchyFilters.den, hierarchyFilters.aen, isAuthenticated, activeDashboard?.id, updateFilterOptions]);
 
   // Auto-fetch IoT data when filtered devices change (not pagination - that's manual)
+  // Skip if GSM filter is active (separate useEffect handles that)
   useEffect(() => {
-    if (isAuthenticated && activeDashboard && filteredDeviceIds.length > 0) {
+    if (isAuthenticated && activeDashboard && filteredDeviceIds.length > 0 && !gsmFilter.enabled) {
       fetchIoTData({ page: 1 }); // Reset to page 1 when filters change
     } else if (!activeDashboard) {
       // Clear data when no dashboard is selected
@@ -401,7 +506,17 @@ export const DashboardProvider = ({ children }) => {
       setStatistics(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredDeviceIds.length, isAuthenticated, activeDashboard?.id]);
+  }, [filteredDeviceIds.length, isAuthenticated, activeDashboard?.id, gsmFilter.enabled]);
+
+  // Refetch IoT data when GSM filter is toggled (enabled or disabled)
+  // This useEffect should ONLY trigger when gsmFilter.enabled changes, not when devices change
+  useEffect(() => {
+    // Only fetch if we have devices loaded and authentication/dashboard are ready
+    if (isAuthenticated && activeDashboard && filteredDeviceIds.length > 0) {
+      fetchIoTData({ page: 1 }); // Reset to page 1 when GSM filter is toggled
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gsmFilter.enabled]); // Only depend on gsmFilter.enabled changes
 
   // Auto-fetch statistics when filtered devices change
   useEffect(() => {
@@ -428,6 +543,11 @@ export const DashboardProvider = ({ children }) => {
     updateHierarchyFilters,
     clearFilters,
     applyFilters,
+
+    // GSM filter
+    gsmFilter,
+    toggleGsmFilter,
+    clearGsmFilter,
 
     // IoT data
     iotData,

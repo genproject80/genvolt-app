@@ -24,7 +24,8 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
     clearFilters,
     applyFilters,
     filteredDeviceIds,
-    activeDashboard
+    activeDashboard,
+    iotDataPagination
   } = useDashboard();
 
   // Local state for form inputs
@@ -156,11 +157,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}>
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Management Hierarchy Filters</h3>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500">
-            {filteredDeviceIds.length} devices selected
-          </span>
-        </div>
       </div>
 
       {error && (
@@ -315,9 +311,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
         <div className="mt-6 pt-6 border-t border-gray-200">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-gray-900">Active Filters</h4>
-            <span className="text-xs text-gray-500">
-              {filteredDeviceIds.length} matching devices
-            </span>
           </div>
           <div className="flex flex-wrap gap-2">
             {activeFilters.map((filter) => (

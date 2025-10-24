@@ -1,16 +1,26 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import StatusBadge from '../common/StatusBadge';
 
-const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersChange, filters }) => {
+const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersChange, filters, onRowClick }) => {
   const [localFilters, setLocalFilters] = useState(filters || {
-    timeRange: '2h',
+    timeRange: 'all',
     status: 'all',
-    search: ''
+    search: '',
+    date: ''
   });
+
+  // Sync local filters with prop filters when they change
+  useEffect(() => {
+    if (filters) {
+      console.log('Syncing localFilters with prop filters:', filters);
+      setLocalFilters(filters);
+    }
+  }, [filters]);
 
   const handleFilterChange = useCallback((key, value) => {
     const newFilters = { ...localFilters, [key]: value };
+    console.log('Filter changed:', key, value, 'New filters:', newFilters);
     setLocalFilters(newFilters);
     if (onFiltersChange) {
       onFiltersChange(newFilters);
@@ -61,12 +71,28 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
     return 'None';
   };
 
+  const formatMotorStatus = (onTime) => {
+    if (!onTime && onTime !== 0) return 'Stopped';
+    return onTime > 0 ? 'Running' : 'Stopped';
+  };
+
+  const formatWheels = (configured, detected) => {
+    const conf = configured || 0;
+    const det = detected || 0;
+    return `${det}/${conf}`;
+  };
+
+  const formatLocation = (latitude, longitude) => {
+    if (!latitude || !longitude) return 'N/A';
+    return `${parseFloat(latitude).toFixed(6)}, ${parseFloat(longitude).toFixed(6)}`;
+  };
+
   return (
     <div>
 
       {/* Filters */}
       <div className="mb-6 p-4 bg-gray-50 rounded-md">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Time Range Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Time Range:</label>
@@ -75,11 +101,37 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
               onChange={(e) => handleFilterChange('timeRange', e.target.value)}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
             >
+              <option value="all">All Time</option>
               <option value="2h">Last 2 Hours</option>
               <option value="24h">Last 24 Hours</option>
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
             </select>
+          </div>
+
+          {/* Date Picker Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Specific Date:</label>
+            <div className="flex">
+              <input
+                type="date"
+                value={localFilters.date}
+                onChange={(e) => handleFilterChange('date', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-l-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              />
+              {localFilters.date && (
+                <button
+                  type="button"
+                  onClick={() => handleFilterChange('date', '')}
+                  className="px-3 py-2 bg-gray-300 text-gray-700 rounded-r-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  title="Clear date"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Status Filter */}
@@ -134,22 +186,25 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
                   Timestamp
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Motor ON Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Motor OFF Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Current (mA)
+                  Entry ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   GSM Signal
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Train Status
+                  Motor Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fault Code
+                  Current (mA)
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Wheels
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Location
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fault Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -158,18 +213,16 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {data.map((row, index) => (
-                <tr key={index} className="hover:bg-gray-50">
+                <tr
+                  key={index}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => onRowClick && onRowClick(row.Entry_ID)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatTimestamp(row.CreatedAt || row.Timestamp)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                    {formatMotorTime(row.Motor_ON_Time_sec)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                    {formatMotorTime(row.Motor_OFF_Time_sec)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                    {formatCurrent(row.Motor_Current_mA)}
+                    #{row.Entry_ID}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
@@ -183,9 +236,18 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <StatusBadge
-                      status={row.Train_Passed ? 'Passed' : 'No Train'}
-                      type={row.Train_Passed ? 'success' : 'inactive'}
+                      status={formatMotorStatus(row.Motor_ON_Time_sec)}
+                      type={row.Motor_ON_Time_sec > 0 ? 'success' : 'inactive'}
                     />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                    {formatCurrent(row.Motor_Current_mA)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                    {formatWheels(row.Number_of_Wheels_Configured, row.Number_of_Wheels_Detected)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {formatLocation(row.Latitude, row.Longitude)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <span className={`px-2 py-1 rounded text-xs ${
@@ -197,7 +259,13 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button className="text-green-600 hover:text-green-900 flex items-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRowClick && onRowClick(row.Entry_ID);
+                      }}
+                      className="text-green-600 hover:text-green-900 flex items-center"
+                    >
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />

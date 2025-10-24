@@ -2,34 +2,44 @@ import React from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import LoadingSpinner from '../common/LoadingSpinner';
 
-const MetricCard = ({ title, value, subtitle, icon, color = "green", loading = false }) => {
+const MetricCard = ({ title, value, subtitle, icon, color = "green", loading = false, onClick, isActive = false }) => {
   const colorClasses = {
     green: {
       bg: 'bg-green-50',
       icon: 'text-green-600',
-      text: 'text-green-900'
+      text: 'text-green-900',
+      activeBorder: 'border-green-500'
     },
     blue: {
       bg: 'bg-blue-50',
       icon: 'text-blue-600',
-      text: 'text-blue-900'
+      text: 'text-blue-900',
+      activeBorder: 'border-blue-500'
     },
     yellow: {
       bg: 'bg-yellow-50',
       icon: 'text-yellow-600',
-      text: 'text-yellow-900'
+      text: 'text-yellow-900',
+      activeBorder: 'border-yellow-500'
     },
     red: {
       bg: 'bg-red-50',
       icon: 'text-red-600',
-      text: 'text-red-900'
+      text: 'text-red-900',
+      activeBorder: 'border-red-500'
     }
   };
 
   const colors = colorClasses[color] || colorClasses.green;
+  const isClickable = !!onClick;
+  const borderClass = isActive ? `border-2 ${colors.activeBorder}` : 'border border-gray-200';
+  const cursorClass = isClickable ? 'cursor-pointer hover:shadow-md transition-shadow' : '';
 
   return (
-    <div className={`${colors.bg} rounded-lg p-6 shadow-sm border border-gray-200`}>
+    <div
+      className={`${colors.bg} rounded-lg p-6 shadow-sm ${borderClass} ${cursorClass}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-600">{title}</p>
@@ -54,6 +64,11 @@ const MetricCard = ({ title, value, subtitle, icon, color = "green", loading = f
           </div>
         )}
       </div>
+      {isClickable && isActive && (
+        <div className="mt-3 pt-3 border-t border-gray-300">
+          <p className="text-xs text-gray-600 font-medium">Filter active - click to clear</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -65,7 +80,9 @@ const MetricsCards = ({ className = "" }) => {
     filteredDeviceIds,
     iotData,
     iotDataLoading,
-    activeDashboard
+    activeDashboard,
+    gsmFilter,
+    toggleGsmFilter
   } = useDashboard();
 
   // Calculate metrics from statistics and current data
@@ -134,9 +151,17 @@ const MetricsCards = ({ className = "" }) => {
       <MetricCard
         title="Avg Signal Strength"
         value={metrics.avgSignalStrength}
-        subtitle={hasData ? "GSM signal quality" : "No signal data"}
+        subtitle={
+          gsmFilter.enabled
+            ? `Showing below ${gsmFilter.avgSignalStrength}/5`
+            : hasData
+            ? "Click to filter below average"
+            : "No signal data"
+        }
         color="yellow"
         loading={statisticsLoading && hasData}
+        onClick={hasData && !statisticsLoading ? toggleGsmFilter : undefined}
+        isActive={gsmFilter.enabled}
         icon={
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />

@@ -24,9 +24,10 @@ export const DeviceDetailProvider = ({ children }) => {
 
   // History filters state
   const [historyFilters, setHistoryFilters] = useState({
-    timeRange: '2h',
+    timeRange: 'all',
     status: 'all',
-    search: ''
+    search: '',
+    date: ''
   });
 
   // History pagination state
@@ -108,6 +109,7 @@ export const DeviceDetailProvider = ({ children }) => {
       timeRange = historyFilters.timeRange,
       status = historyFilters.status,
       search = historyFilters.search,
+      date = historyFilters.date,
       page = historyPagination.page,
       limit = historyPagination.limit,
       sortField = 'timestamp',
@@ -118,15 +120,29 @@ export const DeviceDetailProvider = ({ children }) => {
     setHistoryError(null);
 
     try {
+      console.log('Fetching device history with params:', {
+        timeRange,
+        status,
+        search,
+        date,
+        page,
+        limit,
+        sortField,
+        sortOrder
+      });
+
       const params = new URLSearchParams({
         timeRange,
         status,
         search,
+        date,
         page: page.toString(),
         limit: limit.toString(),
         sortField,
         sortOrder
       });
+
+      console.log('API URL:', `/device-details/${deviceId}/history?${params}`);
 
       const response = await makeAuthenticatedRequest(`/device-details/${deviceId}/history?${params}`);
 
@@ -164,9 +180,10 @@ export const DeviceDetailProvider = ({ children }) => {
     setError(null);
     setHistoryError(null);
     setHistoryFilters({
-      timeRange: '2h',
+      timeRange: 'all',
       status: 'all',
-      search: ''
+      search: '',
+      date: ''
     });
     setHistoryPagination({
       page: 1,
