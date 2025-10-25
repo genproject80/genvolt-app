@@ -25,14 +25,18 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
     applyFilters,
     filteredDeviceIds,
     activeDashboard,
-    iotDataPagination
+    iotDataPagination,
+    saveUserPreference,
+    deleteUserPreference
   } = useDashboard();
 
   // Local state for form inputs
   const [localFilters, setLocalFilters] = useState(hierarchyFilters);
   const [machineSearchTerm, setMachineSearchTerm] = useState('');
   const [isApplying, setIsApplying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveMessage, setSaveMessage] = useState(null);
 
   // Sync local state with context when hierarchy filters change
   useEffect(() => {
@@ -98,7 +102,42 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
     setMachineSearchTerm('');
     clearFilters();
     setError(null);
+    setSaveMessage(null);
   }, [clearFilters]);
+
+  const handleSavePreference = useCallback(async () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+    setError(null);
+
+    try {
+      // Check if there are any filters to save
+      const hasFilters = Object.values(hierarchyFilters).some(value => value !== null && value !== '');
+
+      if (!hasFilters) {
+        // Delete saved preferences if no filters are applied
+        await deleteUserPreference('filter_preferences');
+        setSaveMessage({ type: 'success', text: 'Search preferences cleared successfully' });
+      } else {
+        // Save the current filters as preference
+        await saveUserPreference('filter_preferences', hierarchyFilters);
+        setSaveMessage({ type: 'success', text: 'Search preferences saved successfully' });
+      }
+
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setSaveMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Error saving preference:', err);
+      setError(err.message || 'Failed to save preferences');
+      setTimeout(() => {
+        setError(null);
+      }, 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [hierarchyFilters, saveUserPreference, deleteUserPreference]);
 
   const handleRemoveFilter = useCallback((filterType) => {
     handleFilterChange(filterType, null);
@@ -169,6 +208,21 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-red-800">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveMessage && (
+        <div className={`mb-4 p-3 ${saveMessage.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'} border rounded-md`}>
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className={`h-5 w-5 ${saveMessage.type === 'success' ? 'text-green-400' : 'text-blue-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className={`text-sm ${saveMessage.type === 'success' ? 'text-green-800' : 'text-blue-800'}`}>{saveMessage.text}</p>
             </div>
           </div>
         </div>
@@ -288,8 +342,29 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
           </button>
 
           <button
+            onClick={handleSavePreference}
+            disabled={isSaving || isApplying || hasChanges}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={hasChanges ? "Apply filters first before saving preference" : "Save current filter selection as default preference"}
+          >
+            {isSaving ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Save Preference
+              </>
+            )}
+          </button>
+
+          <button
             onClick={handleClearFilters}
-            disabled={isApplying}
+            disabled={isApplying || isSaving}
             className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Clear All

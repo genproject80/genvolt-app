@@ -354,6 +354,77 @@ export const DashboardProvider = ({ children }) => {
     }
   }, [filteredDeviceIds]);
 
+  // Save user preferences
+  const saveUserPreference = useCallback(async (preferenceName, preferenceValue) => {
+    try {
+      const requestBody = {
+        preference_name: preferenceName,
+        preference_value: JSON.stringify(preferenceValue),
+        dashboard_id: activeDashboard?.id
+      };
+
+      const response = await makeAuthenticatedRequest('/user-preferences', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
+
+      return response;
+    } catch (err) {
+      console.error('Error saving user preference:', err);
+      throw err;
+    }
+  }, [activeDashboard?.id]);
+
+  // Load user preferences
+  const loadUserPreference = useCallback(async (preferenceName) => {
+    try {
+      const params = new URLSearchParams({
+        preference_name: preferenceName
+      });
+
+      if (activeDashboard?.id) {
+        params.append('dashboard_id', activeDashboard.id);
+      }
+
+      const response = await makeAuthenticatedRequest(`/user-preferences?${params}`);
+
+      if (response.data && response.data.preference_value) {
+        try {
+          return JSON.parse(response.data.preference_value);
+        } catch (e) {
+          return response.data.preference_value;
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Error loading user preference:', err);
+      return null;
+    }
+  }, [activeDashboard?.id]);
+
+  // Delete user preference
+  const deleteUserPreference = useCallback(async (preferenceName) => {
+    try {
+      const params = new URLSearchParams({
+        preference_name: preferenceName
+      });
+
+      if (activeDashboard?.id) {
+        params.append('dashboard_id', activeDashboard.id);
+      }
+
+      const response = await makeAuthenticatedRequest(`/user-preferences?${params}`, {
+        method: 'DELETE'
+      });
+
+      return response;
+    } catch (err) {
+      console.error('Error deleting user preference:', err);
+      throw err;
+    }
+  }, [activeDashboard?.id]);
+
   // Update hierarchy filters
   const updateHierarchyFilters = useCallback((newFilters) => {
     setHierarchyFilters(prev => ({
@@ -453,38 +524,71 @@ export const DashboardProvider = ({ children }) => {
 
   // Reset filters and data when active dashboard changes
   useEffect(() => {
-    if (activeDashboard) {
-      // Clear all filters
-      setHierarchyFilters({
-        sden: null,
-        den: null,
-        aen: null,
-        sse: null,
-        machineId: null
-      });
+    const initializeDashboard = async () => {
+      if (activeDashboard) {
+        // Clear GSM filter
+        setGsmFilter({
+          enabled: false,
+          avgSignalStrength: null
+        });
 
-      // Clear GSM filter
-      setGsmFilter({
-        enabled: false,
-        avgSignalStrength: null
-      });
+        // Clear all data
+        setFilteredDevices([]);
+        setFilteredDeviceIds([]);
+        setIotData([]);
+        setStatistics(null);
 
-      // Clear all data
-      setFilteredDevices([]);
-      setFilteredDeviceIds([]);
-      setIotData([]);
-      setStatistics(null);
+        // Reset pagination
+        setIotDataPagination(prev => ({
+          ...prev,
+          page: 1
+        }));
 
-      // Reset pagination
-      setIotDataPagination(prev => ({
-        ...prev,
-        page: 1
-      }));
+        // Try to load saved filter preferences
+        try {
+          const savedPreferences = await loadUserPreference('filter_preferences');
 
-      // Fetch all devices for initial load
-      fetchAllDevices();
-    }
-  }, [activeDashboard?.id, fetchAllDevices]);
+          if (savedPreferences && Object.keys(savedPreferences).length > 0) {
+            console.log('Loading saved filter preferences:', savedPreferences);
+
+            // Set the filters
+            setHierarchyFilters(savedPreferences);
+
+            // Apply the saved filters automatically
+            await applyFilters(savedPreferences);
+          } else {
+            // No saved preferences, clear filters and fetch all devices
+            setHierarchyFilters({
+              sden: null,
+              den: null,
+              aen: null,
+              sse: null,
+              machineId: null
+            });
+
+            // Fetch all devices for initial load
+            await fetchAllDevices();
+          }
+        } catch (err) {
+          console.error('Error loading preferences:', err);
+
+          // On error, clear filters and fetch all devices
+          setHierarchyFilters({
+            sden: null,
+            den: null,
+            aen: null,
+            sse: null,
+            machineId: null
+          });
+
+          await fetchAllDevices();
+        }
+      }
+    };
+
+    initializeDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDashboard?.id]);
 
   // Load filter options when dashboard changes or filters change
   useEffect(() => {
@@ -565,7 +669,12 @@ export const DashboardProvider = ({ children }) => {
     // Actions
     fetchDashboards,
     updateFilterOptions,
-    exportIoTData
+    exportIoTData,
+
+    // User preferences
+    saveUserPreference,
+    loadUserPreference,
+    deleteUserPreference
   };
 
   return (
