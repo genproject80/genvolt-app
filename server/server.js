@@ -26,6 +26,7 @@ import hierarchyFilterRoutes from './routes/hierarchyFilterRoutes.js';
 import iotDataRoutes from './routes/iotDataRoutes.js';
 import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
+import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -153,6 +154,7 @@ app.use('/api/hierarchy-filters', hierarchyFilterRoutes);
 app.use('/api/iot-data', iotDataRoutes);
 app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
+app.use('/api/user-preferences', userPreferencesRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -170,7 +172,8 @@ app.get('/api', (req, res) => {
       hierarchyFilters: '/api/hierarchy-filters',
       iotData: '/api/iot-data',
       deviceDetails: '/api/device-details',
-      devices: '/api/devices'
+      devices: '/api/devices',
+      userPreferences: '/api/user-preferences'
     }
   });
 });
