@@ -184,14 +184,10 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
   const [sortOrder, setSortOrder] = useState('DESC');
   const [isExporting, setIsExporting] = useState(false);
 
-  // Check if user has permission to view device details
+  // Check if row clicks are enabled (controlled by disableRowClick prop)
   const canViewDeviceDetails = useMemo(() => {
-    console.log('User object:', user);
-    console.log('User role:', user?.role);
-    const hasPermission = user?.role === 'SYSTEM_ADMIN' || user?.role === 'SUPER_ADMIN';
-    console.log('Can view device details:', hasPermission);
-    return hasPermission && !disableRowClick;
-  }, [user?.role, disableRowClick]);
+    return !disableRowClick;
+  }, [disableRowClick]);
 
   // Handle row click to navigate to device detail page
   const handleRowClick = useCallback((row) => {

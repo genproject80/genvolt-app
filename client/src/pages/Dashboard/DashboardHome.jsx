@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboard } from '../../context/DashboardContext';
 import HKMI from '../../components/dashboard/HKMI';
@@ -13,6 +13,11 @@ const dashboardComponents = {
 const DashboardHome = () => {
   const { user } = useAuth();
   const { activeDashboard } = useDashboard();
+
+  // Scroll to top when component mounts or when active dashboard changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeDashboard?.id]);
 
   // Dynamically select the dashboard component based on the active dashboard's name
   const DashboardComponent = useMemo(() => {

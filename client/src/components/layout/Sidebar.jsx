@@ -21,8 +21,8 @@ const Sidebar = () => {
 
   const handleDashboardClick = (dashboard) => {
     setActiveDashboard(dashboard);
-    // Navigate to dashboard if not already there
-    if (!location.pathname.startsWith('/dashboard')) {
+    // Always navigate to dashboard home when switching dashboards
+    if (location.pathname !== '/dashboard') {
       navigate('/dashboard');
     }
   };

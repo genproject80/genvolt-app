@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
 import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
+import { Client } from '../models/Client.js';
 
 /**
  * Get IoT data with device ID filtering
@@ -35,7 +36,57 @@ export const getIoTData = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
-    // Parse device IDs from query parameter
+    // STEP 1: Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
+    console.log('=== CLIENT HIERARCHY ===');
+    console.log('User client_id:', user.client_id);
+    console.log('Descendant clients (children):', descendantClients.map(c => c.client_id));
+    console.log('All client IDs (self + children):', allClientIds);
+    console.log('========================');
+
+    // STEP 2: Get all device IDs belonging to these clients
+    const deviceQuery = `
+      SELECT device_id, client_id
+      FROM device
+      WHERE client_id IN (${allClientIds.join(',')})
+    `;
+    const deviceResult = await pool.request().query(deviceQuery);
+    const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
+
+    console.log('=== DEVICES ===');
+    console.log('Total devices found:', allDeviceIds.length);
+    console.log('Device breakdown by client:', deviceResult.recordset.reduce((acc, d) => {
+      acc[d.client_id] = (acc[d.client_id] || 0) + 1;
+      return acc;
+    }, {}));
+    console.log('================');
+
+    // If no devices found, return early
+    if (allDeviceIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No devices found for this client',
+        data: [],
+        meta: {
+          total: 0,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+          filtered_device_count: 0,
+          filters_applied: {
+            device_ids: false,
+            search: false,
+            sort: `Timestamp DESC`
+          }
+        }
+      });
+    }
+
+    // Parse device IDs from query parameter (optional additional filtering)
     let deviceIds = [];
     if (device_ids) {
       try {
@@ -52,51 +103,75 @@ export const getIoTData = asyncHandler(async (req, res) => {
 
     // Build filter conditions
     const request = pool.request();
-    let hkmiJoinCondition = 'LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id';
 
-    // Apply device ID and hierarchy filtering if provided - use INNER JOIN to ensure hierarchy match
-    // Only apply hierarchy filtering if not using GSM filter (GSM filter works on complete dataset)
-    const hasHierarchyFilters = sden || den || aen || sse;
+    // STEP 3: Build device filter - use allDeviceIds OR filter by specific devices if requested
+    let finalDeviceIds = allDeviceIds;
 
-    if (deviceIds.length > 0 && hasHierarchyFilters) {
-      const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
+    // If frontend requests specific devices, filter further
+    if (deviceIds.length > 0) {
+      // Only include devices that exist in our client's device list
+      finalDeviceIds = allDeviceIds.filter(id => deviceIds.includes(id));
+    }
 
-      deviceIds.forEach((deviceId, index) => {
-        request.input(`deviceId${index}`, sql.VarChar, deviceId);
+    // If after filtering no devices remain, return empty
+    if (finalDeviceIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No matching devices found',
+        data: [],
+        meta: {
+          total: 0,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+          filtered_device_count: 0,
+          filters_applied: {
+            device_ids: deviceIds.length > 0,
+            search: false,
+            sort: `Timestamp DESC`
+          }
+        }
       });
+    }
 
-      // Build hierarchy filter conditions for JOIN
-      let hierarchyConditions = [`hkmi.device_id IN (${placeholders})`];
+    // Build SQL IN clause with device IDs
+    const devicePlaceholders = finalDeviceIds.map((_, index) => `@deviceId${index}`).join(',');
+    finalDeviceIds.forEach((deviceId, index) => {
+      request.input(`deviceId${index}`, sql.VarChar, deviceId);
+    });
 
+    console.log('=== FINAL DEVICE FILTER ===');
+    console.log('Final device IDs count:', finalDeviceIds.length);
+    console.log('============================');
+
+    // Build HKMI WHERE clause based on hierarchy filters
+    const hasHierarchyFilters = sden || den || aen || sse;
+    let hkmiWhereConditions = [];
+
+    if (hasHierarchyFilters) {
       if (sden) {
-        hierarchyConditions.push('hkmi.sden = @sden');
+        hkmiWhereConditions.push('hkmi.sden = @sden');
         request.input('sden', sql.VarChar, sden);
       }
       if (den) {
-        hierarchyConditions.push('hkmi.den = @den');
+        hkmiWhereConditions.push('hkmi.den = @den');
         request.input('den', sql.VarChar, den);
       }
       if (aen) {
-        hierarchyConditions.push('hkmi.aen = @aen');
+        hkmiWhereConditions.push('hkmi.aen = @aen');
         request.input('aen', sql.VarChar, aen);
       }
       if (sse) {
-        hierarchyConditions.push('hkmi.sse = @sse');
+        hkmiWhereConditions.push('hkmi.sse = @sse');
         request.input('sse', sql.VarChar, sse);
       }
-
-      // Change to INNER JOIN with device_id and hierarchy filters
-      hkmiJoinCondition = `INNER JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND ${hierarchyConditions.join(' AND ')}`;
-    } else if (deviceIds.length > 0 && !hasHierarchyFilters) {
-      // GSM filter case: filter by device IDs but no hierarchy conditions
-      const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
-
-      deviceIds.forEach((deviceId, index) => {
-        request.input(`deviceId${index}`, sql.VarChar, deviceId);
-      });
-
-      hkmiJoinCondition = `LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.device_id IN (${placeholders})`;
     }
+
+    const hkmiWhereClause = hkmiWhereConditions.length > 0
+      ? 'AND ' + hkmiWhereConditions.join(' AND ')
+      : '';
 
     // Build WHERE conditions for outer query
     let outerWhereConditions = [];
@@ -121,7 +196,7 @@ export const getIoTData = asyncHandler(async (req, res) => {
     }
 
     const outerWhereClause = outerWhereConditions.length > 0
-      ? 'WHERE ' + outerWhereConditions.join(' AND ')
+      ? 'AND ' + outerWhereConditions.join(' AND ')
       : '';
 
     // Validate sort fields
@@ -134,25 +209,40 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const sortField = allowedSortFields.includes(sort_field) ? sort_field : 'Timestamp';
     const sortOrder = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-    // Count query for pagination - count all records that match the query
+    // STEP 4: Count query - simple now that we have device IDs
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM iot_data_sick iot
-      INNER JOIN (
-        SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
-        FROM iot_data_sick
-        GROUP BY Device_ID
-      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
-      ${hkmiJoinCondition}
-      ${outerWhereClause}
+      FROM (
+        SELECT iot.Device_ID
+        FROM iot_data_sick iot
+        INNER JOIN (
+          SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
+          FROM iot_data_sick
+          WHERE Device_ID IN (${devicePlaceholders})
+          GROUP BY Device_ID
+        ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+        LEFT JOIN (
+          SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
+          FROM cloud_dashboard_hkmi
+        ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+        WHERE 1=1
+        ${outerWhereClause}
+        ${hkmiWhereClause}
+      ) as filtered_data
     `;
+
+    // Log the count query for debugging
+    console.log('=== COUNT QUERY ===');
+    console.log(countQuery);
+    console.log('==================');
 
     const countResult = await request.query(countQuery);
     const totalCount = countResult.recordset[0].total;
 
-    // Main data query with JOIN to cloud_dashboard_hkmi and only latest record per device
+    // STEP 5: Main data query - simple, just using device IDs
     const dataQuery = `
-      SELECT DISTINCT
+      SELECT
         iot.Entry_ID,
         iot.CreatedAt,
         iot.Device_ID,
@@ -184,10 +274,17 @@ export const getIoTData = asyncHandler(async (req, res) => {
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
         FROM iot_data_sick
+        WHERE Device_ID IN (${devicePlaceholders})
         GROUP BY Device_ID
       ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
-      ${hkmiJoinCondition}
+      LEFT JOIN (
+        SELECT *,
+          ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
+        FROM cloud_dashboard_hkmi
+      ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      WHERE 1=1
       ${outerWhereClause}
+      ${hkmiWhereClause}
       ORDER BY iot.${sortField} ${sortOrder}
       OFFSET @offset ROWS
       FETCH NEXT @pageSize ROWS ONLY
@@ -195,6 +292,16 @@ export const getIoTData = asyncHandler(async (req, res) => {
 
     request.input('offset', sql.Int, offset);
     request.input('pageSize', sql.Int, pageSize);
+
+    // Log the main data query for debugging
+    console.log('=== DATA QUERY ===');
+    console.log(dataQuery);
+    console.log('=== SORT ===');
+    console.log('sortField:', sortField);
+    console.log('sortOrder:', sortOrder);
+    console.log('offset:', offset);
+    console.log('pageSize:', pageSize);
+    console.log('==================');
 
     const dataResult = await request.query(dataQuery);
 
@@ -259,7 +366,38 @@ export const exportIoTData = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
-    // Parse device IDs
+    // STEP 1: Get all client IDs (self + children only) - same as getIoTData
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
+    // STEP 2: Get all device IDs belonging to these clients
+    const deviceQuery = `
+      SELECT device_id
+      FROM device
+      WHERE client_id IN (${allClientIds.join(',')})
+    `;
+    const deviceResult = await pool.request().query(deviceQuery);
+    const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
+
+    // If no devices found, return early
+    if (allDeviceIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No devices found for this client',
+        data: [],
+        meta: {
+          exported_count: 0,
+          format: format,
+          filters_applied: {
+            device_ids: [],
+            search: null
+          },
+          export_timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Parse device IDs from query parameter (optional additional filtering)
     let deviceIds = [];
     if (device_ids) {
       try {
@@ -269,44 +407,67 @@ export const exportIoTData = asyncHandler(async (req, res) => {
       }
     }
 
+    // STEP 3: Build device filter
+    let finalDeviceIds = allDeviceIds;
+    if (deviceIds.length > 0) {
+      finalDeviceIds = allDeviceIds.filter(id => deviceIds.includes(id));
+    }
+
+    if (finalDeviceIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No matching devices found',
+        data: [],
+        meta: {
+          exported_count: 0,
+          format: format,
+          filters_applied: {
+            device_ids: deviceIds,
+            search: search || null
+          },
+          export_timestamp: new Date().toISOString()
+        }
+      });
+    }
+
     // Limit export to prevent server overload
     const maxExportLimit = Math.min(parseInt(limit), 10000);
 
     // Build filter conditions
     const request = pool.request();
-    let hkmiJoinCondition = 'LEFT JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id';
 
-    // Apply device ID and hierarchy filtering if provided - use INNER JOIN to ensure hierarchy match
-    if (deviceIds.length > 0) {
-      const placeholders = deviceIds.map((_, index) => `@deviceId${index}`).join(',');
+    // Build SQL IN clause with device IDs
+    const devicePlaceholders = finalDeviceIds.map((_, index) => `@deviceId${index}`).join(',');
+    finalDeviceIds.forEach((deviceId, index) => {
+      request.input(`deviceId${index}`, sql.VarChar, deviceId);
+    });
 
-      deviceIds.forEach((deviceId, index) => {
-        request.input(`deviceId${index}`, sql.VarChar, deviceId);
-      });
+    // Build HKMI WHERE clause based on hierarchy filters
+    const hasHierarchyFilters = sden || den || aen || sse;
+    let hkmiWhereConditions = [];
 
-      // Build hierarchy filter conditions for JOIN
-      let hierarchyConditions = [`hkmi.device_id IN (${placeholders})`];
-
+    if (hasHierarchyFilters) {
       if (sden) {
-        hierarchyConditions.push('hkmi.sden = @sden');
+        hkmiWhereConditions.push('hkmi.sden = @sden');
         request.input('sden', sql.VarChar, sden);
       }
       if (den) {
-        hierarchyConditions.push('hkmi.den = @den');
+        hkmiWhereConditions.push('hkmi.den = @den');
         request.input('den', sql.VarChar, den);
       }
       if (aen) {
-        hierarchyConditions.push('hkmi.aen = @aen');
+        hkmiWhereConditions.push('hkmi.aen = @aen');
         request.input('aen', sql.VarChar, aen);
       }
       if (sse) {
-        hierarchyConditions.push('hkmi.sse = @sse');
+        hkmiWhereConditions.push('hkmi.sse = @sse');
         request.input('sse', sql.VarChar, sse);
       }
-
-      // Change to INNER JOIN with device_id and hierarchy filters
-      hkmiJoinCondition = `INNER JOIN cloud_dashboard_hkmi hkmi ON iot.Device_ID = hkmi.device_id AND ${hierarchyConditions.join(' AND ')}`;
     }
+
+    const hkmiWhereClause = hkmiWhereConditions.length > 0
+      ? 'AND ' + hkmiWhereConditions.join(' AND ')
+      : '';
 
     // Build WHERE conditions for outer query
     let outerWhereConditions = [];
@@ -321,11 +482,11 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     }
 
     const outerWhereClause = outerWhereConditions.length > 0
-      ? 'WHERE ' + outerWhereConditions.join(' AND ')
+      ? 'AND ' + outerWhereConditions.join(' AND ')
       : '';
 
     const exportQuery = `
-      SELECT DISTINCT TOP ${maxExportLimit}
+      SELECT TOP ${maxExportLimit}
         iot.Entry_ID,
         iot.CreatedAt,
         iot.Device_ID,
@@ -357,10 +518,17 @@ export const exportIoTData = asyncHandler(async (req, res) => {
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
         FROM iot_data_sick
+        WHERE Device_ID IN (${devicePlaceholders})
         GROUP BY Device_ID
       ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
-      ${hkmiJoinCondition}
+      LEFT JOIN (
+        SELECT *,
+          ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
+        FROM cloud_dashboard_hkmi
+      ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      WHERE 1=1
       ${outerWhereClause}
+      ${hkmiWhereClause}
       ORDER BY iot.CreatedAt DESC
     `;
 

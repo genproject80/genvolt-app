@@ -34,6 +34,11 @@ const DeviceDetailPage = () => {
     navigateHistoryPage
   } = useDeviceDetail();
 
+  // Scroll to top when component mounts or entryId changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [entryId]);
+
   // Initialize device detail data
   useEffect(() => {
     if (entryId && entryId !== entryIdState) {

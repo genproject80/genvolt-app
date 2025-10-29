@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
 import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
+import Client from '../models/Client.js';
 
 /**
  * Get unique Overall Managers (SDEN values)
@@ -32,18 +33,21 @@ export const getOverallManagers = asyncHandler(async (req, res) => {
       }
     }
 
-    // Only show hierarchy data for devices that belong to the dashboard's client
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(parseInt(dashboardClientId));
+    const allClientIds = [parseInt(dashboardClientId), ...descendantClients.map(c => c.client_id)];
+
+    // Only show hierarchy data for devices that belong to the dashboard's client and its children
     const query = `
       SELECT DISTINCT h.sden
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
       WHERE h.sden IS NOT NULL AND h.sden != ''
-      AND d.client_id = @dashboardClientId
+      AND d.client_id IN (${allClientIds.join(',')})
       ORDER BY h.sden
     `;
 
     const result = await pool.request()
-      .input('dashboardClientId', sql.NVarChar, dashboardClientId)
       .query(query);
 
     // Create audit log
@@ -76,16 +80,19 @@ export const getLevel2Managers = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
     let query = `
       SELECT DISTINCT h.den
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
       WHERE h.den IS NOT NULL AND h.den != ''
-      AND d.client_id = @userClientId
+      AND d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();
-    request.input('userClientId', sql.NVarChar, user.client_id.toString());
 
     if (sden) {
       query += ` AND h.sden = @sden`;
@@ -127,16 +134,19 @@ export const getLevel3Managers = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
     let query = `
       SELECT DISTINCT h.aen
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
       WHERE h.aen IS NOT NULL AND h.aen != ''
-      AND d.client_id = @userClientId
+      AND d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();
-    request.input('userClientId', sql.NVarChar, user.client_id.toString());
 
     if (sden) {
       query += ` AND h.sden = @sden`;
@@ -183,16 +193,19 @@ export const getLevel4Managers = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
     let query = `
       SELECT DISTINCT h.sse
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
       WHERE h.sse IS NOT NULL AND h.sse != ''
-      AND d.client_id = @userClientId
+      AND d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();
-    request.input('userClientId', sql.NVarChar, user.client_id.toString());
 
     if (sden) {
       query += ` AND h.sden = @sden`;
@@ -262,15 +275,18 @@ export const getFilteredDevices = asyncHandler(async (req, res) => {
       }
     }
 
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(parseInt(dashboardClientId));
+    const allClientIds = [parseInt(dashboardClientId), ...descendantClients.map(c => c.client_id)];
+
     let query = `
       SELECT DISTINCT h.device_id, h.machine_id
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
-      WHERE d.client_id = @clientId
+      WHERE d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();
-    request.input('clientId', sql.NVarChar, dashboardClientId);
     const appliedFilters = {};
 
     if (sden) {
@@ -363,6 +379,16 @@ export const applyHierarchyFilters = asyncHandler(async (req, res) => {
       }
     }
 
+    // STEP 1: Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(parseInt(dashboardClientId));
+    const allClientIds = [parseInt(dashboardClientId), ...descendantClients.map(c => c.client_id)];
+
+    console.log('=== HIERARCHY FILTER - CLIENT HIERARCHY ===');
+    console.log('Dashboard client_id:', dashboardClientId);
+    console.log('Descendant clients (children):', descendantClients.map(c => c.client_id));
+    console.log('All client IDs (self + children):', allClientIds);
+    console.log('==========================================');
+
     let query = `
       SELECT
         h.device_id,
@@ -373,11 +399,10 @@ export const applyHierarchyFilters = asyncHandler(async (req, res) => {
         h.sse
       FROM cloud_dashboard_hkmi h
       INNER JOIN device d ON h.device_id = d.device_id
-      WHERE d.client_id = @dashboardClientId
+      WHERE d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();
-    request.input('dashboardClientId', sql.NVarChar, dashboardClientId);
     const appliedFilters = {};
 
     if (sden) {
@@ -456,10 +481,16 @@ export const getMachineSuggestions = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
+    // Get all client IDs (self + children only)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
     let query = `
-      SELECT DISTINCT TOP 10 machine_id
-      FROM cloud_dashboard_hkmi
-      WHERE machine_id LIKE @searchTerm
+      SELECT DISTINCT TOP 10 h.machine_id
+      FROM cloud_dashboard_hkmi h
+      INNER JOIN device d ON h.device_id = d.device_id
+      WHERE h.machine_id LIKE @searchTerm
+      AND d.client_id IN (${allClientIds.join(',')})
     `;
 
     const request = pool.request();

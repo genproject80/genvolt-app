@@ -141,6 +141,19 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
       }
     }
 
+    console.log('=== GET USER PREFERENCES - QUERY PARAMETERS ===');
+    console.log('Request params from frontend:');
+    console.log('  - dashboard_id:', dashboard_id);
+    console.log('  - preference_name:', preference_name);
+    console.log('Logged-in user info:');
+    console.log('  - user.user_id:', user.user_id);
+    console.log('  - user.client_id:', user.client_id);
+    console.log('Resolved client_id for query:', clientId);
+    console.log('Query will use:');
+    console.log('  - userId:', user.user_id);
+    console.log('  - clientId:', clientId);
+    console.log('  - preferenceName:', preference_name);
+
     let query = `
       SELECT
         id,
@@ -161,7 +174,16 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
       request.input('preferenceName', sql.NVarChar, preference_name);
     }
 
+    console.log('Executing query:', query);
+
     const result = await request.query(query);
+
+    console.log('Query results:');
+    console.log('  - Records found:', result.recordset.length);
+    if (result.recordset.length > 0) {
+      console.log('  - Preference data:', result.recordset[0]);
+    }
+    console.log('===============================================');
 
     // Create audit log
     await createAuditLog(
@@ -187,6 +209,13 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
           preference_name: preference.preference_name,
           preference_value: preference.preference_value
         }
+      });
+    } else if (preference_name && result.recordset.length === 0) {
+      // Specific preference requested but not found - return null explicitly
+      res.json({
+        success: true,
+        message: 'No preference found',
+        data: null
       });
     } else {
       // Return all preferences

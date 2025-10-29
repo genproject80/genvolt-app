@@ -548,7 +548,17 @@ export const DashboardProvider = ({ children }) => {
         try {
           const savedPreferences = await loadUserPreference('filter_preferences');
 
-          if (savedPreferences && Object.keys(savedPreferences).length > 0) {
+          console.log('Raw saved preferences from API:', savedPreferences);
+
+          // Check if any filter values are actually set (not null/undefined/empty string)
+          const hasActiveFilters = savedPreferences &&
+            Object.values(savedPreferences).some(value =>
+              value !== null && value !== undefined && value !== ''
+            );
+
+          console.log('Has active filters:', hasActiveFilters);
+
+          if (hasActiveFilters) {
             console.log('Loading saved filter preferences:', savedPreferences);
 
             // Set the filters
@@ -557,7 +567,8 @@ export const DashboardProvider = ({ children }) => {
             // Apply the saved filters automatically
             await applyFilters(savedPreferences);
           } else {
-            // No saved preferences, clear filters and fetch all devices
+            // No saved preferences or all values are null/empty, clear filters and fetch all devices
+            console.log('No active filters found, showing all data');
             setHierarchyFilters({
               sden: null,
               den: null,

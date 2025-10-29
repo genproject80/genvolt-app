@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
+import Client from '../models/Client.js';
 
 /**
  * Get user-accessible dashboards
@@ -24,7 +25,17 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
       throw new ValidationError('User does not have a valid client_id');
     }
 
-    // Get dashboards based on user's client hierarchy (simplified for now)
+    // STEP 1: Get all descendant clients (children, grandchildren, etc.)
+    const descendantClients = await Client.getDescendantClients(user.client_id);
+    const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
+
+    console.log('=== DASHBOARD FETCHING - CLIENT HIERARCHY ===');
+    console.log('User client_id:', user.client_id);
+    console.log('Descendant clients:', descendantClients.map(c => ({ id: c.client_id, name: c.name, level: c.level })));
+    console.log('All client IDs (self + all descendants):', allClientIds);
+    console.log('=============================================');
+
+    // STEP 2: Get dashboards for all these clients
     const query = `
       SELECT DISTINCT
         d.id,
@@ -38,28 +49,23 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
       FROM dashboard d
       LEFT JOIN client c ON d.client_id = c.client_id
       WHERE d.is_active = 1
-      AND (
-        -- Direct client access
-        d.client_id = @userClientId
-        OR
-        -- Parent client access (if user's client is parent)
-        d.client_id IN (
-          SELECT client_id FROM client
-          WHERE parent_id = @userClientId
-        )
-      )
+      AND d.client_id IN (${allClientIds.join(',')})
       ORDER BY d.display_name
     `;
 
     const result = await pool.request()
-      .input('userClientId', sql.NVarChar, user.client_id.toString())
       .query(query);
 
     // Create audit log
     await createAuditLog(user.id, 'DASHBOARD_VIEW', 'Viewed dashboard list', 'dashboard', null, {
       client_id: user.client_id,
+      descendant_count: descendantClients.length,
+      total_clients_included: allClientIds.length,
       dashboards_count: result.recordset.length
     });
+
+    console.log('Dashboards found:', result.recordset.length);
+    console.log('Dashboard details:', result.recordset.map(d => ({ id: d.id, name: d.display_name, client_id: d.client_id, client_name: d.client_name })));
 
     res.json({
       success: true,
@@ -67,7 +73,9 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
       data: result.recordset,
       meta: {
         total: result.recordset.length,
-        user_client_id: user.client_id
+        user_client_id: user.client_id,
+        descendant_clients_count: descendantClients.length,
+        total_clients_included: allClientIds.length
       }
     });
 
