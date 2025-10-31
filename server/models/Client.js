@@ -22,6 +22,9 @@ export class Client {
     this.created_at = clientData.created_at;
     this.updated_at = clientData.updated_at;
     this.updated_by_user_id = clientData.updated_by_user_id;
+    this.device_count = clientData.device_count || 0;
+    this.parent_client_name = clientData.parent_client_name;
+    this.created_by_name = clientData.created_by_name;
   }
 
   /**
@@ -34,13 +37,13 @@ export class Client {
       const { includeInactive = false, limit, offset } = options;
       
       let query = `
-        SELECT 
-          c.client_id, c.parent_id, c.name, c.email, c.phone, c.Address, 
-          c.contact_person, c.thinkspeak_subscription_info, c.city, c.state, 
+        SELECT
+          c.client_id, c.parent_id, c.name, c.email, c.phone, c.Address,
+          c.contact_person, c.thinkspeak_subscription_info, c.city, c.state,
           c.is_active, c.created_by_user_id, c.created_at, c.updated_at, c.updated_by_user_id,
           pc.name as parent_client_name,
           cu.first_name + ' ' + cu.last_name as created_by_name,
-          COUNT(d.id) as device_count
+          COUNT(d.device_id) as device_count
         FROM client c
         LEFT JOIN client pc ON c.parent_id = pc.client_id
         LEFT JOIN [user] cu ON c.created_by_user_id = cu.user_id
@@ -62,7 +65,21 @@ export class Client {
         query += ` OFFSET ${offset || 0} ROWS FETCH NEXT ${limit} ROWS ONLY`;
       }
 
+      console.log('=== CLIENT FINDALL QUERY ===');
+      console.log('Query:', query);
+
       const result = await executeQuery(query);
+
+      console.log('Query results count:', result.recordset.length);
+      if (result.recordset.length > 0) {
+        console.log('Sample client with device count:', {
+          client_id: result.recordset[0].client_id,
+          name: result.recordset[0].name,
+          device_count: result.recordset[0].device_count
+        });
+      }
+      console.log('============================');
+
       return result.recordset.map(row => new Client(row));
     } catch (error) {
       logDB('error', 'Failed to find all clients', { error: error.message });
@@ -565,7 +582,10 @@ export class Client {
       state: this.state,
       is_active: this.is_active,
       created_at: this.created_at,
-      updated_at: this.updated_at
+      updated_at: this.updated_at,
+      device_count: this.device_count,
+      parent_client_name: this.parent_client_name,
+      created_by_name: this.created_by_name
     };
   }
 }
