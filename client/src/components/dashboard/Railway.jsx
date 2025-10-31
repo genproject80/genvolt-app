@@ -11,15 +11,6 @@ const Railway = () => {
 
   return (
     <div className="space-y-6">
-      {/* Dashboard Description */}
-      {activeDashboard?.description && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <p className="text-sm text-gray-600">
-            {activeDashboard.description}
-          </p>
-        </div>
-      )}
-
       {/* Key Metrics */}
       <MetricsCards />
 

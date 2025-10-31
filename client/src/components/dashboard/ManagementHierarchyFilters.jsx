@@ -32,7 +32,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
 
   // Local state for form inputs
   const [localFilters, setLocalFilters] = useState(hierarchyFilters);
-  const [machineSearchTerm, setMachineSearchTerm] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -41,7 +40,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
   // Sync local state with context when hierarchy filters change
   useEffect(() => {
     setLocalFilters(hierarchyFilters);
-    setMachineSearchTerm(hierarchyFilters.machineId || '');
   }, [hierarchyFilters]);
 
   const handleFilterChange = useCallback((filterType, value) => {
@@ -62,15 +60,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
 
       return newFilters;
     });
-  }, []);
-
-  const handleMachineSearchChange = useCallback((e) => {
-    const value = e.target.value;
-    setMachineSearchTerm(value);
-    setLocalFilters(prev => ({
-      ...prev,
-      machineId: value || null
-    }));
   }, []);
 
   const handleApplyFilters = useCallback(async () => {
@@ -141,9 +130,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
 
   const handleRemoveFilter = useCallback((filterType) => {
     handleFilterChange(filterType, null);
-    if (filterType === 'machineId') {
-      setMachineSearchTerm('');
-    }
   }, [handleFilterChange]);
 
   // Get active filter tags
@@ -153,8 +139,7 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
       sden: 'Overall Manager',
       den: 'Level 2 Manager',
       aen: 'Level 3 Manager',
-      sse: 'Level 4 Manager',
-      machineId: 'Machine ID'
+      sse: 'Level 4 Manager'
     };
 
     Object.entries(hierarchyFilters).forEach(([key, value]) => {
@@ -229,7 +214,7 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
       )}
 
       {/* Filter Form */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Overall Manager (SDEN) */}
         <div>
           <label htmlFor="sden-filter" className="block text-sm font-medium text-gray-700 mb-2">
@@ -311,21 +296,6 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Machine ID Search */}
-        <div>
-          <label htmlFor="machine-search" className="block text-sm font-medium text-gray-700 mb-2">
-            Machine ID
-          </label>
-          <input
-            type="text"
-            id="machine-search"
-            value={machineSearchTerm}
-            onChange={handleMachineSearchChange}
-            placeholder="Search machine ID..."
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-          />
         </div>
       </div>
 

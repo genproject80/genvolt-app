@@ -1,5 +1,4 @@
 import React, { useMemo, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { useDashboard } from '../../context/DashboardContext';
 import HKMI from '../../components/dashboard/HKMI';
 import Railway from '../../components/dashboard/Railway';
@@ -11,7 +10,6 @@ const dashboardComponents = {
 };
 
 const DashboardHome = () => {
-  const { user } = useAuth();
   const { activeDashboard } = useDashboard();
 
   // Scroll to top when component mounts or when active dashboard changes
@@ -40,20 +38,9 @@ const DashboardHome = () => {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {activeDashboard?.display_name || 'Dashboard'}
-          </h1>
-          <p className="text-gray-600">
-            Welcome back, {user?.name}! Monitor your IoT devices and analyze data in real-time.
-          </p>
-          {activeDashboard && (
-            <div className="mt-2 flex items-center space-x-2 text-sm text-gray-500">
-              <span className="font-medium">Client:</span>
-              <span>{activeDashboard.client_name}</span>
-            </div>
-          )}
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {activeDashboard?.display_name || 'Dashboard'}
+        </h1>
       </div>
 
       {/* Dynamically Loaded Dashboard Content */}

@@ -9,6 +9,7 @@ import {
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { useDashboard } from '../../context/DashboardContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -18,6 +19,7 @@ const Sidebar = () => {
   const [isDashboardMenuOpen, setIsDashboardMenuOpen] = useState(true);
 
   const { dashboards, activeDashboard, setActiveDashboard } = useDashboard();
+  const { user } = useAuth();
 
   const handleDashboardClick = (dashboard) => {
     setActiveDashboard(dashboard);
@@ -78,8 +80,8 @@ const Sidebar = () => {
             )}
           </div>
 
-          {/* Reports */}
-          <NavLink
+          {/* Reports - Hidden for now */}
+          {/* <NavLink
             to="/reports"
             className={({ isActive }) =>
               `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -91,25 +93,27 @@ const Sidebar = () => {
           >
             <ChartBarIcon className="w-5 h-5 mr-3" />
             Reports
-          </NavLink>
+          </NavLink> */}
 
-          {/* Admin */}
-          <NavLink
-            to="/admin"
-            className={({ isActive }) =>
-              `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isActive || isAdminRoute
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`
-            }
-          >
-            <CogIcon className="w-5 h-5 mr-3" />
-            Admin
-          </NavLink>
+          {/* Admin - Hidden for CLIENT_USER role */}
+          {user?.role !== 'CLIENT_USER' && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isActive || isAdminRoute
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`
+              }
+            >
+              <CogIcon className="w-5 h-5 mr-3" />
+              Admin
+            </NavLink>
+          )}
 
-          {/* Users (submenu under Admin) - only show when on admin routes */}
-          {isAdminRoute && (
+          {/* Users (submenu under Admin) - only show when on admin routes and not CLIENT_USER */}
+          {isAdminRoute && user?.role !== 'CLIENT_USER' && (
             <NavLink
               to="/admin/users"
               className={({ isActive }) =>
