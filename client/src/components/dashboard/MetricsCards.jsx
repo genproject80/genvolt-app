@@ -37,29 +37,29 @@ const MetricCard = ({ title, value, subtitle, icon, color = "green", loading = f
 
   return (
     <div
-      className={`${colors.bg} rounded-lg p-6 shadow-sm ${borderClass} ${cursorClass}`}
+      className={`${colors.bg} rounded-lg p-4 shadow-sm ${borderClass} ${cursorClass}`}
       onClick={onClick}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-xs font-medium text-gray-600">{title}</p>
           {loading ? (
-            <div className="mt-2">
+            <div className="mt-1">
               <LoadingSpinner size="sm" />
             </div>
           ) : (
             <>
-              <p className={`text-3xl font-bold ${colors.text} mt-2`}>
+              <p className={`text-2xl font-bold ${colors.text} mt-1`}>
                 {value}
               </p>
               {subtitle && (
-                <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+                <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
               )}
             </>
           )}
         </div>
         {icon && (
-          <div className={`${colors.icon} ml-4`}>
+          <div className={`${colors.icon} ml-3`}>
             {icon}
           </div>
         )}
@@ -121,7 +121,7 @@ const MetricsCards = ({ className = "" }) => {
   const hasData = activeDashboard && filteredDeviceIds.length > 0;
 
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 ${className}`}>
+    <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}>
       <MetricCard
         title="Total Records"
         value={metrics.totalRecords}
