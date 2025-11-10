@@ -1,0 +1,25 @@
+please look into code and create plan document for device management module including the logic, high level, with respect to on boarding device and transferring device. Also list down some excample with client hierarchy and how/when device can be transfer from one client to another and also when divice can not trasfer and save this plan document into "D:\GenVoltRashmiRepo11Nov\genvolt-app\document".
+
+With current implementation if a device(HK00012) is onboared by Genvolt and transferred to Acme Corporation and Acme Corporation transferred to AC1 Corp and AC1 Corp transferred to AC1 Child Corp. so now device belongs to HK00012 AC1 Child Corp. if Genvolt user or Acme Corporation user or AC1 Corp user with "Transfer Device" permission logs in and tries to transfer this device back to themself then is this transfer is allowed with current implementation? 
+
+As per new reuirement we want to change this logic. Reverse and Forward, both transfer, is allowed as long as "Machid Id" is not assigned to device. Example if a device(HK00012) is onboared by Genvolt and transferred to Acme Corporation and Acme Corporation transferred to AC1 Corp and AC1 Corp transferred to AC1 Child Corp. if user with "Transfer Device" permission logs-in and tries to Reverse transfer to "AC1 Corp" then it should create a new entry into client_device with seller_id as AC1 Child Corp and buyer id with AC1 Corp and also update Device table client_id with AC1 Corp.
+
+Genvolt(HK00012)							HK00099 
+	Acme Corporation(HK00012)				HKMI (HK00099)	
+		AC1 Corp(HK00012)  						Railways 1(HK00099)
+			AC1 Child Corp (HK00012)
+			AC2 Child Corp (HK00012)
+		AC2 Corp
+	Tech flow industries(3)
+		TF1 Corp
+		TF2 Corp
+
+
+1 Created HK00011 and assigned to Genvolt with Machid_id: looks good
+2 Created HK00011 and assigned to Acme Corporation with m/c id M-11	: looks good
+	from Transfer device, Transferred this device to AC1 Corp : looks good
+	from Transfer device, Transferred this device to AC2 Corp : looks good
+3 Created HK00011 without m/c id : device belog to Genvolt, looks good
+	from Transfer device, Transferred this device to AC1 Child Corp: looks good
+	from Transfer device, Transferred this device to AC2 Corp/Tech flow industries : Error message, looks good
+
