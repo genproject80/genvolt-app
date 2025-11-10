@@ -663,19 +663,12 @@ export class Device {
         };
       }
 
-      // Check if target is a descendant - if yes, create missing transfer chain
+      // Check if target is a descendant (will be used later for chain creation)
       const isTargetDescendant = await Client.isDescendant(sellerId, buyerId);
-
-      if (isTargetDescendant) {
-        // Target is a descendant - ensure complete transfer history chain exists
-        logger.info('Target is a descendant. Checking and creating missing transfer chain...');
-
-        await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
-
-        logger.info('Transfer chain validated/created. Proceeding with final transfer...');
-      }
+      logger.info('Is target descendant of current owner?', isTargetDescendant);
 
       // Check if there's an existing client_device record for this device
+      // IMPORTANT: Get existing records BEFORE creating any new ones
       const existingRecordQuery = `
         SELECT TOP 1 *
         FROM client_device
@@ -713,9 +706,13 @@ export class Device {
           logger.info('Is target descendant of current owner?', isTargetDescendantCheck);
 
           if (isTargetDescendantCheck) {
-            // Transferring DOWN the hierarchy
-            // The transfer chain was already created above, just fetch the latest record
-            logger.info('Target is a descendant. Transfer allowed (down hierarchy). Chain already created.');
+            // Transferring DOWN the hierarchy - create transfer chain
+            logger.info('Target is a descendant. Transfer allowed (down hierarchy). Creating transfer chain...');
+
+            // Create the complete transfer chain
+            await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
+
+            // Fetch the latest record after chain creation
             const latestRecordQuery = `
               SELECT TOP 1 *
               FROM client_device
@@ -811,9 +808,11 @@ export class Device {
 
           logger.info('Hierarchy validation passed. Target is a descendant.');
 
-          // If target is a descendant, the chain was already created at line 673
-          // Just fetch the latest record from the chain instead of creating a duplicate
-          logger.info('Transfer chain already created. Fetching the latest record.');
+          // Target is descendant - create transfer chain
+          logger.info('Creating transfer chain for down-hierarchy transfer...');
+          await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
+
+          // Fetch the latest record after chain creation
           const latestRecordQuery = `
             SELECT TOP 1 *
             FROM client_device
@@ -824,11 +823,12 @@ export class Device {
           transferRecord = latestResult.recordset[0];
         }
       } else {
-        // No existing record
-        // If target is a descendant, the chain was already created above
-        // Otherwise, create a direct transfer record
+        // No existing record - this is the first transfer
         if (isTargetDescendant) {
-          logger.info('No existing client_device record, but chain was already created for descendant transfer.');
+          logger.info('No existing client_device record. Creating transfer chain for descendant transfer.');
+          // Create the complete transfer chain
+          await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
+
           // Fetch the latest record from the chain
           const latestRecordQuery = `
             SELECT TOP 1 *

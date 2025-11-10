@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
+import { useAuth } from '../../context/AuthContext';
 import { clientService } from '../../services/clientService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
   const { createDevice, loading } = useDevice();
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     device_id: '',
@@ -53,6 +55,16 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
 
         setClients(clientsData);
         console.log('✅ AddDeviceModal: Loaded descendant clients:', clientsData);
+
+        // Set default client_id to user's client AFTER clients are loaded
+        // The API returns user's own client as first item (level 0)
+        if (user?.client_id && clientsData.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            client_id: user.client_id.toString()
+          }));
+          console.log('✅ AddDeviceModal: Set default client_id to user client:', user.client_id);
+        }
       } else {
         console.warn('⚠️ AddDeviceModal: Failed to load descendant clients:', clientsResponse);
         setErrors({ submit: 'Failed to load clients data' });
@@ -118,7 +130,7 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
         device_id: '',
         machin_id: '',
         Model: '',
-        client_id: '',
+        client_id: user?.client_id ? user.client_id.toString() : '',
         conversionLogic_ld: '',
         TransactionTableID: '',
         TransactionTableName: ''
@@ -170,7 +182,7 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
       device_id: '',
       machin_id: '',
       Model: '',
-      client_id: '',
+      client_id: user?.client_id ? user.client_id.toString() : '',
       conversionLogic_ld: '',
       TransactionTableID: '',
       TransactionTableName: ''
@@ -266,10 +278,10 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             }`}
             disabled={loading || loadingData}
           >
-            <option value="">No client assigned</option>
+            {/* Show all clients from the API (which includes user's client at level 0) */}
             {clients.map(client => (
               <option key={client.client_id} value={client.client_id}>
-                {client.name}
+                {client.name} {client.level === 0 ? '(My Client)' : ''}
               </option>
             ))}
           </select>
