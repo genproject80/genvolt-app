@@ -65,7 +65,7 @@ export const DashboardProvider = ({ children }) => {
   const [statisticsLoading, setStatisticsLoading] = useState(false);
 
   // Base API URL
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api`;
 
   // Helper function to make authenticated API calls
   const makeAuthenticatedRequest = async (url, options = {}) => {
