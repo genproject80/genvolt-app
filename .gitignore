@@ -8,7 +8,5 @@ yarn-debug.log*
 /.claude/
 
 #others
-/server/package-lock.json
 /server/.env
-/client/package-lock.json
 /server/logs/
