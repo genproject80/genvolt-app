@@ -3,7 +3,7 @@ import { JWTUtils } from '../utils/jwtBrowser';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api`,
   timeout: 60000, // Longer timeout for data operations
   headers: {
     'Content-Type': 'application/json',
