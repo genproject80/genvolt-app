@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/server/models/**)",
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/server/controllers/**)",
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/server/routes/**)",
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/server/middleware/**)",
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/server/**)",
+      "Read(//d/GenVoltRashmiRepo11Nov/genvolt-app/**)",
+      "Bash(if not exist \"D:\\GenVoltRashmiRepo11Nov\\genvolt-app\\document\" mkdir \"D:\\GenVoltRashmiRepo11Nov\\genvolt-app\\document\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
