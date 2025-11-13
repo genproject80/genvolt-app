@@ -205,9 +205,16 @@ export const transferDeviceValidation = [
     }),
 
   body('machin_id')
-    .notEmpty().withMessage('Machine ID is required')
-    .trim()
-    .isLength({ min: 1, max: 100 }).withMessage('Machine ID must be 1-100 characters'),
+    .optional({ nullable: true, checkFalsy: true })
+    .customSanitizer(value => {
+      // Convert empty strings and null to undefined so they're treated as optional
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        return undefined;
+      }
+      return typeof value === 'string' ? value.trim() : value;
+    })
+    .if(body('machin_id').exists({ checkNull: false, checkFalsy: false }))
+    .isLength({ max: 100 }).withMessage('Machine ID must be less than 100 characters'),
 
   handleValidationErrors
 ];

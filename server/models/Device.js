@@ -360,15 +360,37 @@ export class Device {
   }
 
   /**
-   * Delete device
+   * Delete device and its transfer history
    * @param {number} id - Device ID to delete
    * @returns {Promise<boolean>} True if successful
    */
   static async delete(id) {
     try {
-      const query = 'DELETE FROM device WHERE id = @id';
-      const result = await executeQuery(query, { id });
-      return result.rowsAffected[0] > 0;
+      logger.info('Deleting device and transfer history:', { deviceId: id });
+
+      // First, delete all transfer history records for this device
+      // Note: device_id in client_device table is a foreign key to device.id
+      const deleteTransferHistoryQuery = 'DELETE FROM client_device WHERE device_id = @id';
+      const transferHistoryResult = await executeQuery(deleteTransferHistoryQuery, { id });
+
+      const deletedTransferRecords = transferHistoryResult.rowsAffected[0] || 0;
+      logger.info('Deleted transfer history records:', {
+        deviceId: id,
+        recordsDeleted: deletedTransferRecords
+      });
+
+      // Then, delete the device itself
+      const deleteDeviceQuery = 'DELETE FROM device WHERE id = @id';
+      const deviceResult = await executeQuery(deleteDeviceQuery, { id });
+
+      const deviceDeleted = deviceResult.rowsAffected[0] > 0;
+      logger.info('Device deletion result:', {
+        deviceId: id,
+        deleted: deviceDeleted,
+        transferRecordsDeleted: deletedTransferRecords
+      });
+
+      return deviceDeleted;
     } catch (error) {
       logger.error('Error deleting device:', error);
       throw error;
@@ -631,6 +653,84 @@ export class Device {
   }
 
   /**
+   * Create transfer chain when transferring UP the hierarchy to an ancestor
+   * @param {number} deviceId - Device ID
+   * @param {number} sellerId - Current owner (descendant) client ID
+   * @param {number} buyerId - Target ancestor client ID
+   * @returns {Promise<Array>} Array of created transfer records
+   */
+  static async createAncestorTransferChain(deviceId, sellerId, buyerId) {
+    try {
+      logger.info('Creating ancestor transfer chain (going UP hierarchy):', { deviceId, sellerId, buyerId });
+
+      // Get the hierarchy path from ancestor to descendant
+      // For example: getHierarchyPath(GenVolt, AC1 Child) returns [GenVolt, Acme, AC1, AC1 Child]
+      const hierarchyPath = await Client.getHierarchyPath(buyerId, sellerId);
+
+      if (!hierarchyPath || hierarchyPath.length < 2) {
+        logger.info('No intermediate transfers needed - direct relationship or no path');
+        // Still create a single direct record
+        const record = await Device.createClientDeviceRecord(sellerId, buyerId, deviceId);
+        return [record];
+      }
+
+      logger.info('Hierarchy path (ancestor to descendant):', hierarchyPath);
+
+      // Reverse the path to go from descendant to ancestor (bottom-up)
+      // Example: [GenVolt, Acme, AC1, AC1 Child] → [AC1 Child, AC1, Acme, GenVolt]
+      const reversedPath = [...hierarchyPath].reverse();
+      logger.info('Reversed path (descendant to ancestor):', reversedPath);
+
+      // Check which transfers already exist
+      const existingTransfersQuery = `
+        SELECT seller_id, buyer_id
+        FROM client_device
+        WHERE device_id = @deviceId
+      `;
+      const existingResult = await executeQuery(existingTransfersQuery, { deviceId });
+      const existingTransfers = new Set(
+        existingResult.recordset.map(t => `${t.seller_id}-${t.buyer_id}`)
+      );
+
+      logger.info('Existing transfers:', Array.from(existingTransfers));
+
+      // Create transfer records for each step going UP the chain
+      // Records are created sequentially with slight delays to ensure proper chronological order
+      const createdRecords = [];
+      for (let i = 0; i < reversedPath.length - 1; i++) {
+        const currentSeller = reversedPath[i];
+        const currentBuyer = reversedPath[i + 1];
+        const transferKey = `${currentSeller}-${currentBuyer}`;
+
+        if (!existingTransfers.has(transferKey)) {
+          logger.info(`Creating ancestor transfer record ${i + 1}/${reversedPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
+
+          const record = await Device.createClientDeviceRecord(
+            currentSeller,
+            currentBuyer,
+            deviceId
+          );
+          createdRecords.push(record);
+          existingTransfers.add(transferKey);
+
+          // Add a 10ms delay between records to ensure proper chronological ordering
+          if (i < reversedPath.length - 2) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        } else {
+          logger.info(`Transfer record already exists: ${currentSeller} → ${currentBuyer}`);
+        }
+      }
+
+      logger.info(`Created ${createdRecords.length} ancestor transfer records`);
+      return createdRecords;
+    } catch (error) {
+      logger.error('Error creating ancestor transfer chain:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Transfer device to another client
    * @param {number} deviceId - Device ID
    * @param {number} sellerId - Current client ID
@@ -764,12 +864,34 @@ export class Device {
                 throw new Error('Failed to update client_device record');
               }
             } else {
-              // Different parents - not allowed
-              logger.error('Transfer blocked: Target is neither a descendant nor a sibling');
-              logger.error('Current owner (sellerId):', sellerId, 'Target (buyerId):', buyerId);
-              const error = new Error('Device can only be transferred to descendant clients or sibling clients at the same level');
-              error.code = 'INVALID_HIERARCHY_TRANSFER';
-              throw error;
+              // Not a sibling - check if target is an ancestor (parent or above)
+              const isTargetAncestor = await Client.isDescendant(buyerId, sellerId);
+              logger.info('Is target an ancestor of current owner?', isTargetAncestor);
+
+              if (isTargetAncestor) {
+                // Transferring UP the hierarchy (back to parent/ancestor) - CREATE complete chain
+                logger.info('Target is an ancestor. Transfer allowed (up hierarchy). Creating ancestor transfer chain.');
+
+                // Create the complete ancestor transfer chain
+                await Device.createAncestorTransferChain(deviceId, sellerId, buyerId);
+
+                // Fetch the latest record after chain creation
+                const latestRecordQuery = `
+                  SELECT TOP 1 *
+                  FROM client_device
+                  WHERE device_id = @deviceId
+                  ORDER BY transfer_date DESC
+                `;
+                const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+                transferRecord = latestResult.recordset[0];
+              } else {
+                // Not descendant, not sibling, not ancestor - not allowed
+                logger.error('Transfer blocked: Target is neither a descendant, sibling, nor ancestor');
+                logger.error('Current owner (sellerId):', sellerId, 'Target (buyerId):', buyerId);
+                const error = new Error('Device can only be transferred to descendant clients, sibling clients at the same level, or ancestor clients');
+                error.code = 'INVALID_HIERARCHY_TRANSFER';
+                throw error;
+              }
             }
           }
 
@@ -786,41 +908,63 @@ export class Device {
         } else {
           // Current owner is neither seller nor buyer in the latest record
           // This means the device has been transferred down the hierarchy already
-          // Rule 2: Device can ONLY be transferred further down, NOT to siblings or up
+          // Rule 2: Device can be transferred further down OR back up to ancestors, but NOT to siblings
           logger.info('Device has been transferred down the hierarchy (current owner is neither seller nor buyer in latest record).');
           logger.info('Latest record - Seller:', existingRecord.seller_id, 'Buyer:', existingRecord.buyer_id, 'Current owner:', sellerId, 'Target:', buyerId);
 
           // Rule 2 applies to ALL users (including SYSTEM_ADMIN and SUPER_ADMIN)
-          // Device has been transferred down hierarchy - ONLY allow further down transfers
-          // NO siblings, NO up transfers
-          logger.info('Applying Rule 2: Device already transferred down. Checking if target is descendant of current owner (ONLY down allowed)...');
+          // Device has been transferred down hierarchy - allow down transfers OR up transfers to ancestors
+          // NO siblings allowed
+          logger.info('Applying Rule 2: Device already transferred down. Checking if target is descendant or ancestor of current owner...');
 
           const isTargetDescendantCheck2 = await Client.isDescendant(sellerId, buyerId);
           logger.info('Is target descendant of current owner?', isTargetDescendantCheck2);
 
-          if (!isTargetDescendantCheck2) {
-            logger.error('Transfer blocked: Device has been transferred down the hierarchy. Can only transfer to descendants, not siblings or up.');
-            logger.error('Current owner (sellerId):', sellerId, 'Target (buyerId):', buyerId);
-            const error = new Error('Device has been transferred down the hierarchy and can only be transferred to descendant clients, not siblings or parent levels');
-            error.code = 'INVALID_HIERARCHY_TRANSFER';
-            throw error;
+          if (isTargetDescendantCheck2) {
+            // Target is descendant - create transfer chain
+            logger.info('Hierarchy validation passed. Target is a descendant.');
+            logger.info('Creating transfer chain for down-hierarchy transfer...');
+            await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
+
+            // Fetch the latest record after chain creation
+            const latestRecordQuery = `
+              SELECT TOP 1 *
+              FROM client_device
+              WHERE device_id = @deviceId
+              ORDER BY transfer_date DESC
+            `;
+            const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+            transferRecord = latestResult.recordset[0];
+          } else {
+            // Not a descendant - check if target is an ancestor (allow transfer back up)
+            const isTargetAncestor2 = await Client.isDescendant(buyerId, sellerId);
+            logger.info('Is target an ancestor of current owner?', isTargetAncestor2);
+
+            if (isTargetAncestor2) {
+              // Transferring UP the hierarchy (back to parent/ancestor) - CREATE complete chain
+              logger.info('Target is an ancestor. Transfer allowed (up hierarchy). Creating ancestor transfer chain.');
+
+              // Create the complete ancestor transfer chain
+              await Device.createAncestorTransferChain(deviceId, sellerId, buyerId);
+
+              // Fetch the latest record after chain creation
+              const latestRecordQuery = `
+                SELECT TOP 1 *
+                FROM client_device
+                WHERE device_id = @deviceId
+                ORDER BY transfer_date DESC
+              `;
+              const latestResult = await executeQuery(latestRecordQuery, { deviceId });
+              transferRecord = latestResult.recordset[0];
+            } else {
+              // Not descendant, not ancestor - siblings not allowed in Rule 2
+              logger.error('Transfer blocked: Device has been transferred down the hierarchy. Can only transfer to descendants or ancestors, not siblings.');
+              logger.error('Current owner (sellerId):', sellerId, 'Target (buyerId):', buyerId);
+              const error = new Error('Device has been transferred down the hierarchy and can only be transferred to descendant clients or ancestor clients, not siblings');
+              error.code = 'INVALID_HIERARCHY_TRANSFER';
+              throw error;
+            }
           }
-
-          logger.info('Hierarchy validation passed. Target is a descendant.');
-
-          // Target is descendant - create transfer chain
-          logger.info('Creating transfer chain for down-hierarchy transfer...');
-          await Device.createMissingTransferChain(deviceId, sellerId, buyerId);
-
-          // Fetch the latest record after chain creation
-          const latestRecordQuery = `
-            SELECT TOP 1 *
-            FROM client_device
-            WHERE device_id = @deviceId
-            ORDER BY transfer_date DESC
-          `;
-          const latestResult = await executeQuery(latestRecordQuery, { deviceId });
-          transferRecord = latestResult.recordset[0];
         }
       } else {
         // No existing record - this is the first transfer
