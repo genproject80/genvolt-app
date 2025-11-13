@@ -49,6 +49,7 @@ const DeviceManagement = () => {
 
   // Ref to prevent multiple concurrent API calls
   const isLoadingDevices = useRef(false);
+  const hasInitialLoadCompleted = useRef(false);
 
   // Check if user has access
   const hasAccess = canViewDevice;
@@ -146,6 +147,7 @@ const DeviceManagement = () => {
             client_id: userClientId
           };
           await getAllDevices(options);
+          hasInitialLoadCompleted.current = true;
         } catch (err) {
           console.error('Failed to load initial devices:', err);
         } finally {
@@ -157,6 +159,14 @@ const DeviceManagement = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess, currentUser]);
+
+  // Load devices when page, search, or filter changes (after initial load)
+  useEffect(() => {
+    if (hasAccess && hasInitialLoadCompleted.current && !isLoadingDevices.current) {
+      loadDevices();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchTerm, modelFilter, selectedClientId]);
 
   // Load device stats only once on component mount
   useEffect(() => {
