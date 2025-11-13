@@ -34,31 +34,38 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
 
       if (clientsResponse && clientsResponse.success) {
         // Extract the actual clients array from the response
+        // Backend returns: { success: true, data: { clients: [...] } }
         let clientsData = [];
 
         if (clientsResponse.data?.clients && Array.isArray(clientsResponse.data.clients)) {
           clientsData = clientsResponse.data.clients;
-        } else if (clientsResponse.data?.data && Array.isArray(clientsResponse.data.data)) {
-          clientsData = clientsResponse.data.data;
         } else if (clientsResponse.clients && Array.isArray(clientsResponse.clients)) {
           clientsData = clientsResponse.clients;
         } else if (Array.isArray(clientsResponse.data)) {
           clientsData = clientsResponse.data;
+        } else {
+          console.error('❌ TransferDeviceModal: Unexpected response structure:', clientsResponse);
+          setError('Failed to parse clients data');
+          return;
         }
 
-        // Filter to show only descendants, not the user's own client (level 0)
-        // Also exclude the client that currently owns this device
-        let descendantsOnly = clientsData.filter(client => client.level && client.level > 0);
+        console.log('📊 TransferDeviceModal: Raw clients data:', clientsData);
 
-        // Filter out the current device owner from the list
-        if (device?.client_id) {
-          descendantsOnly = descendantsOnly.filter(client => client.client_id !== device.client_id);
-        }
+        // Filter: Include user's own client (level 0) and all descendants
+        // Only exclude the client that currently owns this device (can't transfer to same client)
+        let availableClients = clientsData.filter(client => {
+          // Filter out the current device owner
+          if (device?.client_id && client.client_id === device.client_id) {
+            console.log(`🚫 Excluding current device owner: ${client.name} (ID: ${client.client_id})`);
+            return false;
+          }
+          return true;
+        });
 
-        setClients(descendantsOnly);
-        console.log('✅ TransferDeviceModal: Loaded descendant clients (excluding own and current owner):', descendantsOnly);
+        setClients(availableClients);
+        console.log('✅ TransferDeviceModal: Available clients for transfer (including user\'s own client):', availableClients);
       } else {
-        console.warn('⚠️ TransferDeviceModal: Failed to load descendant clients:', clientsResponse);
+        console.warn('⚠️ TransferDeviceModal: Failed to load clients:', clientsResponse);
         setError('Failed to load clients data');
       }
     } catch (error) {
@@ -75,14 +82,11 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
       return;
     }
 
-    if (!machineId || !machineId.trim()) {
-      setError('Machine ID is required');
-      return;
-    }
-
     try {
       setError('');
-      await transferDevice(device.id, parseInt(targetClientId), machineId.trim());
+      // Machine ID is now optional, pass it only if provided
+      const machineIdValue = machineId?.trim() || null;
+      await transferDevice(device.id, parseInt(targetClientId), machineIdValue);
       setTargetClientId('');
       setMachineId('');
       onSuccess?.();
@@ -164,7 +168,7 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Machine ID *
+            Machine ID (Optional)
           </label>
           <input
             type="text"
@@ -173,7 +177,7 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
               setMachineId(e.target.value);
               setError('');
             }}
-            placeholder="Enter machine ID"
+            placeholder="Enter machine ID (optional)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             disabled={loading || loadingData}
           />
@@ -204,7 +208,7 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
             type="button"
             onClick={handleTransfer}
             className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            disabled={loading || loadingData || !targetClientId || !machineId.trim()}
+            disabled={loading || loadingData || !targetClientId}
           >
             {loading && <LoadingSpinner size="sm" inline className="mr-2" />}
             Transfer Device

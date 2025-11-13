@@ -156,10 +156,18 @@ export const deviceService = {
   async transferDevice(deviceId, targetClientId, machineId) {
     try {
       console.log(`🔧 DeviceService: Transferring device ${deviceId} to client ${targetClientId} with machine ID ${machineId}`);
-      const response = await api.post(`/devices/${deviceId}/transfer`, {
-        target_client_id: targetClientId,
-        machin_id: machineId
-      });
+
+      // Build request body - only include machin_id if it has a value
+      const requestBody = {
+        target_client_id: targetClientId
+      };
+
+      // Only add machin_id if it's provided and not null/empty
+      if (machineId && machineId.trim()) {
+        requestBody.machin_id = machineId;
+      }
+
+      const response = await api.post(`/devices/${deviceId}/transfer`, requestBody);
       console.log('🔧 DeviceService: Device transferred successfully');
       return response.data;
     } catch (error) {
