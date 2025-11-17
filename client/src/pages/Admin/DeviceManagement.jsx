@@ -106,8 +106,10 @@ const DeviceManagement = () => {
         sortOrder: 'desc'
       };
 
-      // Add client_id filter if a specific client is selected
-      if (selectedClientId && selectedClientId.trim()) {
+      // Add client_id filter if a specific client is selected (not "all")
+      // When "all" is selected or no client is selected, don't add client_id filter
+      // This will load all devices under the user's hierarchy
+      if (selectedClientId && selectedClientId.trim() && selectedClientId !== 'all') {
         options.client_id = selectedClientId.trim();
       }
 
@@ -128,14 +130,14 @@ const DeviceManagement = () => {
     }
   }, [currentPage, searchTerm, modelFilter, selectedClientId, getAllDevices]);
 
-  // Initialize selectedClientId with logged-in user's client_id on mount
-  // and load devices for logged-in user's client automatically
+  // Initialize selectedClientId with "all" on mount
+  // and load all devices under the user's hierarchy automatically
   useEffect(() => {
     if (hasAccess && currentUser && currentUser.client_id) {
-      const userClientId = currentUser.client_id.toString();
-      setSelectedClientId(userClientId);
+      // Set default to "all" to show all devices in hierarchy
+      setSelectedClientId('all');
 
-      // Automatically load devices for logged-in user's client on initial mount
+      // Automatically load all devices under user's hierarchy on initial mount
       const loadInitialDevices = async () => {
         try {
           isLoadingDevices.current = true;
@@ -143,8 +145,8 @@ const DeviceManagement = () => {
             page: 1,
             limit: 10,
             sortBy: 'onboarding_date',
-            sortOrder: 'desc',
-            client_id: userClientId
+            sortOrder: 'desc'
+            // No client_id filter - loads all devices under user's hierarchy
           };
           await getAllDevices(options);
           hasInitialLoadCompleted.current = true;
@@ -324,6 +326,7 @@ const DeviceManagement = () => {
               disabled={loadingClients}
             >
               <option value="">Select a client</option>
+              <option value="all">All Clients</option>
               {clients.map(client => (
                 <option key={client.client_id} value={client.client_id}>
                   {client.name}
@@ -334,7 +337,7 @@ const DeviceManagement = () => {
           <div>
             <button
               onClick={handleShowDevices}
-              disabled={!selectedClientId || loading}
+              disabled={!selectedClientId || selectedClientId === '' || loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               Show Devices
