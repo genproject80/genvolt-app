@@ -602,45 +602,26 @@ export class Device {
 
       logger.info('Hierarchy path found:', hierarchyPath);
 
-      // Check which transfers already exist
-      const existingTransfersQuery = `
-        SELECT seller_id, buyer_id
-        FROM client_device
-        WHERE device_id = @deviceId
-      `;
-      const existingResult = await executeQuery(existingTransfersQuery, { deviceId });
-      const existingTransfers = new Set(
-        existingResult.recordset.map(t => `${t.seller_id}-${t.buyer_id}`)
-      );
-
-      logger.info('Existing transfers:', Array.from(existingTransfers));
-
-      // Create missing transfer records for each step in the chain
+      // Always create new transfer records to preserve complete history
       // Records are created sequentially with slight delays to ensure proper chronological order
       const createdRecords = [];
       for (let i = 0; i < hierarchyPath.length - 1; i++) {
         const currentSeller = hierarchyPath[i];
         const currentBuyer = hierarchyPath[i + 1];
-        const transferKey = `${currentSeller}-${currentBuyer}`;
 
-        if (!existingTransfers.has(transferKey)) {
-          logger.info(`Creating missing transfer record ${i + 1}/${hierarchyPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
+        logger.info(`Creating transfer record ${i + 1}/${hierarchyPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
 
-          const record = await Device.createClientDeviceRecord(
-            currentSeller,
-            currentBuyer,
-            deviceId
-          );
-          createdRecords.push(record);
-          existingTransfers.add(transferKey);
+        const record = await Device.createClientDeviceRecord(
+          currentSeller,
+          currentBuyer,
+          deviceId
+        );
+        createdRecords.push(record);
 
-          // Add a 10ms delay between records to ensure proper chronological ordering
-          // This ensures transfer_date values are distinct and maintain hierarchy order
-          if (i < hierarchyPath.length - 2) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-        } else {
-          logger.info(`Transfer record already exists: ${currentSeller} → ${currentBuyer}`);
+        // Add a 10ms delay between records to ensure proper chronological ordering
+        // This ensures transfer_date values are distinct and maintain hierarchy order
+        if (i < hierarchyPath.length - 2) {
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
 
@@ -681,44 +662,25 @@ export class Device {
       const reversedPath = [...hierarchyPath].reverse();
       logger.info('Reversed path (descendant to ancestor):', reversedPath);
 
-      // Check which transfers already exist
-      const existingTransfersQuery = `
-        SELECT seller_id, buyer_id
-        FROM client_device
-        WHERE device_id = @deviceId
-      `;
-      const existingResult = await executeQuery(existingTransfersQuery, { deviceId });
-      const existingTransfers = new Set(
-        existingResult.recordset.map(t => `${t.seller_id}-${t.buyer_id}`)
-      );
-
-      logger.info('Existing transfers:', Array.from(existingTransfers));
-
-      // Create transfer records for each step going UP the chain
+      // Always create new transfer records to preserve complete history
       // Records are created sequentially with slight delays to ensure proper chronological order
       const createdRecords = [];
       for (let i = 0; i < reversedPath.length - 1; i++) {
         const currentSeller = reversedPath[i];
         const currentBuyer = reversedPath[i + 1];
-        const transferKey = `${currentSeller}-${currentBuyer}`;
 
-        if (!existingTransfers.has(transferKey)) {
-          logger.info(`Creating ancestor transfer record ${i + 1}/${reversedPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
+        logger.info(`Creating ancestor transfer record ${i + 1}/${reversedPath.length - 1}: ${currentSeller} → ${currentBuyer}`);
 
-          const record = await Device.createClientDeviceRecord(
-            currentSeller,
-            currentBuyer,
-            deviceId
-          );
-          createdRecords.push(record);
-          existingTransfers.add(transferKey);
+        const record = await Device.createClientDeviceRecord(
+          currentSeller,
+          currentBuyer,
+          deviceId
+        );
+        createdRecords.push(record);
 
-          // Add a 10ms delay between records to ensure proper chronological ordering
-          if (i < reversedPath.length - 2) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-        } else {
-          logger.info(`Transfer record already exists: ${currentSeller} → ${currentBuyer}`);
+        // Add a 10ms delay between records to ensure proper chronological ordering
+        if (i < reversedPath.length - 2) {
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
 
@@ -831,38 +793,17 @@ export class Device {
 
             if (currentOwner.parent_id && currentOwner.parent_id === targetClient.parent_id) {
               // Same parent - siblings allowed (Rule 1)
-              // Transferring to SIBLING (same level) - UPDATE existing entry
-              logger.info('Target is a sibling (same parent). Transfer allowed (same level). Updating existing client_device entry.');
+              // Transferring to SIBLING (same level) - CREATE new entry to preserve history
+              logger.info('Target is a sibling (same parent). Transfer allowed (same level). Creating new client_device entry.');
 
-              const updateRecordQuery = `
-                UPDATE client_device
-                SET buyer_id = @buyerId, transfer_date = GETUTCDATE()
-                OUTPUT INSERTED.*
-                WHERE id = @recordId
-              `;
-
-              logger.info('About to execute UPDATE query with params:', {
-                buyerId: buyerId,
-                buyerId_type: typeof buyerId,
-                recordId: existingRecord.id,
-                recordId_type: typeof existingRecord.id
-              });
-
-              const updateResult = await executeQuery(updateRecordQuery, {
+              // Create a new transfer record instead of updating existing one
+              transferRecord = await Device.createClientDeviceRecord(
+                sellerId,
                 buyerId,
-                recordId: existingRecord.id
-              });
+                deviceId
+              );
 
-              logger.info('UPDATE query result:', updateResult);
-              logger.info('Rows affected by UPDATE:', updateResult.rowsAffected);
-
-              if (updateResult.recordset && updateResult.recordset.length > 0) {
-                transferRecord = updateResult.recordset[0];
-                logger.info('Updated client_device record:', transferRecord);
-              } else {
-                logger.error('UPDATE query returned no records!');
-                throw new Error('Failed to update client_device record');
-              }
+              logger.info('Created new sibling transfer record:', transferRecord);
             } else {
               // Not a sibling - check if target is an ancestor (parent or above)
               const isTargetAncestor = await Client.isDescendant(buyerId, sellerId);
