@@ -61,6 +61,8 @@ export const getDeviceDetails = asyncHandler(async (req, res) => {
         h.den,
         h.aen,
         h.sse,
+        h.div_rly,
+        h.section,
         h.machine_id
       FROM [IoT_Data_Sick] iot
       INNER JOIN device d ON iot.Device_ID = d.device_id
@@ -165,6 +167,8 @@ export const getDeviceDetails = asyncHandler(async (req, res) => {
         den: deviceData.den,
         aen: deviceData.aen,
         sse: deviceData.sse,
+        div_rly: deviceData.div_rly,
+        section: deviceData.section,
         machine_id: deviceData.machine_id
       }
     };

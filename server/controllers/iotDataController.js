@@ -268,8 +268,12 @@ export const getIoTData = asyncHandler(async (req, res) => {
         hkmi.den,
         hkmi.aen,
         hkmi.sse,
+        hkmi.div_rly,
+        hkmi.section,
         hkmi.curve_number,
-        hkmi.line
+        hkmi.line,
+        hkmi.grease_left,
+        hkmi.last_service_date
       FROM iot_data_sick iot
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
@@ -512,8 +516,12 @@ export const exportIoTData = asyncHandler(async (req, res) => {
         hkmi.den,
         hkmi.aen,
         hkmi.sse,
+        hkmi.div_rly,
+        hkmi.section,
         hkmi.curve_number,
-        hkmi.line
+        hkmi.line,
+        hkmi.grease_left,
+        hkmi.last_service_date
       FROM iot_data_sick iot
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
