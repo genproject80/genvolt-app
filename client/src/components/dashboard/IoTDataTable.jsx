@@ -165,7 +165,7 @@ const Pagination = ({ pagination, onPageChange }) => {
   );
 };
 
-const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = false, showDeviceId = false }) => {
+const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = false, showDeviceId = false, hideMachineId = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const {
@@ -198,25 +198,32 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
 
   // Table columns configuration matching HKMI dashboard
   const columns = useMemo(() => {
-    const baseColumns = [
-      { key: 'machine_id', label: 'Machine ID', sortable: true, width: 'min-w-48' },
-      { key: 'management_hierarchy', label: 'Management Hierarchy', sortable: false, width: 'min-w-64' },
-      { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'min-w-32' },
-      { key: 'line', label: 'Line', sortable: true, width: 'min-w-20' },
-      { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'min-w-40' },
-      { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'min-w-32' },
-      { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'min-w-32' },
-      { key: 'status', label: 'Status', sortable: true, width: 'min-w-28' },
-      { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'min-w-36' }
+    let baseColumns = [
+      { key: 'machine_id', label: 'Machine ID', sortable: true, width: 'w-36' },
+      { key: 'management_hierarchy', label: 'Management Hierarchy', sortable: false, width: 'w-44' },
+      { key: 'div_rly', label: 'Division/ Railway', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'section', label: 'Section', sortable: true, width: 'w-24' },
+      { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'line', label: 'Line', sortable: true, width: 'w-16' },
+      { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'w-32' },
+      { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'status', label: 'Status', sortable: true, width: 'w-24' },
+      { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'w-20', wrapHeader: true }
     ];
 
     // Add Device ID column if showDeviceId is true
     if (showDeviceId) {
-      baseColumns.splice(1, 0, { key: 'Device_ID', label: 'Device ID', sortable: true, width: 'min-w-32' });
+      baseColumns.splice(1, 0, { key: 'Device_ID', label: 'Device ID', sortable: true, width: 'w-28' });
+    }
+
+    // Remove Machine ID column if hideMachineId is true
+    if (hideMachineId) {
+      baseColumns = baseColumns.filter(col => col.key !== 'machine_id');
     }
 
     return baseColumns;
-  }, [showDeviceId]);
+  }, [showDeviceId, hideMachineId]);
 
   // Format cell value based on column type
   const formatCellValue = useCallback((value, columnKey, row) => {
@@ -226,6 +233,10 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       case 'machine_id':
         // Use machine_id from cloud_dashboard_hkmi if available
         return row?.machine_id || row?.Device_ID || '-';
+      case 'div_rly':
+        return row?.div_rly || '-';
+      case 'section':
+        return row?.section || '-';
       case 'curve_number':
         // Use curve_number from cloud_dashboard_hkmi if available, otherwise extract from machine_id
         if (row?.curve_number) {
@@ -249,10 +260,8 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
         }
         return '-';
       case 'grease_left':
-        // Mock grease level based on device status
-        const faultCode = row?.Fault_Code;
-        if (faultCode && faultCode !== '0') return (Math.random() * 5 + 2).toFixed(1); // Low for faults
-        return (Math.random() * 8 + 5).toFixed(1); // Normal range
+        // Use grease_left from cloud_dashboard_hkmi table
+        return row?.grease_left ? parseFloat(row.grease_left).toFixed(1) : '-';
       case 'status':
         // Determine status based on fault codes and motor current
         const hasFault = row?.Fault_Code && row?.Fault_Code !== '0';
@@ -261,8 +270,15 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
         if (motorCurrent > 50) return 'Active';
         return 'Maintenance';
       case 'days_since_service':
-        // Mock days since service
-        return Math.floor(Math.random() * 60) + 1;
+        // Calculate days since service from last_service_date
+        if (row?.last_service_date) {
+          const lastServiceDate = new Date(row.last_service_date);
+          const today = new Date();
+          const diffTime = Math.abs(today - lastServiceDate);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return diffDays;
+        }
+        return '-';
       default:
         return value || '-';
     }
@@ -427,22 +443,22 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1200px' }}>
+        <table className="w-full table-fixed divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0">
             <tr>
               {columns.map((column) => (
                 <th
                   key={column.key}
                   scope="col"
-                  className={`${column.width} px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap ${
+                  className={`${column.width} px-2 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide ${
                     column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
                   }`}
                   onClick={column.sortable ? () => handleSort(column.key) : undefined}
                 >
                   <div className="flex items-center space-x-1">
-                    <span>{column.label}</span>
+                    <span className={column.wrapHeader ? 'break-words whitespace-normal leading-tight inline-block' : 'whitespace-nowrap'}>{column.label}</span>
                     {column.sortable && (
-                      <div className="flex flex-col">
+                      <div className="flex flex-col flex-shrink-0">
                         <svg
                           className={`w-3 h-3 ${
                             sortField === column.key && sortOrder === 'ASC'
@@ -496,14 +512,10 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
                       : 'cursor-default'
                   }`}
                   onClick={() => handleRowClick(row)}
-                  title={
-                    canViewDeviceDetails
-                      ? `Click to view details for device ${row.Device_ID}`
-                      : 'You do not have permission to view device details'
-                  }
+                  title={canViewDeviceDetails ? `Click to view details for device ${row.Device_ID}` : ''}
                 >
                   {columns.map((column) => (
-                    <td key={column.key} className={`px-4 py-3 text-sm text-gray-900 ${column.width}`}>
+                    <td key={column.key} className={`px-2 py-2 text-sm text-gray-900 ${column.width} break-words`}>
                       {column.key === 'GSM_Signal_Strength' ? (
                         <GSMSignalBars strength={row[column.key]} />
                       ) : column.key === 'management_hierarchy' ? (

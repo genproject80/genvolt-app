@@ -17,8 +17,8 @@ const Railway = () => {
       {/* Management Hierarchy Filters */}
       <ManagementHierarchyFilters />
 
-      {/* IoT Data Table - Row clicks disabled and export hidden for Railway dashboard */}
-      <IoTDataTable disableRowClick={true} hideExport={true} />
+      {/* IoT Data Table - Row clicks disabled, export hidden, and machine ID hidden for Railway dashboard */}
+      <IoTDataTable disableRowClick={true} hideExport={true} hideMachineId={true} />
     </div>
   );
 };
