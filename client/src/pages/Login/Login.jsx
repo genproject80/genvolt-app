@@ -97,7 +97,7 @@ const Login = () => {
   const handleDemoLogin = (demoType) => {
     if (demoType === 'admin') {
       setFormData({
-        email: 'admin@demo.com',
+        email: 'admin@genvolt.com',
         password: 'demo123'
       });
     } else {
@@ -234,7 +234,7 @@ const Login = () => {
                 onClick={() => handleDemoLogin('admin')}
                 className="w-full text-xs text-gray-600 hover:text-primary-600 transition-colors"
               >
-                admin@demo.com / demo123 (password)
+                admin@genvolt.com / demo123 (password)
               </button>
               <button
                 type="button"
