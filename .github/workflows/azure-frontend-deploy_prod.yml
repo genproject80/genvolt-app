@@ -3,7 +3,7 @@ name: Deploy Frontend to Azure Static Web Apps (PROD)
 on:
   push:
     branches:
-      - dev
+      - main
     paths:
       - 'client/**'
       - '.github/workflows/azure-frontend-deploy_prod.yml'
