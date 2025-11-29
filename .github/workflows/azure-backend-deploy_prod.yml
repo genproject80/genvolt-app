@@ -3,7 +3,7 @@ name: Deploy Backend to Azure Web App (PROD)
 on:
   push:
     branches:
-      - dev
+      - main
     paths:
       - 'server/**'
       - '.github/workflows/azure-backend-deploy_prod.yml'

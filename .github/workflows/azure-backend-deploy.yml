@@ -3,7 +3,7 @@ name: Deploy Backend to Azure Web App (DEV)
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - 'server/**'
       - '.github/workflows/azure-backend-deploy.yml'
