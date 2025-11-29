@@ -72,7 +72,8 @@ const corsOptions = {
     // Fallback: check against allowed origins
     const allowedOrigins = [
       process.env.CORS_ORIGIN || 'http://localhost:3008',
-      'https://thankful-bay-0638b7700.3.azurestaticapps.net', // Production frontend
+      'https://thankful-bay-0638b7700.3.azurestaticapps.net', // DEV frontend
+      'https://lively-sand-08d4b6900.3.azurestaticapps.net', // PROD frontend
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
