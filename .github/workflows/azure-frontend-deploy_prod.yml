@@ -6,7 +6,7 @@ on:
       - dev
     paths:
       - 'client/**'
-      - '.github/workflows/azure-frontend-deploy.yml'
+      - '.github/workflows/azure-frontend-deploy_prod.yml'
   workflow_dispatch:
 
 jobs:
