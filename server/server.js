@@ -27,6 +27,7 @@ import iotDataRoutes from './routes/iotDataRoutes.js';
 import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
+import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -156,6 +157,7 @@ app.use('/api/iot-data', iotDataRoutes);
 app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
+app.use('/api/hkmi-table', hkmiTableRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -174,7 +176,8 @@ app.get('/api', (req, res) => {
       iotData: '/api/iot-data',
       deviceDetails: '/api/device-details',
       devices: '/api/devices',
-      userPreferences: '/api/user-preferences'
+      userPreferences: '/api/user-preferences',
+      hkmiTable: '/api/hkmi-table'
     }
   });
 });

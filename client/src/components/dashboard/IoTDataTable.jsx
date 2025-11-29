@@ -272,8 +272,15 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       case 'days_since_service':
         // Calculate days since service from last_service_date
         if (row?.last_service_date) {
-          const lastServiceDate = new Date(row.last_service_date);
+          // Parse date without timezone conversion
+          const dateStr = String(row.last_service_date).split('T')[0];
+          const [year, month, day] = dateStr.split('-').map(num => parseInt(num, 10));
+          const lastServiceDate = new Date(year, month - 1, day);
+
+          // Get today's date at midnight
           const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
           const diffTime = Math.abs(today - lastServiceDate);
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           return diffDays;

@@ -1,16 +1,16 @@
-name: Deploy Backend to Azure Web App (DEV)
+name: Deploy Backend to Azure Web App (PROD)
 
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - 'server/**'
-      - '.github/workflows/azure-backend-deploy.yml'
+      - '.github/workflows/azure-backend-deploy_prod.yml'
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: 'genvolt-backend-api'  
+  AZURE_WEBAPP_NAME: 'genvolt-backend-api-prod'  
   NODE_VERSION: '18.x'
 
 jobs:
@@ -35,5 +35,5 @@ jobs:
       uses: azure/webapps-deploy@v2
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD }}
         package: ./server

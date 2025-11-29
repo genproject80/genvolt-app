@@ -2,11 +2,18 @@ import React, { useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import HKMI from '../../components/dashboard/HKMI';
 import Railway from '../../components/dashboard/Railway';
+import HKMITable from '../../components/dashboard/HKMITable';
 
 // Dashboard component mapping based on dashboard name
 const dashboardComponents = {
   'HKMI': HKMI,
-  'Railway': Railway
+  'Railway': Railway,
+  'HKMI Table': HKMITable,
+  'HKMI_Table': HKMITable,
+  'HKMITable': HKMITable,
+  'HKMI_maping_data': HKMITable,
+  'HKMI_mapping_data': HKMITable,
+  'HKMI Mapping Data': HKMITable
 };
 
 const DashboardHome = () => {
