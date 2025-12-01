@@ -14,6 +14,10 @@ import DashboardHome from './pages/Dashboard/DashboardHome';
 import DeviceDetailPage from './pages/Dashboard/DeviceDetailPage';
 import Reports from './pages/Reports/Reports';
 import AdminPanel from './pages/Admin/AdminPanel';
+import UserManagement from './pages/Admin/UserManagement';
+import ClientManagement from './pages/Admin/ClientManagement';
+import RoleManagement from './pages/Admin/RoleManagement';
+import DeviceManagement from './pages/Admin/DeviceManagement';
 import LoadingSpinner from './components/common/LoadingSpinner';
 
 // Protected Route Component
@@ -85,15 +89,59 @@ const AppRoutes = () => {
         } 
       />
       
-      <Route 
-        path="/admin/*" 
+      <Route
+        path="/admin"
         element={
           <ProtectedRoute>
             <Layout>
               <AdminPanel />
             </Layout>
           </ProtectedRoute>
-        } 
+        }
+      />
+
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <UserManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/clients"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ClientManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/roles"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <RoleManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/devices"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DeviceManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
       />
       
       {/* Default redirect */}
