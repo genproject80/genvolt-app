@@ -6,7 +6,10 @@ import {
   CogIcon,
   UsersIcon,
   ChevronDownIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ShieldCheckIcon,
+  BuildingOfficeIcon,
+  ComputerDesktopIcon
 } from '@heroicons/react/24/outline';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
@@ -17,6 +20,7 @@ const Sidebar = () => {
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isDashboardRoute = location.pathname.startsWith('/dashboard');
   const [isDashboardMenuOpen, setIsDashboardMenuOpen] = useState(true);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(true);
 
   const { dashboards, activeDashboard, setActiveDashboard } = useDashboard();
   const { user } = useAuth();
@@ -95,38 +99,89 @@ const Sidebar = () => {
             Reports
           </NavLink> */}
 
-          {/* Admin - Hidden for CLIENT_USER role */}
+          {/* Admin - with submenu - Hidden for CLIENT_USER role */}
           {user?.role !== 'CLIENT_USER' && (
-            <NavLink
-              to="/admin"
-              className={({ isActive }) =>
-                `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isActive || isAdminRoute
+            <div>
+              <button
+                onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isAdminRoute
                     ? 'bg-primary-50 text-primary-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`
-              }
-            >
-              <CogIcon className="w-5 h-5 mr-3" />
-              Admin
-            </NavLink>
-          )}
+                }`}
+              >
+                <div className="flex items-center">
+                  <CogIcon className="w-5 h-5 mr-3" />
+                  Admin
+                </div>
+                {isAdminMenuOpen ? (
+                  <ChevronDownIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronRightIcon className="w-4 h-4" />
+                )}
+              </button>
 
-          {/* Users (submenu under Admin) - only show when on admin routes and not CLIENT_USER */}
-          {isAdminRoute && user?.role !== 'CLIENT_USER' && (
-            <NavLink
-              to="/admin/users"
-              className={({ isActive }) =>
-                `flex items-center px-3 py-2 ml-6 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`
-              }
-            >
-              <UsersIcon className="w-4 h-4 mr-2" />
-              Users
-            </NavLink>
+              {/* Admin Submenu */}
+              {isAdminMenuOpen && (
+                <div className="mt-1 ml-6 space-y-1">
+                  <NavLink
+                    to="/admin/users"
+                    className={({ isActive }) =>
+                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <UsersIcon className="w-4 h-4 mr-2" />
+                    User Management
+                  </NavLink>
+
+                  <NavLink
+                    to="/admin/clients"
+                    className={({ isActive }) =>
+                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <BuildingOfficeIcon className="w-4 h-4 mr-2" />
+                    Client Management
+                  </NavLink>
+
+                  <NavLink
+                    to="/admin/roles"
+                    className={({ isActive }) =>
+                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <ShieldCheckIcon className="w-4 h-4 mr-2" />
+                    Role Management
+                  </NavLink>
+
+                  <NavLink
+                    to="/admin/devices"
+                    className={({ isActive }) =>
+                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <ComputerDesktopIcon className="w-4 h-4 mr-2" />
+                    Device Management
+                  </NavLink>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </nav>
