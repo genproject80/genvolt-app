@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, KeyIcon } from '@heroicons/react/24/outline';
 import { useUser } from '../../context/UserContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { useAuth } from '../../context/AuthContext';
@@ -7,6 +7,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AddUserModal from '../../components/modals/AddUserModal';
 import EditUserModal from '../../components/modals/EditUserModal';
 import DeleteUserModal from '../../components/modals/DeleteUserModal';
+import ResetPasswordModal from '../../components/modals/ResetPasswordModal';
 
 const UserManagement = () => {
   const {
@@ -26,6 +27,7 @@ const UserManagement = () => {
     canCreateUser,
     canEditUser,
     canDeleteUser,
+    canResetPassword,
     canAccessUserManagement
   } = useUserPermissions();
 
@@ -39,6 +41,7 @@ const UserManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Ref to prevent multiple concurrent API calls
@@ -123,6 +126,13 @@ const UserManagement = () => {
     if (canDeleteUser && user.user_id !== currentUser.user_id) {
       setSelectedUser(user);
       setShowDeleteModal(true);
+    }
+  };
+
+  const handleResetPassword = (user) => {
+    if (canResetPassword) {
+      setSelectedUser(user);
+      setShowResetPasswordModal(true);
     }
   };
 
@@ -312,6 +322,15 @@ const UserManagement = () => {
                           <PencilIcon className="w-4 h-4" />
                         </button>
                       )}
+                      {canResetPassword && (
+                        <button
+                          onClick={() => handleResetPassword(user)}
+                          className="text-green-600 hover:text-green-900 cursor-pointer"
+                          title="Reset Password"
+                        >
+                          <KeyIcon className="w-4 h-4" />
+                        </button>
+                      )}
                       {canDeleteUser && user.user_id !== currentUser?.user_id && (
                         <button
                           onClick={() => handleDeleteUser(user)}
@@ -321,7 +340,7 @@ const UserManagement = () => {
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       )}
-                      {!canEditUser && !canDeleteUser && (
+                      {!canEditUser && !canDeleteUser && !canResetPassword && (
                         <span className="text-gray-400 text-xs">View only</span>
                       )}
                     </div>
@@ -388,6 +407,19 @@ const UserManagement = () => {
         user={selectedUser}
         onSuccess={() => {
           // Refresh users list after successful update
+          loadUsers();
+        }}
+      />
+
+      <ResetPasswordModal
+        isOpen={showResetPasswordModal}
+        onClose={() => {
+          setShowResetPasswordModal(false);
+          setSelectedUser(null);
+        }}
+        user={selectedUser}
+        onSuccess={() => {
+          // Optionally refresh users list after password reset
           loadUsers();
         }}
       />

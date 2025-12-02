@@ -512,12 +512,8 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
     throw new AuthorizationError('Access denied to this user');
   }
 
-  // Update password
-  await User.update(user.user_id, { 
-    password: newPassword,
-    password_reset_at: new Date(),
-    password_reset_by_user_id: currentUser.user_id
-  }, currentUser.user_id);
+  // Reset password (simple update without tracking)
+  await User.resetPassword(user.user_id, newPassword);
 
   // Log password reset
   logAuth('password_reset_by_admin', {
