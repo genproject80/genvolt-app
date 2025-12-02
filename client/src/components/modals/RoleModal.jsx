@@ -171,8 +171,8 @@ const RoleModal = ({ isOpen, onClose, role = null, onSuccess }) => {
   const groupedPermissions = permissions.reduce((groups, permission) => {
     // Simple categorization based on permission name
     let category = 'Other';
-    
-    if (permission.permission_name.includes('User')) {
+
+    if (permission.permission_name.includes('User') || permission.permission_name.includes('Password')) {
       category = 'User Management';
     } else if (permission.permission_name.includes('Client')) {
       category = 'Client Management';
@@ -186,7 +186,7 @@ const RoleModal = ({ isOpen, onClose, role = null, onSuccess }) => {
       groups[category] = [];
     }
     groups[category].push(permission);
-    
+
     return groups;
   }, {});
 
