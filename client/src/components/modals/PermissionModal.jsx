@@ -52,7 +52,7 @@ const PermissionModal = ({ isOpen, onClose, role = null, onSuccess }) => {
       // Simple categorization based on permission name
       let category = 'Other';
 
-      if (permission.permission_name.includes('User')) {
+      if (permission.permission_name.includes('User') || permission.permission_name.includes('Password')) {
         category = 'User Management';
       } else if (permission.permission_name.includes('Client')) {
         category = 'Client Management';
