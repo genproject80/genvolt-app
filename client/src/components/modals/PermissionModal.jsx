@@ -46,34 +46,58 @@ const PermissionModal = ({ isOpen, onClose, role = null, onSuccess }) => {
     }
   }, [selectedPermissions, rolePermissions]);
 
+  // Group permissions by category for better UX (same logic as RoleModal)
+  const groupPermissionsByCategory = (permissions) => {
+    return permissions.reduce((groups, permission) => {
+      // Simple categorization based on permission name
+      let category = 'Other';
+
+      if (permission.permission_name.includes('User')) {
+        category = 'User Management';
+      } else if (permission.permission_name.includes('Client')) {
+        category = 'Client Management';
+      } else if (permission.permission_name.includes('Device')) {
+        category = 'Device Management';
+      } else if (permission.permission_name.includes('Role') || permission.permission_name.includes('role')) {
+        category = 'System Administration';
+      }
+
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(permission);
+
+      return groups;
+    }, {});
+  };
+
   const loadPermissionsData = async () => {
     if (!role) return;
 
     setIsLoading(true);
     try {
-      // Load all permissions and categories
-      const [allPermsResponse, categoriesResponse, rolePermsResponse] = await Promise.all([
+      // Load all permissions
+      const [allPermsResponse, rolePermsResponse] = await Promise.all([
         permissionService.getAllPermissions(),
-        permissionService.getPermissionsByCategory(),
         permissionService.getUnassignedPermissions(role.role_id)
       ]);
 
       if (allPermsResponse.success) {
         setAllPermissions(allPermsResponse.data.permissions);
-      }
 
-      if (categoriesResponse.success) {
-        setPermissionCategories(categoriesResponse.data.categories);
+        // Group permissions using same logic as RoleModal
+        const grouped = groupPermissionsByCategory(allPermsResponse.data.permissions);
+        setPermissionCategories(grouped);
       }
 
       // Get currently assigned permissions
-      const currentPermissions = allPermsResponse.data.permissions.filter(p => 
+      const currentPermissions = allPermsResponse.data.permissions.filter(p =>
         !rolePermsResponse.data.unassigned_permissions.find(up => up.permission_id === p.permission_id)
       );
-      
+
       setRolePermissions(currentPermissions);
       setSelectedPermissions(new Set(currentPermissions.map(p => p.permission_id)));
-      
+
     } catch (error) {
       console.error('Failed to load permissions data:', error);
     } finally {
