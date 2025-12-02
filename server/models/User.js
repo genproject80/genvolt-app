@@ -265,6 +265,31 @@ export class User {
   }
 
   /**
+   * Reset user password (simple update without tracking)
+   * @param {number} userId - User ID
+   * @param {string} newPassword - New password (plain text)
+   * @returns {Promise<boolean>} True if successful
+   */
+  static async resetPassword(userId, newPassword) {
+    try {
+      // Hash password before storing
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+      const query = `
+        UPDATE [user]
+        SET password = @password
+        WHERE user_id = @userId
+      `;
+
+      const result = await executeQuery(query, { userId, password: hashedPassword });
+      return result.rowsAffected[0] > 0;
+    } catch (error) {
+      logger.error('Error resetting password:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get user's permissions based on role
    * @returns {Promise<Array>} Array of permission names
    */

@@ -15,7 +15,8 @@ export const useUserPermissions = () => {
     canViewUser,
     canCreateUser,
     canEditUser,
-    canDeleteUser
+    canDeleteUser,
+    canResetPassword
   } = usePermissions();
 
   // Derived permission flags for more specific user management scenarios
@@ -60,6 +61,7 @@ export const useUserPermissions = () => {
     canCreateUser,
     canEditUser,
     canDeleteUser,
+    canResetPassword,
 
     // Derived permission flags
     canManageUsers,

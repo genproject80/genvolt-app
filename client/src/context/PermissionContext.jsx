@@ -112,6 +112,7 @@ export const PermissionProvider = ({ children }) => {
   const canCreateUser = hasPermission('Create User');
   const canEditUser = hasPermission('Edit User');
   const canDeleteUser = hasPermission('Delete User');
+  const canResetPassword = hasPermission('Reset Password');
 
   const value = {
     // State
@@ -142,7 +143,8 @@ export const PermissionProvider = ({ children }) => {
     canViewUser,
     canCreateUser,
     canEditUser,
-    canDeleteUser
+    canDeleteUser,
+    canResetPassword
   };
 
   return (
