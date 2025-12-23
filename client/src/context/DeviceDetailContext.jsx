@@ -40,8 +40,8 @@ export const DeviceDetailProvider = ({ children }) => {
     hasPrevious: false
   });
 
-  // Base API URL
-  const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api`;
+  // Base API URL - use relative path when VITE_API_URL is empty (for Vite proxy)
+  const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
 
   // Helper function to make authenticated API calls
   const makeAuthenticatedRequest = async (url, options = {}) => {

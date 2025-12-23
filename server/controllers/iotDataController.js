@@ -273,7 +273,9 @@ export const getIoTData = asyncHandler(async (req, res) => {
         hkmi.curve_number,
         hkmi.line,
         hkmi.grease_left,
-        hkmi.last_service_date
+        hkmi.last_service_date,
+        motor_run.Motor_Run_Count_Last_24Hrs,
+        record_count.Record_Count_Last_1Hr
       FROM iot_data_sick iot
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
@@ -286,6 +288,40 @@ export const getIoTData = asyncHandler(async (req, res) => {
           ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
         FROM cloud_dashboard_hkmi
       ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Motor_Run_Count_Last_24Hrs
+        FROM (
+          SELECT
+            Device_ID,
+            CreatedAt,
+            Motor_OFF_Time_min,
+            DATEDIFF(MINUTE,
+              LAG(CreatedAt) OVER (PARTITION BY Device_ID ORDER BY CreatedAt),
+              CreatedAt
+            ) as Minutes_Since_Last_Run,
+            ROW_NUMBER() OVER (PARTITION BY Device_ID ORDER BY CreatedAt) as run_number
+          FROM iot_data_sick
+          WHERE Device_ID IN (${devicePlaceholders})
+            AND CreatedAt >= DATEADD(hour, -24, GETDATE())
+            AND Number_of_Wheels_Detected > Number_of_Wheels_Configured
+            AND Train_Passed = 1
+        ) runs
+        WHERE run_number = 1
+          OR Minutes_Since_Last_Run >= Motor_OFF_Time_min
+          OR Minutes_Since_Last_Run IS NULL
+        GROUP BY Device_ID
+      ) motor_run ON iot.Device_ID = motor_run.Device_ID
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Record_Count_Last_1Hr
+        FROM iot_data_sick
+        WHERE Device_ID IN (${devicePlaceholders})
+          AND CreatedAt >= DATEADD(hour, -1, GETDATE())
+        GROUP BY Device_ID
+      ) record_count ON iot.Device_ID = record_count.Device_ID
       WHERE 1=1
       ${outerWhereClause}
       ${hkmiWhereClause}
@@ -521,7 +557,9 @@ export const exportIoTData = asyncHandler(async (req, res) => {
         hkmi.curve_number,
         hkmi.line,
         hkmi.grease_left,
-        hkmi.last_service_date
+        hkmi.last_service_date,
+        motor_run.Motor_Run_Count_Last_24Hrs,
+        record_count.Record_Count_Last_1Hr
       FROM iot_data_sick iot
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
@@ -534,6 +572,40 @@ export const exportIoTData = asyncHandler(async (req, res) => {
           ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
         FROM cloud_dashboard_hkmi
       ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Motor_Run_Count_Last_24Hrs
+        FROM (
+          SELECT
+            Device_ID,
+            CreatedAt,
+            Motor_OFF_Time_min,
+            DATEDIFF(MINUTE,
+              LAG(CreatedAt) OVER (PARTITION BY Device_ID ORDER BY CreatedAt),
+              CreatedAt
+            ) as Minutes_Since_Last_Run,
+            ROW_NUMBER() OVER (PARTITION BY Device_ID ORDER BY CreatedAt) as run_number
+          FROM iot_data_sick
+          WHERE Device_ID IN (${devicePlaceholders})
+            AND CreatedAt >= DATEADD(hour, -24, GETDATE())
+            AND Number_of_Wheels_Detected > Number_of_Wheels_Configured
+            AND Train_Passed = 1
+        ) runs
+        WHERE run_number = 1
+          OR Minutes_Since_Last_Run >= Motor_OFF_Time_min
+          OR Minutes_Since_Last_Run IS NULL
+        GROUP BY Device_ID
+      ) motor_run ON iot.Device_ID = motor_run.Device_ID
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Record_Count_Last_1Hr
+        FROM iot_data_sick
+        WHERE Device_ID IN (${devicePlaceholders})
+          AND CreatedAt >= DATEADD(hour, -1, GETDATE())
+        GROUP BY Device_ID
+      ) record_count ON iot.Device_ID = record_count.Device_ID
       WHERE 1=1
       ${outerWhereClause}
       ${hkmiWhereClause}

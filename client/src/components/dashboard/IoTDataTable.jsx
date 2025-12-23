@@ -10,8 +10,7 @@ const HKMIStatusBadge = ({ status }) => {
 
     const statusLower = status.toLowerCase();
     if (statusLower === 'active') return 'bg-green-100 text-green-800';
-    if (statusLower === 'maintenance') return 'bg-orange-100 text-orange-800';
-    if (statusLower === 'offline') return 'bg-red-100 text-red-800';
+    if (statusLower === 'signal loss') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
   };
 
@@ -180,7 +179,7 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
 
   // Local state
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState('Timestamp');
+  const [sortField, setSortField] = useState('Entry_ID');
   const [sortOrder, setSortOrder] = useState('DESC');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -208,6 +207,7 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'w-32' },
       { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'motor_run_count', label: 'Motor Run Count Last 24Hrs', sortable: false, width: 'w-24', wrapHeader: true },
       { key: 'status', label: 'Status', sortable: true, width: 'w-24' },
       { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'w-20', wrapHeader: true }
     ];
@@ -253,8 +253,8 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
         const lineMatch = (row?.machine_id || '').match(/-([A-Z]{2})-/);
         return lineMatch ? lineMatch[1] : '-';
       case 'gps_location':
-        const lat = row?.Latitude;
-        const lng = row?.Longitude;
+        const lat = row?.Longitude;
+        const lng = row?.Latitude;
         if (lat && lng && lat !== 0 && lng !== 0) {
           return `${parseFloat(lat).toFixed(4)},${parseFloat(lng).toFixed(4)}`;
         }
@@ -262,13 +262,14 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       case 'grease_left':
         // Use grease_left from cloud_dashboard_hkmi table
         return row?.grease_left ? parseFloat(row.grease_left).toFixed(1) : '-';
+      case 'motor_run_count':
+        // Display motor run count for last 24 hours
+        return row?.Motor_Run_Count_Last_24Hrs || 0;
       case 'status':
-        // Determine status based on fault codes and motor current
-        const hasFault = row?.Fault_Code && row?.Fault_Code !== '0';
-        const motorCurrent = row?.Motor_Current_mA || 0;
-        if (hasFault) return 'Offline';
-        if (motorCurrent > 50) return 'Active';
-        return 'Maintenance';
+        // Determine status based on record count in last 1 hour
+        const recordCount = row?.Record_Count_Last_1Hr || 0;
+        if (recordCount >= 12) return 'Active';
+        return 'Signal Loss';
       case 'days_since_service':
         // Calculate days since service from last_service_date
         if (row?.last_service_date) {

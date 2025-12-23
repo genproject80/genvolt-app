@@ -12,7 +12,7 @@ const HKMI = () => {
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
-      <MetricsCards />
+      {/* <MetricsCards /> */}
 
       {/* Management Hierarchy Filters */}
       <ManagementHierarchyFilters />

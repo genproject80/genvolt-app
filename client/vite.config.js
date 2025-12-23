@@ -8,8 +8,17 @@ export default defineConfig({
     outDir: 'dist'
   },
   server: {
+    allowedHosts: true,
     port: 3002,
-    host: 'localhost',
+    host: '0.0.0.0', // Allow external access (required for ngrok)
     open: true,
+    proxy: {
+      // Proxy API requests to the backend server
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 })
