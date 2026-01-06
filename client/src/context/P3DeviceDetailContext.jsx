@@ -1,20 +1,20 @@
 import React, { createContext, useState, useContext, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
-const DeviceDetailContext = createContext({});
+const P3DeviceDetailContext = createContext({});
 
-export const useDeviceDetail = () => {
-  const context = useContext(DeviceDetailContext);
+export const useP3DeviceDetail = () => {
+  const context = useContext(P3DeviceDetailContext);
   if (!context) {
-    throw new Error('useDeviceDetail must be used within a DeviceDetailProvider');
+    throw new Error('useP3DeviceDetail must be used within a P3DeviceDetailProvider');
   }
   return context;
 };
 
-export const DeviceDetailProvider = ({ children }) => {
+export const P3DeviceDetailProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
 
-  // Device detail state
+  // P3 Device detail state
   const [deviceDetail, setDeviceDetail] = useState(null);
   const [deviceHistory, setDeviceHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,7 +71,7 @@ export const DeviceDetailProvider = ({ children }) => {
       const responseData = await response.json();
       return responseData;
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('P3 API request failed:', error);
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
         throw new Error('Unable to connect to server. Please check if the server is running on port 5001.');
       }
@@ -79,20 +79,20 @@ export const DeviceDetailProvider = ({ children }) => {
     }
   };
 
-  // Fetch device details
-  const fetchDeviceDetail = useCallback(async (deviceId) => {
-    if (!isAuthenticated || !deviceId) {
+  // Fetch P3 device details
+  const fetchDeviceDetail = useCallback(async (entryId) => {
+    if (!isAuthenticated || !entryId) {
       return;
     }
     setLoading(true);
     setError(null);
 
     try {
-      const response = await makeAuthenticatedRequest(`/device-details/${deviceId}`);
+      const response = await makeAuthenticatedRequest(`/p3-device-details/${entryId}`);
       setDeviceDetail(response.data);
       return response.data;
     } catch (err) {
-      console.error('Error fetching device details:', err);
+      console.error('Error fetching P3 device details:', err);
       setError(err.message);
       setDeviceDetail(null);
       throw err;
@@ -101,9 +101,9 @@ export const DeviceDetailProvider = ({ children }) => {
     }
   }, [isAuthenticated]);
 
-  // Fetch device history
-  const fetchDeviceHistory = useCallback(async (deviceId, options = {}) => {
-    if (!isAuthenticated || !deviceId) return;
+  // Fetch P3 device history
+  const fetchDeviceHistory = useCallback(async (entryId, options = {}) => {
+    if (!isAuthenticated || !entryId) return;
 
     const {
       timeRange = historyFilters.timeRange,
@@ -112,7 +112,7 @@ export const DeviceDetailProvider = ({ children }) => {
       date = historyFilters.date,
       page = historyPagination.page,
       limit = historyPagination.limit,
-      sortField = 'timestamp',
+      sortField = 'CreatedAt',
       sortOrder = 'DESC'
     } = options;
 
@@ -120,7 +120,7 @@ export const DeviceDetailProvider = ({ children }) => {
     setHistoryError(null);
 
     try {
-      console.log('Fetching device history with params:', {
+      console.log('Fetching P3 device history with params:', {
         timeRange,
         status,
         search,
@@ -142,16 +142,16 @@ export const DeviceDetailProvider = ({ children }) => {
         sortOrder
       });
 
-      console.log('API URL:', `/device-details/${deviceId}/history?${params}`);
+      console.log('P3 API URL:', `/p3-device-details/${entryId}/history?${params}`);
 
-      const response = await makeAuthenticatedRequest(`/device-details/${deviceId}/history?${params}`);
+      const response = await makeAuthenticatedRequest(`/p3-device-details/${entryId}/history?${params}`);
 
       setDeviceHistory(response.data || []);
       setHistoryPagination(response.meta || {});
 
       return response;
     } catch (err) {
-      console.error('Error fetching device history:', err);
+      console.error('Error fetching P3 device history:', err);
       setHistoryError(err.message);
       setDeviceHistory([]);
       throw err;
@@ -216,7 +216,7 @@ export const DeviceDetailProvider = ({ children }) => {
     });
   }, []);
 
-  // Format device data for display
+  // Format P3 device data for display
   const formatDeviceData = useCallback((rawData) => {
     if (!rawData) return null;
 
@@ -224,23 +224,20 @@ export const DeviceDetailProvider = ({ children }) => {
       ...rawData,
       device_information: {
         ...rawData.device_information,
-        record_time: rawData.device_information.record_time
+        record_time: rawData.device_information?.record_time
           ? new Date(rawData.device_information.record_time).toLocaleString()
           : 'N/A'
       },
-      operational_status: {
-        ...rawData.operational_status,
-        runtime_formatted: rawData.operational_status.runtime
-          ? `${Math.floor(rawData.operational_status.runtime / 60)}h ${rawData.operational_status.runtime % 60}m`
-          : 'N/A'
-      },
-      electrical_parameters: {
-        ...rawData.electrical_parameters,
-        hv_output_voltage_formatted: rawData.electrical_parameters.hv_output_voltage
-          ? `${rawData.electrical_parameters.hv_output_voltage} kV`
-          : '0 kV',
-        hv_output_current_formatted: rawData.electrical_parameters.hv_output_current
-          ? `${rawData.electrical_parameters.hv_output_current} mA`
+      technical_details: {
+        ...rawData.technical_details,
+        motor_on_time_formatted: rawData.technical_details?.motor_on_time_sec
+          ? `${rawData.technical_details.motor_on_time_sec} seconds`
+          : '0 seconds',
+        motor_off_time_formatted: rawData.technical_details?.motor_off_time_sec
+          ? `${rawData.technical_details.motor_off_time_sec} seconds`
+          : '0 seconds',
+        current_draw_formatted: rawData.technical_details?.current_draw_ma
+          ? `${rawData.technical_details.current_draw_ma} mA`
           : '0 mA'
       }
     };
@@ -252,18 +249,15 @@ export const DeviceDetailProvider = ({ children }) => {
 
     return rawData.map(item => ({
       ...item,
-      timestamp_formatted: item.timestamp
-        ? new Date(item.timestamp).toLocaleString()
+      timestamp_formatted: item.CreatedAt
+        ? new Date(item.CreatedAt).toLocaleString()
         : 'N/A',
-      runtime_formatted: item.runtime
-        ? `${item.runtime} min`
-        : 'N/A',
-      hv_output_voltage_formatted: item.hv_output_voltage
-        ? `${item.hv_output_voltage} kV`
-        : '0 kV',
-      hv_output_current_formatted: item.hv_output_current
-        ? `${item.hv_output_current} mA`
-        : '0 mA'
+      motor_current_formatted: item.Motor_Current_Average_mA
+        ? `${item.Motor_Current_Average_mA} mA`
+        : '0 mA',
+      battery_voltage_formatted: item.Battery_Voltage_mV
+        ? `${item.Battery_Voltage_mV} mV`
+        : 'N/A'
     }));
   }, []);
 
@@ -292,8 +286,8 @@ export const DeviceDetailProvider = ({ children }) => {
   };
 
   return (
-    <DeviceDetailContext.Provider value={value}>
+    <P3DeviceDetailContext.Provider value={value}>
       {children}
-    </DeviceDetailContext.Provider>
+    </P3DeviceDetailContext.Provider>
   );
 };

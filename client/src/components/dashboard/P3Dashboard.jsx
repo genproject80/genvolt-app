@@ -1,26 +1,22 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboard } from '../../context/DashboardContext';
-import MetricsCards from './MetricsCards';
 import ManagementHierarchyFilters from './ManagementHierarchyFilters';
-import IoTDataTable from './IoTDataTable';
+import P3DataTable from './P3DataTable';
 
-const Railway = () => {
+const P3Dashboard = () => {
   const { user } = useAuth();
   const { activeDashboard } = useDashboard();
 
   return (
     <div className="space-y-6">
-      {/* Key Metrics */}
-      {/* <MetricsCards /> */}
-
       {/* Management Hierarchy Filters */}
       <ManagementHierarchyFilters />
 
-      {/* IoT Data Table - Row clicks disabled, export hidden, and machine ID hidden for Railway dashboard */}
-      <IoTDataTable disableRowClick={true} hideExport={true} hideMachineId={true} />
+      {/* P3 Data Table - Show Device ID */}
+      <P3DataTable showDeviceId={true} />
     </div>
   );
 };
 
-export default Railway;
+export default P3Dashboard;

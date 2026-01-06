@@ -20,8 +20,8 @@ const CommunicationGPSCard = ({ data, loading }) => {
   }
 
   // Extract actual GPS data from the device details
-  const latitude = data?.Latitude;
-  const longitude = data?.Longitude;
+  const latitude = data?.Longitude;
+  const longitude = data?.Latitude;
   const gsmSignal = data?.GSM_Signal_Strength || 0;
 
 

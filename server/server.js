@@ -28,6 +28,8 @@ import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
+import p3DataRoutes from './routes/p3DataRoutes.js';
+import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -82,7 +84,8 @@ const corsOptions = {
       'http://localhost:3005',
       'http://localhost:3006',
       'http://localhost:3007',
-      'http://localhost:3009'
+      'http://localhost:3009',
+      'https://ayesha-ungainsaid-superinquisitively.ngrok-free.dev' // ngrok frontend
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -159,6 +162,8 @@ app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
+app.use('/api/iot-data/p3', p3DataRoutes);
+app.use('/api/p3-device-details', p3DeviceDetailRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -178,7 +183,9 @@ app.get('/api', (req, res) => {
       deviceDetails: '/api/device-details',
       devices: '/api/devices',
       userPreferences: '/api/user-preferences',
-      hkmiTable: '/api/hkmi-table'
+      hkmiTable: '/api/hkmi-table',
+      p3Data: '/api/iot-data/p3',
+      p3DeviceDetails: '/api/p3-device-details'
     }
   });
 });

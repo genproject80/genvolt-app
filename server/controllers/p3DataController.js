@@ -7,10 +7,13 @@ import { validationResult } from 'express-validator';
 import { Client } from '../models/Client.js';
 
 /**
- * Get IoT data with device ID filtering
- * GET /api/iot-data/sick
+ * Get P3 IoT data with device ID filtering and HKMI hierarchy
+ * GET /api/iot-data/p3
+ *
+ * Returns latest P3 data per device joined with cloud_dashboard_hkmi
+ * with calculated Motor Runs (Event_Type=2) and Train Passed (Event_Type=2 OR 3)
  */
-export const getIoTData = asyncHandler(async (req, res) => {
+export const getP3Data = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new ValidationError('Invalid request parameters', errors.array());
@@ -21,14 +24,13 @@ export const getIoTData = asyncHandler(async (req, res) => {
     page = 1,
     limit = 20,
     search,
-    sort_field = 'Timestamp',
+    sort_field = 'CreatedAt',
     sort_order = 'DESC',
     sden,
     den,
     aen,
     sse,
-    gsm_filter,
-    avg_gsm
+    event_date // Optional date filter for Motor Runs and Train Passed counts (format: YYYY-MM-DD)
   } = req.query;
 
   const user = req.user;
@@ -40,11 +42,10 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== CLIENT HIERARCHY ===');
+    console.log('=== P3 CLIENT HIERARCHY ===');
     console.log('User client_id:', user.client_id);
-    console.log('Descendant clients (children):', descendantClients.map(c => c.client_id));
     console.log('All client IDs (self + children):', allClientIds);
-    console.log('========================');
+    console.log('===========================');
 
     // STEP 2: Get all device IDs belonging to these clients
     const deviceQuery = `
@@ -55,13 +56,9 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const deviceResult = await pool.request().query(deviceQuery);
     const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
 
-    console.log('=== DEVICES ===');
+    console.log('=== P3 DEVICES ===');
     console.log('Total devices found:', allDeviceIds.length);
-    console.log('Device breakdown by client:', deviceResult.recordset.reduce((acc, d) => {
-      acc[d.client_id] = (acc[d.client_id] || 0) + 1;
-      return acc;
-    }, {}));
-    console.log('================');
+    console.log('==================');
 
     // If no devices found, return early
     if (allDeviceIds.length === 0) {
@@ -80,7 +77,7 @@ export const getIoTData = asyncHandler(async (req, res) => {
           filters_applied: {
             device_ids: false,
             search: false,
-            sort: `Timestamp DESC`
+            sort: `CreatedAt DESC`
           }
         }
       });
@@ -97,23 +94,19 @@ export const getIoTData = asyncHandler(async (req, res) => {
     }
 
     // Calculate pagination
-    const pageSize = Math.min(parseInt(limit), 100); // Max 100 records per page
+    const pageSize = Math.min(parseInt(limit), 100);
     const currentPage = parseInt(page);
     const offset = (currentPage - 1) * pageSize;
 
     // Build filter conditions
     const request = pool.request();
 
-    // STEP 3: Build device filter - use allDeviceIds OR filter by specific devices if requested
+    // STEP 3: Build device filter
     let finalDeviceIds = allDeviceIds;
-
-    // If frontend requests specific devices, filter further
     if (deviceIds.length > 0) {
-      // Only include devices that exist in our client's device list
       finalDeviceIds = allDeviceIds.filter(id => deviceIds.includes(id));
     }
 
-    // If after filtering no devices remain, return empty
     if (finalDeviceIds.length === 0) {
       return res.json({
         success: true,
@@ -130,7 +123,7 @@ export const getIoTData = asyncHandler(async (req, res) => {
           filters_applied: {
             device_ids: deviceIds.length > 0,
             search: false,
-            sort: `Timestamp DESC`
+            sort: `CreatedAt DESC`
           }
         }
       });
@@ -141,10 +134,6 @@ export const getIoTData = asyncHandler(async (req, res) => {
     finalDeviceIds.forEach((deviceId, index) => {
       request.input(`deviceId${index}`, sql.VarChar, deviceId);
     });
-
-    console.log('=== FINAL DEVICE FILTER ===');
-    console.log('Final device IDs count:', finalDeviceIds.length);
-    console.log('============================');
 
     // Build HKMI WHERE clause based on hierarchy filters
     const hasHierarchyFilters = sden || den || aen || sse;
@@ -173,96 +162,99 @@ export const getIoTData = asyncHandler(async (req, res) => {
       ? 'AND ' + hkmiWhereConditions.join(' AND ')
       : '';
 
+    // Build date filter for Motor Runs and Train Passed counts
+    let eventDateFilter = '';
+    if (event_date) {
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (dateRegex.test(event_date)) {
+        eventDateFilter = 'AND CAST(CreatedAt AS DATE) = @eventDate';
+        request.input('eventDate', sql.Date, event_date);
+      }
+    }
+
     // Build WHERE conditions for outer query
     let outerWhereConditions = [];
 
-    // Apply search filtering if provided
     if (search) {
       outerWhereConditions.push(`(
-        iot.Device_ID LIKE @search OR
-        iot.MessageType LIKE @search OR
-        iot.FaultDescriptions LIKE @search
+        p3.Device_ID LIKE @search OR
+        hkmi.machine_id LIKE @search OR
+        hkmi.section LIKE @search
       )`);
       request.input('search', sql.VarChar, `%${search}%`);
-    }
-
-    // Apply GSM signal strength filter if provided
-    // Filter shows records with GSM_Signal_Strength BELOW the average (e.g., if avg is 2.71, show records < 2.71)
-    if (gsm_filter === 'below_average' && avg_gsm) {
-      // Parse only the numeric value (e.g., "2.71" from "2.71/5" display format)
-      const avgGsmValue = parseFloat(avg_gsm);
-      outerWhereConditions.push('iot.GSM_Signal_Strength < @avgGsm');
-      request.input('avgGsm', sql.Float, avgGsmValue);
     }
 
     const outerWhereClause = outerWhereConditions.length > 0
       ? 'AND ' + outerWhereConditions.join(' AND ')
       : '';
 
-    // Validate sort fields
+    // Validate sort fields for P3
     const allowedSortFields = [
-      'Entry_ID', 'CreatedAt', 'Device_ID', 'MessageType', 'Timestamp',
-      'GSM_Signal_Strength', 'Motor_ON_Time_sec', 'Motor_OFF_Time_sec',
-      'Latitude', 'Longitude', 'Train_Passed'
+      'Entry_ID', 'CreatedAt', 'Device_ID', 'Signal_Strength',
+      'Event_Type', 'Latitude', 'Longitude', 'Battery_Voltage_mV',
+      'machine_id', 'grease_left'
     ];
 
-    const sortField = allowedSortFields.includes(sort_field) ? sort_field : 'Timestamp';
+    const sortField = allowedSortFields.includes(sort_field) ? sort_field : 'CreatedAt';
     const sortOrder = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-    // STEP 4: Count query - simple now that we have device IDs
+    // STEP 4: Count query
     const countQuery = `
       SELECT COUNT(*) as total
       FROM (
-        SELECT iot.Device_ID
-        FROM iot_data_sick iot
+        SELECT p3.Device_ID
+        FROM IoT_Data_Sick_P3 p3
         INNER JOIN (
           SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
-          FROM iot_data_sick
+          FROM IoT_Data_Sick_P3
           WHERE Device_ID IN (${devicePlaceholders})
           GROUP BY Device_ID
-        ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+        ) latest ON p3.Device_ID = latest.Device_ID AND p3.CreatedAt = latest.MaxCreatedAt
         LEFT JOIN (
           SELECT *,
             ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
           FROM cloud_dashboard_hkmi
-        ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+        ) hkmi ON p3.Device_ID = hkmi.device_id AND hkmi.rn = 1
         WHERE 1=1
         ${outerWhereClause}
         ${hkmiWhereClause}
       ) as filtered_data
     `;
 
-    // Log the count query for debugging
-    console.log('=== COUNT QUERY ===');
+    console.log('=== P3 COUNT QUERY ===');
     console.log(countQuery);
-    console.log('==================');
+    console.log('======================');
 
     const countResult = await request.query(countQuery);
     const totalCount = countResult.recordset[0].total;
 
-    // STEP 5: Main data query - simple, just using device IDs
+    // STEP 5: Main data query with calculated columns
+    // Device Status: Active if data received within last 90 minutes, otherwise Inactive
     const dataQuery = `
       SELECT
-        iot.Entry_ID,
-        iot.CreatedAt,
-        iot.Device_ID,
-        iot.MessageType,
-        iot.HexField,
-        iot.GSM_Signal_Strength,
-        iot.Motor_ON_Time_sec,
-        iot.Motor_OFF_Time_sec,
-        iot.Number_of_Wheels_Configured,
-        iot.Latitude,
-        iot.Longitude,
-        iot.Number_of_Wheels_Detected,
-        iot.Fault_Code,
-        iot.Motor_Current_mA,
-        iot.Timestamp,
-        iot.InsertedAt,
-        iot.Train_Passed,
-        iot.FaultDescriptions,
-        iot.Debug_Value,
-        iot.Motor_OFF_Time_min,
+        p3.Entry_ID,
+        p3.CreatedAt,
+        p3.Device_ID,
+        p3.Event_Type,
+        p3.Event_Type_Description,
+        p3.Signal_Strength,
+        p3.Motor_ON_Time_sec,
+        p3.Motor_OFF_Time_min,
+        p3.Wheel_Threshold,
+        p3.Latitude,
+        p3.Longitude,
+        p3.Number_of_Wheels_Detected,
+        p3.Motor_Current_Average_mA,
+        p3.Motor_Current_Min_mA,
+        p3.Motor_Current_Max_mA,
+        p3.Train_Passed_Flag,
+        p3.Motor_ON_Flag,
+        p3.Battery_Voltage_mV,
+        p3.Debug_Value,
+        p3.Timestamp,
+        p3.InsertedAt,
+        p3.HexField,
         hkmi.machine_id,
         hkmi.sden,
         hkmi.den,
@@ -274,58 +266,49 @@ export const getIoTData = asyncHandler(async (req, res) => {
         hkmi.line,
         hkmi.grease_left,
         hkmi.last_service_date,
-        motor_run.Motor_Run_Count_Last_24Hrs,
-        record_count.Record_Count_Last_1Hr
-      FROM iot_data_sick iot
+        motor_runs.Motor_Runs,
+        train_passed.Train_Passed_Count,
+        CASE
+          WHEN DATEDIFF(MINUTE, p3.CreatedAt, GETUTCDATE()) <= 90 THEN 'Active'
+          ELSE 'Inactive'
+        END AS Device_Status,
+        DATEDIFF(MINUTE, p3.CreatedAt, GETUTCDATE()) AS Minutes_Since_Last_Data
+      FROM IoT_Data_Sick_P3 p3
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
-        FROM iot_data_sick
+        FROM IoT_Data_Sick_P3
         WHERE Device_ID IN (${devicePlaceholders})
         GROUP BY Device_ID
-      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+      ) latest ON p3.Device_ID = latest.Device_ID AND p3.CreatedAt = latest.MaxCreatedAt
       LEFT JOIN (
         SELECT *,
           ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
         FROM cloud_dashboard_hkmi
-      ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      ) hkmi ON p3.Device_ID = hkmi.device_id AND hkmi.rn = 1
       LEFT JOIN (
         SELECT
           Device_ID,
-          COUNT(*) as Motor_Run_Count_Last_24Hrs
-        FROM (
-          SELECT
-            Device_ID,
-            CreatedAt,
-            Motor_OFF_Time_min,
-            DATEDIFF(MINUTE,
-              LAG(CreatedAt) OVER (PARTITION BY Device_ID ORDER BY CreatedAt),
-              CreatedAt
-            ) as Minutes_Since_Last_Run,
-            ROW_NUMBER() OVER (PARTITION BY Device_ID ORDER BY CreatedAt) as run_number
-          FROM iot_data_sick
-          WHERE Device_ID IN (${devicePlaceholders})
-            AND CreatedAt >= DATEADD(hour, -24, GETDATE())
-            AND Number_of_Wheels_Detected > Number_of_Wheels_Configured
-            AND Train_Passed = 1
-        ) runs
-        WHERE run_number = 1
-          OR Minutes_Since_Last_Run >= Motor_OFF_Time_min
-          OR Minutes_Since_Last_Run IS NULL
-        GROUP BY Device_ID
-      ) motor_run ON iot.Device_ID = motor_run.Device_ID
-      LEFT JOIN (
-        SELECT
-          Device_ID,
-          COUNT(*) as Record_Count_Last_1Hr
-        FROM iot_data_sick
+          COUNT(*) as Motor_Runs
+        FROM IoT_Data_Sick_P3
         WHERE Device_ID IN (${devicePlaceholders})
-          AND CreatedAt >= DATEADD(hour, -1, GETDATE())
+          AND Event_Type = 2
+          ${eventDateFilter}
         GROUP BY Device_ID
-      ) record_count ON iot.Device_ID = record_count.Device_ID
+      ) motor_runs ON p3.Device_ID = motor_runs.Device_ID
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Train_Passed_Count
+        FROM IoT_Data_Sick_P3
+        WHERE Device_ID IN (${devicePlaceholders})
+          AND (Event_Type = 2 OR Event_Type = 3)
+          ${eventDateFilter}
+        GROUP BY Device_ID
+      ) train_passed ON p3.Device_ID = train_passed.Device_ID
       WHERE 1=1
       ${outerWhereClause}
       ${hkmiWhereClause}
-      ORDER BY iot.${sortField} ${sortOrder}
+      ORDER BY ${sortField.includes('.') ? sortField : (sortField === 'machine_id' || sortField === 'grease_left' ? `hkmi.${sortField}` : `p3.${sortField}`)} ${sortOrder}
       OFFSET @offset ROWS
       FETCH NEXT @pageSize ROWS ONLY
     `;
@@ -333,20 +316,17 @@ export const getIoTData = asyncHandler(async (req, res) => {
     request.input('offset', sql.Int, offset);
     request.input('pageSize', sql.Int, pageSize);
 
-    // Log the main data query for debugging
-    console.log('=== DATA QUERY ===');
+    console.log('=== P3 DATA QUERY ===');
     console.log(dataQuery);
     console.log('=== SORT ===');
     console.log('sortField:', sortField);
     console.log('sortOrder:', sortOrder);
-    console.log('offset:', offset);
-    console.log('pageSize:', pageSize);
-    console.log('==================');
+    console.log('=====================');
 
     const dataResult = await request.query(dataQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_VIEW', 'Retrieved IoT data', 'iot_data', null, {
+    await createAuditLog(user.id, 'P3_DATA_VIEW', 'Retrieved P3 IoT data', 'iot_data_p3', null, {
       device_ids_filter: deviceIds,
       search_term: search || null,
       page: currentPage,
@@ -356,7 +336,7 @@ export const getIoTData = asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      message: 'IoT data retrieved successfully',
+      message: 'P3 IoT data retrieved successfully',
       data: dataResult.recordset,
       meta: {
         total: totalCount,
@@ -375,16 +355,16 @@ export const getIoTData = asyncHandler(async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error fetching IoT data:', error);
+    logger.error('Error fetching P3 IoT data:', error);
     throw error;
   }
 });
 
 /**
- * Export filtered IoT data
- * GET /api/iot-data/sick/export
+ * Export filtered P3 IoT data
+ * GET /api/iot-data/p3/export
  */
-export const exportIoTData = asyncHandler(async (req, res) => {
+export const exportP3Data = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new ValidationError('Invalid request parameters', errors.array());
@@ -398,7 +378,8 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     sden,
     den,
     aen,
-    sse
+    sse,
+    event_date // Optional date filter for Motor Runs and Train Passed counts (format: YYYY-MM-DD)
   } = req.query;
 
   const user = req.user;
@@ -406,11 +387,11 @@ export const exportIoTData = asyncHandler(async (req, res) => {
   try {
     const pool = await getPool();
 
-    // STEP 1: Get all client IDs (self + children only) - same as getIoTData
+    // Get client hierarchy
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    // STEP 2: Get all device IDs belonging to these clients
+    // Get all device IDs belonging to these clients
     const deviceQuery = `
       SELECT device_id
       FROM device
@@ -419,7 +400,6 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     const deviceResult = await pool.request().query(deviceQuery);
     const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
 
-    // If no devices found, return early
     if (allDeviceIds.length === 0) {
       return res.json({
         success: true,
@@ -428,16 +408,13 @@ export const exportIoTData = asyncHandler(async (req, res) => {
         meta: {
           exported_count: 0,
           format: format,
-          filters_applied: {
-            device_ids: [],
-            search: null
-          },
+          filters_applied: { device_ids: [], search: null },
           export_timestamp: new Date().toISOString()
         }
       });
     }
 
-    // Parse device IDs from query parameter (optional additional filtering)
+    // Parse device IDs from query parameter
     let deviceIds = [];
     if (device_ids) {
       try {
@@ -447,7 +424,6 @@ export const exportIoTData = asyncHandler(async (req, res) => {
       }
     }
 
-    // STEP 3: Build device filter
     let finalDeviceIds = allDeviceIds;
     if (deviceIds.length > 0) {
       finalDeviceIds = allDeviceIds.filter(id => deviceIds.includes(id));
@@ -461,19 +437,13 @@ export const exportIoTData = asyncHandler(async (req, res) => {
         meta: {
           exported_count: 0,
           format: format,
-          filters_applied: {
-            device_ids: deviceIds,
-            search: search || null
-          },
+          filters_applied: { device_ids: deviceIds, search: search || null },
           export_timestamp: new Date().toISOString()
         }
       });
     }
 
-    // Limit export to prevent server overload
     const maxExportLimit = Math.min(parseInt(limit), 10000);
-
-    // Build filter conditions
     const request = pool.request();
 
     // Build SQL IN clause with device IDs
@@ -482,41 +452,46 @@ export const exportIoTData = asyncHandler(async (req, res) => {
       request.input(`deviceId${index}`, sql.VarChar, deviceId);
     });
 
-    // Build HKMI WHERE clause based on hierarchy filters
-    const hasHierarchyFilters = sden || den || aen || sse;
+    // Build HKMI WHERE clause
     let hkmiWhereConditions = [];
-
-    if (hasHierarchyFilters) {
-      if (sden) {
-        hkmiWhereConditions.push('hkmi.sden = @sden');
-        request.input('sden', sql.VarChar, sden);
-      }
-      if (den) {
-        hkmiWhereConditions.push('hkmi.den = @den');
-        request.input('den', sql.VarChar, den);
-      }
-      if (aen) {
-        hkmiWhereConditions.push('hkmi.aen = @aen');
-        request.input('aen', sql.VarChar, aen);
-      }
-      if (sse) {
-        hkmiWhereConditions.push('hkmi.sse = @sse');
-        request.input('sse', sql.VarChar, sse);
-      }
+    if (sden) {
+      hkmiWhereConditions.push('hkmi.sden = @sden');
+      request.input('sden', sql.VarChar, sden);
+    }
+    if (den) {
+      hkmiWhereConditions.push('hkmi.den = @den');
+      request.input('den', sql.VarChar, den);
+    }
+    if (aen) {
+      hkmiWhereConditions.push('hkmi.aen = @aen');
+      request.input('aen', sql.VarChar, aen);
+    }
+    if (sse) {
+      hkmiWhereConditions.push('hkmi.sse = @sse');
+      request.input('sse', sql.VarChar, sse);
     }
 
     const hkmiWhereClause = hkmiWhereConditions.length > 0
       ? 'AND ' + hkmiWhereConditions.join(' AND ')
       : '';
 
-    // Build WHERE conditions for outer query
-    let outerWhereConditions = [];
+    // Build date filter for Motor Runs and Train Passed counts
+    let eventDateFilter = '';
+    if (event_date) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (dateRegex.test(event_date)) {
+        eventDateFilter = 'AND CAST(CreatedAt AS DATE) = @eventDate';
+        request.input('eventDate', sql.Date, event_date);
+      }
+    }
 
+    // Build search WHERE clause
+    let outerWhereConditions = [];
     if (search) {
       outerWhereConditions.push(`(
-        iot.Device_ID LIKE @search OR
-        iot.MessageType LIKE @search OR
-        iot.FaultDescriptions LIKE @search
+        p3.Device_ID LIKE @search OR
+        hkmi.machine_id LIKE @search OR
+        hkmi.section LIKE @search
       )`);
       request.input('search', sql.VarChar, `%${search}%`);
     }
@@ -527,26 +502,23 @@ export const exportIoTData = asyncHandler(async (req, res) => {
 
     const exportQuery = `
       SELECT TOP ${maxExportLimit}
-        iot.Entry_ID,
-        iot.CreatedAt,
-        iot.Device_ID,
-        iot.MessageType,
-        iot.HexField,
-        iot.GSM_Signal_Strength,
-        iot.Motor_ON_Time_sec,
-        iot.Motor_OFF_Time_sec,
-        iot.Number_of_Wheels_Configured,
-        iot.Latitude,
-        iot.Longitude,
-        iot.Number_of_Wheels_Detected,
-        iot.Fault_Code,
-        iot.Motor_Current_mA,
-        iot.Timestamp,
-        iot.InsertedAt,
-        iot.Train_Passed,
-        iot.FaultDescriptions,
-        iot.Debug_Value,
-        iot.Motor_OFF_Time_min,
+        p3.Entry_ID,
+        p3.CreatedAt,
+        p3.Device_ID,
+        p3.Event_Type,
+        p3.Event_Type_Description,
+        p3.Signal_Strength,
+        p3.Motor_ON_Time_sec,
+        p3.Motor_OFF_Time_min,
+        p3.Latitude,
+        p3.Longitude,
+        p3.Number_of_Wheels_Detected,
+        p3.Motor_Current_Average_mA,
+        p3.Motor_Current_Min_mA,
+        p3.Motor_Current_Max_mA,
+        p3.Train_Passed_Flag,
+        p3.Motor_ON_Flag,
+        p3.Battery_Voltage_mV,
         hkmi.machine_id,
         hkmi.sden,
         hkmi.den,
@@ -558,64 +530,55 @@ export const exportIoTData = asyncHandler(async (req, res) => {
         hkmi.line,
         hkmi.grease_left,
         hkmi.last_service_date,
-        motor_run.Motor_Run_Count_Last_24Hrs,
-        record_count.Record_Count_Last_1Hr
-      FROM iot_data_sick iot
+        motor_runs.Motor_Runs,
+        train_passed.Train_Passed_Count,
+        CASE
+          WHEN DATEDIFF(MINUTE, p3.CreatedAt, GETUTCDATE()) <= 90 THEN 'Active'
+          ELSE 'Inactive'
+        END AS Device_Status,
+        DATEDIFF(MINUTE, p3.CreatedAt, GETUTCDATE()) AS Minutes_Since_Last_Data
+      FROM IoT_Data_Sick_P3 p3
       INNER JOIN (
         SELECT Device_ID, MAX(CreatedAt) as MaxCreatedAt
-        FROM iot_data_sick
+        FROM IoT_Data_Sick_P3
         WHERE Device_ID IN (${devicePlaceholders})
         GROUP BY Device_ID
-      ) latest ON iot.Device_ID = latest.Device_ID AND iot.CreatedAt = latest.MaxCreatedAt
+      ) latest ON p3.Device_ID = latest.Device_ID AND p3.CreatedAt = latest.MaxCreatedAt
       LEFT JOIN (
         SELECT *,
           ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
         FROM cloud_dashboard_hkmi
-      ) hkmi ON iot.Device_ID = hkmi.device_id AND hkmi.rn = 1
+      ) hkmi ON p3.Device_ID = hkmi.device_id AND hkmi.rn = 1
       LEFT JOIN (
         SELECT
           Device_ID,
-          COUNT(*) as Motor_Run_Count_Last_24Hrs
-        FROM (
-          SELECT
-            Device_ID,
-            CreatedAt,
-            Motor_OFF_Time_min,
-            DATEDIFF(MINUTE,
-              LAG(CreatedAt) OVER (PARTITION BY Device_ID ORDER BY CreatedAt),
-              CreatedAt
-            ) as Minutes_Since_Last_Run,
-            ROW_NUMBER() OVER (PARTITION BY Device_ID ORDER BY CreatedAt) as run_number
-          FROM iot_data_sick
-          WHERE Device_ID IN (${devicePlaceholders})
-            AND CreatedAt >= DATEADD(hour, -24, GETDATE())
-            AND Number_of_Wheels_Detected > Number_of_Wheels_Configured
-            AND Train_Passed = 1
-        ) runs
-        WHERE run_number = 1
-          OR Minutes_Since_Last_Run >= Motor_OFF_Time_min
-          OR Minutes_Since_Last_Run IS NULL
-        GROUP BY Device_ID
-      ) motor_run ON iot.Device_ID = motor_run.Device_ID
-      LEFT JOIN (
-        SELECT
-          Device_ID,
-          COUNT(*) as Record_Count_Last_1Hr
-        FROM iot_data_sick
+          COUNT(*) as Motor_Runs
+        FROM IoT_Data_Sick_P3
         WHERE Device_ID IN (${devicePlaceholders})
-          AND CreatedAt >= DATEADD(hour, -1, GETDATE())
+          AND Event_Type = 2
+          ${eventDateFilter}
         GROUP BY Device_ID
-      ) record_count ON iot.Device_ID = record_count.Device_ID
+      ) motor_runs ON p3.Device_ID = motor_runs.Device_ID
+      LEFT JOIN (
+        SELECT
+          Device_ID,
+          COUNT(*) as Train_Passed_Count
+        FROM IoT_Data_Sick_P3
+        WHERE Device_ID IN (${devicePlaceholders})
+          AND (Event_Type = 2 OR Event_Type = 3)
+          ${eventDateFilter}
+        GROUP BY Device_ID
+      ) train_passed ON p3.Device_ID = train_passed.Device_ID
       WHERE 1=1
       ${outerWhereClause}
       ${hkmiWhereClause}
-      ORDER BY iot.CreatedAt DESC
+      ORDER BY p3.CreatedAt DESC
     `;
 
     const result = await request.query(exportQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_EXPORT', 'Exported IoT data', 'iot_data', null, {
+    await createAuditLog(user.id, 'P3_DATA_EXPORT', 'Exported P3 IoT data', 'iot_data_p3', null, {
       device_ids_filter: deviceIds,
       search_term: search || null,
       format: format,
@@ -624,7 +587,6 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     });
 
     if (format === 'csv') {
-      // Convert to CSV format
       if (result.recordset.length === 0) {
         return res.json({
           success: true,
@@ -650,13 +612,12 @@ export const exportIoTData = asyncHandler(async (req, res) => {
       const csvContent = [csvHeader, ...csvRows].join('\n');
 
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="iot_data_export_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="p3_data_export_${new Date().toISOString().split('T')[0]}.csv"`);
       res.send(csvContent);
     } else {
-      // Return JSON format
       res.json({
         success: true,
-        message: 'IoT data exported successfully',
+        message: 'P3 IoT data exported successfully',
         data: result.recordset,
         meta: {
           exported_count: result.recordset.length,
@@ -671,16 +632,16 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     }
 
   } catch (error) {
-    logger.error('Error exporting IoT data:', error);
+    logger.error('Error exporting P3 IoT data:', error);
     throw error;
   }
 });
 
 /**
- * Get aggregated statistics for filtered devices
- * GET /api/iot-data/sick/stats
+ * Get P3 IoT data statistics
+ * GET /api/iot-data/p3/stats
  */
-export const getIoTDataStats = asyncHandler(async (req, res) => {
+export const getP3Stats = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new ValidationError('Invalid request parameters', errors.array());
@@ -717,40 +678,37 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
       SELECT
         COUNT(*) as total_records,
         COUNT(DISTINCT Device_ID) as unique_devices,
-        AVG(CAST(GSM_Signal_Strength as FLOAT)) as avg_signal_strength,
-        AVG(CAST(Motor_ON_Time_sec as FLOAT)) as avg_motor_on_time,
-        AVG(CAST(Motor_OFF_Time_sec as FLOAT)) as avg_motor_off_time,
-        SUM(CASE WHEN Train_Passed = 1 THEN 1 ELSE 0 END) as trains_passed_count,
-        SUM(CASE WHEN Fault_Code = 1 THEN 1 ELSE 0 END) as fault_records_count,
-        MIN(Timestamp) as earliest_record,
-        MAX(Timestamp) as latest_record
-      FROM iot_data_sick
+        AVG(CAST(Signal_Strength as FLOAT)) as avg_signal_strength,
+        SUM(CASE WHEN Event_Type = 2 THEN 1 ELSE 0 END) as motor_runs_total,
+        SUM(CASE WHEN Event_Type = 2 OR Event_Type = 3 THEN 1 ELSE 0 END) as trains_passed_total,
+        SUM(CASE WHEN Event_Type = 4 THEN 1 ELSE 0 END) as low_battery_alerts,
+        AVG(CAST(Battery_Voltage_mV as FLOAT)) as avg_battery_voltage,
+        AVG(CAST(Motor_Current_Average_mA as FLOAT)) as avg_motor_current,
+        MIN(CreatedAt) as earliest_record,
+        MAX(CreatedAt) as latest_record
+      FROM IoT_Data_Sick_P3
       ${whereClause}
     `;
 
     const statsResult = await request.query(statsQuery);
     const stats = statsResult.recordset[0];
 
-    // Get device-wise statistics
-    const deviceStatsQuery = `
+    // Event type breakdown
+    const eventBreakdownQuery = `
       SELECT
-        Device_ID,
-        COUNT(*) as record_count,
-        AVG(CAST(GSM_Signal_Strength as FLOAT)) as avg_signal_strength,
-        SUM(CASE WHEN Train_Passed = 1 THEN 1 ELSE 0 END) as trains_passed,
-        SUM(CASE WHEN Fault_Code = 1 THEN 1 ELSE 0 END) as faults,
-        MIN(Timestamp) as first_record,
-        MAX(Timestamp) as last_record
-      FROM iot_data_sick
+        Event_Type,
+        Event_Type_Description,
+        COUNT(*) as count
+      FROM IoT_Data_Sick_P3
       ${whereClause}
-      GROUP BY Device_ID
-      ORDER BY record_count DESC
+      GROUP BY Event_Type, Event_Type_Description
+      ORDER BY Event_Type
     `;
 
-    const deviceStatsResult = await request.query(deviceStatsQuery);
+    const eventBreakdownResult = await request.query(eventBreakdownQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_STATS', 'Retrieved IoT data statistics', 'iot_data', null, {
+    await createAuditLog(user.id, 'P3_DATA_STATS', 'Retrieved P3 IoT data statistics', 'iot_data_p3', null, {
       device_ids_filter: deviceIds,
       total_records: stats.total_records,
       unique_devices: stats.unique_devices
@@ -758,27 +716,24 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      message: 'IoT data statistics retrieved successfully',
+      message: 'P3 IoT data statistics retrieved successfully',
       data: {
         overall_stats: {
           total_records: stats.total_records,
           unique_devices: stats.unique_devices,
           avg_signal_strength: Math.round((stats.avg_signal_strength || 0) * 100) / 100,
-          avg_motor_on_time: Math.round((stats.avg_motor_on_time || 0) * 100) / 100,
-          avg_motor_off_time: Math.round((stats.avg_motor_off_time || 0) * 100) / 100,
-          trains_passed_count: stats.trains_passed_count,
-          fault_records_count: stats.fault_records_count,
+          motor_runs_total: stats.motor_runs_total,
+          trains_passed_total: stats.trains_passed_total,
+          low_battery_alerts: stats.low_battery_alerts,
+          avg_battery_voltage: Math.round((stats.avg_battery_voltage || 0)),
+          avg_motor_current: Math.round((stats.avg_motor_current || 0)),
           earliest_record: stats.earliest_record,
           latest_record: stats.latest_record
         },
-        device_stats: deviceStatsResult.recordset.map(device => ({
-          device_id: device.Device_ID,
-          record_count: device.record_count,
-          avg_signal_strength: Math.round((device.avg_signal_strength || 0) * 100) / 100,
-          trains_passed: device.trains_passed,
-          faults: device.faults,
-          first_record: device.first_record,
-          last_record: device.last_record
+        event_breakdown: eventBreakdownResult.recordset.map(event => ({
+          event_type: event.Event_Type,
+          description: event.Event_Type_Description,
+          count: event.count
         }))
       },
       meta: {
@@ -788,7 +743,7 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error fetching IoT data statistics:', error);
+    logger.error('Error fetching P3 IoT data statistics:', error);
     throw error;
   }
 });
