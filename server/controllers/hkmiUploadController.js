@@ -55,19 +55,19 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
       throw new ValidationError('The uploaded file is empty');
     }
 
-    // Find the header row (look for row containing device or machine)
+    // Find the header row (look for row containing "Controller ID" or "HKM Code")
     let headerRowIndex = -1;
     for (let i = 0; i < Math.min(10, allRows.length); i++) {
       const row = allRows[i];
       const rowString = JSON.stringify(row).toLowerCase();
-      if (rowString.includes('device') && rowString.includes('machine')) {
+      if ((rowString.includes('controller') && rowString.includes('id')) || rowString.includes('hkm code')) {
         headerRowIndex = i;
         break;
       }
     }
 
     if (headerRowIndex === -1) {
-      throw new ValidationError('Could not find header row with device and machine columns');
+      throw new ValidationError('Could not find header row with "Controller ID" or "HKM Code" columns');
     }
 
     // Extract headers and data
@@ -92,16 +92,47 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
       throw new ValidationError('The uploaded file contains no data rows');
     }
 
-    // Validate required columns - STRICT MATCH ONLY
-    const requiredColumns = ['device_id', 'machine_id', 'grease_left', 'last_service_date'];
+    // Define column mapping from Excel headers to database columns
+    const columnMapping = {
+      'Controller ID': 'device_id',
+      'HKM Code': 'machine_id',
+      'Division/Railway': 'div_rly',
+      'Section': 'section',
+      'Curve Number': 'curve_number',
+      'Line': 'line',
+      'DEN': 'den',
+      'AEN': 'aen',
+      'SSE': 'sse',
+      'Last Service Date': 'last_service_date',
+      'Remaining Grease (kg)': 'grease_left',
+      'Last CoF Date': 'last_cof_date',
+      'Last CoF Value': 'last_cof_value'
+    };
+
+    // Validate required columns from Excel
+    const requiredExcelColumns = ['Controller ID', 'HKM Code', 'Remaining Grease (kg)', 'Last Service Date'];
     const firstRow = data[0];
     const fileColumns = Object.keys(firstRow);
 
-    const missingColumns = requiredColumns.filter(col => !fileColumns.includes(col));
+    const missingColumns = requiredExcelColumns.filter(col => !fileColumns.includes(col));
 
     if (missingColumns.length > 0) {
-      throw new ValidationError(`Missing required columns: ${missingColumns.join(', ')}. The file must have EXACTLY these column names: device_id, machine_id, grease_left, last_service_date`);
+      throw new ValidationError(`Missing required columns: ${missingColumns.join(', ')}. The file must have these column headers: ${requiredExcelColumns.join(', ')}`);
     }
+
+    // Map Excel data to database column names
+    data = data.map(row => {
+      const mappedRow = {};
+      Object.keys(row).forEach(excelColumn => {
+        const dbColumn = columnMapping[excelColumn];
+        if (dbColumn) {
+          mappedRow[dbColumn] = row[excelColumn];
+        }
+      });
+      // Add hardcoded SDEN value
+      mappedRow['sden'] = 'SDEN CO';
+      return mappedRow;
+    });
 
     // Process each row
     const successfulRows = [];
@@ -113,10 +144,36 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
       const rejectionReasons = [];
 
       // Extract values using exact column names
-      const deviceId = row.device_id ? String(row.device_id).trim() : null;
+      let deviceId = row.device_id ? String(row.device_id).trim() : null;
+
+      // Format device_id: Add "HK" prefix and pad with zeros to make length 7
+      // Example: "1" -> "HK00001", "26" -> "HK00026"
+      if (deviceId && deviceId !== '') {
+        // Remove any existing HK prefix if present
+        deviceId = deviceId.replace(/^HK/i, '');
+        // Parse as integer to remove any leading zeros, then convert back to string
+        const deviceNumber = parseInt(deviceId, 10);
+        if (!isNaN(deviceNumber)) {
+          // Pad with zeros to make 5 digits, then add HK prefix (total length = 7)
+          deviceId = 'HK' + String(deviceNumber).padStart(5, '0');
+        }
+      }
+
       const machineId = row.machine_id ? String(row.machine_id).trim() : null;
       const greaseLeft = row.grease_left;
       const lastServiceDate = row.last_service_date;
+
+      // Extract additional fields if present
+      const divRly = row.div_rly ? String(row.div_rly).trim() : null;
+      const section = row.section ? String(row.section).trim() : null;
+      const curveNumber = row.curve_number ? String(row.curve_number).trim() : null;
+      const line = row.line ? String(row.line).trim() : null;
+      const den = row.den ? String(row.den).trim() : null;
+      const aen = row.aen ? String(row.aen).trim() : null;
+      const sse = row.sse ? String(row.sse).trim() : null;
+      const sden = row.sden; // Already set to 'SDEN CO'
+      const lastCofDate = row.last_cof_date;
+      const lastCofValue = row.last_cof_value;
 
       // Check if device_id and machine_id are provided
       if (!deviceId || deviceId === '') {
@@ -157,7 +214,7 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
       const hkmiComboCheckQuery = `
         SELECT COUNT(*) as count
         FROM cloud_dashboard_hkmi
-        WHERE device_id = @deviceId AND machine_id = @machineId
+        WHERE RTRIM(LTRIM(device_id)) = @deviceId AND RTRIM(LTRIM(machine_id)) = @machineId
       `;
 
       const hkmiComboCheckResult = await pool.request()
@@ -176,14 +233,32 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
       }
 
       // Check 4: Validate last_service_date is a valid date
-      let parsedDate = null;
+      let parsedServiceDate = null;
       if (!lastServiceDate || lastServiceDate === '') {
         rejectionReasons.push('last_service_date is empty');
       } else {
         // Try to parse the date - handle multiple formats
-        parsedDate = parseDate(lastServiceDate);
-        if (!parsedDate) {
+        parsedServiceDate = parseDate(lastServiceDate);
+        if (!parsedServiceDate) {
           rejectionReasons.push('last_service_date is not a valid date');
+        }
+      }
+
+      // Check 5: Validate last_cof_date if provided (optional field)
+      let parsedCofDate = null;
+      if (lastCofDate && lastCofDate !== '') {
+        parsedCofDate = parseDate(lastCofDate);
+        if (!parsedCofDate) {
+          rejectionReasons.push('last_cof_date is not a valid date');
+        }
+      }
+
+      // Check 6: Validate last_cof_value if provided (optional field)
+      let cofValueNumber = null;
+      if (lastCofValue !== null && lastCofValue !== '' && lastCofValue !== undefined) {
+        cofValueNumber = parseFloat(lastCofValue);
+        if (isNaN(cofValueNumber)) {
+          rejectionReasons.push('last_cof_value is not a valid number');
         }
       }
 
@@ -201,30 +276,87 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
         // All validations passed, update the database
         try {
           // Convert JavaScript Date to YYYY-MM-DD string to avoid timezone issues
-          const dateString = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`;
+          const serviceDateString = `${parsedServiceDate.getFullYear()}-${String(parsedServiceDate.getMonth() + 1).padStart(2, '0')}-${String(parsedServiceDate.getDate()).padStart(2, '0')}`;
+
+          let cofDateString = null;
+          if (parsedCofDate) {
+            cofDateString = `${parsedCofDate.getFullYear()}-${String(parsedCofDate.getMonth() + 1).padStart(2, '0')}-${String(parsedCofDate.getDate()).padStart(2, '0')}`;
+          }
+
+          // Build dynamic UPDATE query based on available fields
+          let updateFields = [
+            'grease_left = @greaseLeft',
+            'last_service_date = @lastServiceDate',
+            'updated_at = GETDATE()'
+          ];
+
+          const request = pool.request()
+            .input('greaseLeft', sql.Decimal(10, 3), greaseLeftNumber)
+            .input('lastServiceDate', sql.Date, serviceDateString)
+            .input('machineId', sql.VarChar, machineId);
+
+          // Add optional fields if they exist
+          if (divRly) {
+            updateFields.push('div_rly = @divRly');
+            request.input('divRly', sql.VarChar, divRly);
+          }
+          if (section) {
+            updateFields.push('section = @section');
+            request.input('section', sql.VarChar, section);
+          }
+          if (curveNumber) {
+            updateFields.push('curve_number = @curveNumber');
+            request.input('curveNumber', sql.VarChar, curveNumber);
+          }
+          if (line) {
+            updateFields.push('line = @line');
+            request.input('line', sql.VarChar, line);
+          }
+          if (den) {
+            updateFields.push('den = @den');
+            request.input('den', sql.VarChar, den);
+          }
+          if (aen) {
+            updateFields.push('aen = @aen');
+            request.input('aen', sql.VarChar, aen);
+          }
+          if (sse) {
+            updateFields.push('sse = @sse');
+            request.input('sse', sql.VarChar, sse);
+          }
+          if (sden) {
+            updateFields.push('sden = @sden');
+            request.input('sden', sql.VarChar, sden);
+          }
+          if (cofDateString) {
+            updateFields.push('last_cof_date = @lastCofDate');
+            request.input('lastCofDate', sql.Date, cofDateString);
+          }
+          if (cofValueNumber !== null) {
+            updateFields.push('last_cof_value = @lastCofValue');
+            request.input('lastCofValue', sql.Decimal(10, 2), cofValueNumber);
+          }
 
           const updateQuery = `
             UPDATE cloud_dashboard_hkmi
-            SET
-              grease_left = @greaseLeft,
-              last_service_date = @lastServiceDate,
-              updated_at = GETDATE()
-            WHERE machine_id = @machineId
+            SET ${updateFields.join(', ')}
+            WHERE RTRIM(LTRIM(machine_id)) = @machineId
           `;
 
-          await pool.request()
-            .input('greaseLeft', sql.Decimal(10, 3), greaseLeftNumber)
-            .input('lastServiceDate', sql.Date, dateString)
-            .input('machineId', sql.VarChar, machineId)
-            .query(updateQuery);
+          await request.query(updateQuery);
 
-          successfulRows.push({
+          const successRow = {
             row_number: rowNumber,
             device_id: deviceId,
             machine_id: machineId,
             grease_left: greaseLeftNumber,
-            last_service_date: dateString
-          });
+            last_service_date: serviceDateString
+          };
+
+          if (cofDateString) successRow.last_cof_date = cofDateString;
+          if (cofValueNumber !== null) successRow.last_cof_value = cofValueNumber;
+
+          successfulRows.push(successRow);
         } catch (updateError) {
           logger.error(`Error updating row ${rowNumber}:`, updateError);
           rejectedRows.push({

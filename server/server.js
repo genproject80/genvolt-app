@@ -28,6 +28,8 @@ import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
+import p3DataRoutes from './routes/p3DataRoutes.js';
+import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -154,7 +156,10 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/dashboards', dashboardRoutes);
 app.use('/api/hierarchy-filters', hierarchyFilterRoutes);
+// IMPORTANT: More specific routes must be registered before general routes
+app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/iot-data', iotDataRoutes);
+app.use('/api/p3-device-details', p3DeviceDetailRoutes);
 app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
@@ -178,7 +183,9 @@ app.get('/api', (req, res) => {
       deviceDetails: '/api/device-details',
       devices: '/api/devices',
       userPreferences: '/api/user-preferences',
-      hkmiTable: '/api/hkmi-table'
+      hkmiTable: '/api/hkmi-table',
+      p3Data: '/api/iot-data/p3',
+      p3DeviceDetails: '/api/p3-device-details'
     }
   });
 });
