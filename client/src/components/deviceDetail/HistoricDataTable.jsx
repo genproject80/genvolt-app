@@ -247,7 +247,7 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
                     {formatWheels(row.Number_of_Wheels_Configured, row.Number_of_Wheels_Detected)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {formatLocation(row.Latitude, row.Longitude)}
+                    {formatLocation(row.Longitude, row.Latitude)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <span className={`px-2 py-1 rounded text-xs ${

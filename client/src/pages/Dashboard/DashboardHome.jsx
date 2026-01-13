@@ -3,6 +3,8 @@ import { useDashboard } from '../../context/DashboardContext';
 import HKMI from '../../components/dashboard/HKMI';
 import Railway from '../../components/dashboard/Railway';
 import HKMITable from '../../components/dashboard/HKMITable';
+import P3Dashboard from '../../components/dashboard/P3Dashboard';
+import P3SSDashboard from '../../components/dashboard/P3SSDashboard';
 
 // Dashboard component mapping based on dashboard name
 const dashboardComponents = {
@@ -13,7 +15,16 @@ const dashboardComponents = {
   'HKMITable': HKMITable,
   'HKMI_maping_data': HKMITable,
   'HKMI_mapping_data': HKMITable,
-  'HKMI Mapping Data': HKMITable
+  'HKMI Mapping Data': HKMITable,
+  'P3': P3Dashboard,
+  'P3_Dashboard': P3Dashboard,
+  'P3 Dashboard': P3Dashboard,
+  'P3Dashboard': P3Dashboard,
+  'P3_Logic': P3Dashboard,
+  'P3 Logic': P3Dashboard,
+  'P3_SS': P3SSDashboard,
+  'P3 SS': P3SSDashboard,
+  'P3SS': P3SSDashboard
 };
 
 const DashboardHome = () => {

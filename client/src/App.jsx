@@ -7,11 +7,13 @@ import { PermissionProvider } from './context/PermissionContext';
 import { UserProvider } from './context/UserContext';
 import { DashboardProvider } from './context/DashboardContext';
 import { DeviceDetailProvider } from './context/DeviceDetailContext';
+import { P3DeviceDetailProvider } from './context/P3DeviceDetailContext';
 import { DeviceProvider } from './context/DeviceContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
 import DeviceDetailPage from './pages/Dashboard/DeviceDetailPage';
+import P3DeviceDetailPage from './pages/Dashboard/P3DeviceDetailPage';
 import Reports from './pages/Reports/Reports';
 import AdminPanel from './pages/Admin/AdminPanel';
 import UserManagement from './pages/Admin/UserManagement';
@@ -73,6 +75,16 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               <DeviceDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/p3-device/:entryId"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <P3DeviceDetailPage />
             </Layout>
           </ProtectedRoute>
         }
@@ -163,11 +175,13 @@ const App = () => {
               <DeviceProvider>
                 <DashboardProvider>
                   <DeviceDetailProvider>
-                    <Router>
-                      <div className="App">
-                        <AppRoutes />
-                      </div>
-                    </Router>
+                    <P3DeviceDetailProvider>
+                      <Router>
+                        <div className="App">
+                          <AppRoutes />
+                        </div>
+                      </Router>
+                    </P3DeviceDetailProvider>
                   </DeviceDetailProvider>
                 </DashboardProvider>
               </DeviceProvider>

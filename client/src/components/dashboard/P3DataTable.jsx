@@ -1,23 +1,37 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
+import { useDashboard } from '../../context/DashboardContext';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { fetchP3Data, downloadP3CSVExport, exportP3Data } from '../../services/p3DataService';
 
-const HKMIStatusBadge = ({ status }) => {
+const DeviceStatusBadge = ({ status, minutesSinceLastData }) => {
   const getStatusClass = (status) => {
     if (!status) return 'bg-gray-100 text-gray-800';
-
     const statusLower = status.toLowerCase();
     if (statusLower === 'active') return 'bg-green-100 text-green-800';
-    if (statusLower === 'signal loss') return 'bg-red-100 text-red-800';
+    if (statusLower === 'inactive') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
   };
 
+  const formatLastSeen = (minutes) => {
+    if (!minutes && minutes !== 0) return '';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
+    return `${Math.floor(minutes / 1440)}d ago`;
+  };
+
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wide ${getStatusClass(status)}`}>
-      {status || 'Unknown'}
-    </span>
+    <div className="flex flex-col">
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide ${getStatusClass(status)}`}>
+        {status || 'Unknown'}
+      </span>
+      {minutesSinceLastData !== undefined && (
+        <span className="text-xs text-gray-500 mt-0.5">
+          {formatLastSeen(minutesSinceLastData)}
+        </span>
+      )}
+    </div>
   );
 };
 
@@ -52,7 +66,6 @@ const GSMSignalBars = ({ strength }) => {
 
   const getBarColor = (barIndex, signalStrength) => {
     if (barIndex > signalStrength) return 'bg-gray-300';
-
     if (signalStrength <= 1) return 'bg-red-500';
     if (signalStrength <= 3) return 'bg-yellow-500';
     if (signalStrength <= 5) return 'bg-green-500';
@@ -139,7 +152,7 @@ const Pagination = ({ pagination, onPageChange }) => {
                 onClick={() => onPageChange(pageNum)}
                 className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
                   pageNum === page
-                    ? 'z-10 bg-green-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600'
+                    ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
                     : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
                 }`}
               >
@@ -164,66 +177,134 @@ const Pagination = ({ pagination, onPageChange }) => {
   );
 };
 
-const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = false, showDeviceId = false, hideMachineId = false }) => {
+const P3DataTable = ({ className = "", showDeviceId = true, showMachineId = true, enableRowClick = true }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const {
-    iotData,
-    iotDataLoading,
-    iotDataError,
-    iotDataPagination,
-    fetchIoTData,
-    exportIoTData,
+    hierarchyFilters,
     filteredDeviceIds
   } = useDashboard();
 
-  // Local state
+  // Local state for P3 data
+  const [p3Data, setP3Data] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState('Entry_ID');
+  const [sortField, setSortField] = useState('CreatedAt');
   const [sortOrder, setSortOrder] = useState('DESC');
   const [isExporting, setIsExporting] = useState(false);
+  // Default to today's date for Motor Runs and Train Passed counts
+  const [eventDate, setEventDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  });
 
-  // Check if row clicks are enabled (controlled by disableRowClick prop)
-  const canViewDeviceDetails = useMemo(() => {
-    return !disableRowClick;
-  }, [disableRowClick]);
+  // Fetch P3 data function
+  const loadP3Data = useCallback(async (options = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = searchTerm,
+      sortFieldParam = sortField,
+      sortOrderParam = sortOrder,
+      dateFilter = eventDate
+    } = options;
 
-  // Handle row click to navigate to device detail page
-  const handleRowClick = useCallback((row) => {
-    if (canViewDeviceDetails && row.Entry_ID) {
-      navigate(`/dashboard/device/${row.Entry_ID}`);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetchP3Data({
+        deviceIds: filteredDeviceIds,
+        page,
+        limit,
+        search,
+        sortField: sortFieldParam,
+        sortOrder: sortOrderParam,
+        sden: hierarchyFilters.sden,
+        den: hierarchyFilters.den,
+        aen: hierarchyFilters.aen,
+        sse: hierarchyFilters.sse,
+        eventDate: dateFilter || null
+      });
+
+      setP3Data(response.data || []);
+      setPagination(response.meta || {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrevious: false
+      });
+    } catch (err) {
+      console.error('Error fetching P3 data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [navigate, canViewDeviceDetails]);
+  }, [filteredDeviceIds, hierarchyFilters, searchTerm, sortField, sortOrder, eventDate]);
 
-  // Table columns configuration matching HKMI dashboard
+  // Load data when filters change
+  useEffect(() => {
+    if (filteredDeviceIds.length > 0) {
+      loadP3Data({ page: 1 });
+    } else {
+      setP3Data([]);
+      setPagination({
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrevious: false
+      });
+    }
+  }, [filteredDeviceIds, hierarchyFilters, eventDate]);
+
+  // Table columns configuration
   const columns = useMemo(() => {
-    let baseColumns = [
-      { key: 'machine_id', label: 'Machine ID', sortable: true, width: 'w-36' },
+    let baseColumns = [];
+
+    // Conditionally add machine_id column
+    if (showMachineId) {
+      baseColumns.push({ key: 'machine_id', label: 'Machine ID', sortable: true, width: 'w-36' });
+    }
+
+    // Add remaining columns
+    baseColumns.push(
       { key: 'management_hierarchy', label: 'Management Hierarchy', sortable: false, width: 'w-44' },
       { key: 'div_rly', label: 'Division/ Railway', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'section', label: 'Section', sortable: true, width: 'w-24' },
       { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'line', label: 'Line', sortable: true, width: 'w-16' },
       { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'w-32' },
-      { key: 'GSM_Signal_Strength', label: 'GSM Strength', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'Signal_Strength', label: 'GSM Strength', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'w-20', wrapHeader: true },
-      { key: 'motor_run_count', label: 'Motor Run Count Last 24Hrs', sortable: false, width: 'w-24', wrapHeader: true },
-      { key: 'status', label: 'Status', sortable: true, width: 'w-24' },
-      { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'w-20', wrapHeader: true }
-    ];
+      { key: 'Motor_Runs', label: 'Motor Runs', sortable: false, width: 'w-20', wrapHeader: true },
+      { key: 'Train_Passed_Count', label: 'Train Passed', sortable: false, width: 'w-20', wrapHeader: true },
+      { key: 'Device_Status', label: 'Device Status', sortable: false, width: 'w-24', wrapHeader: true },
+      { key: 'days_since_service', label: 'Days Since Service', sortable: true, width: 'w-20', wrapHeader: true },
+      { key: 'last_cof_date', label: 'Last CoF Date', sortable: true, width: 'w-24', wrapHeader: true },
+      { key: 'last_cof_value', label: 'Last CoF Value', sortable: true, width: 'w-24', wrapHeader: true }
+    );
 
-    // Add Device ID column if showDeviceId is true
+    // Conditionally add Device_ID column
     if (showDeviceId) {
-      baseColumns.splice(1, 0, { key: 'Device_ID', label: 'Device ID', sortable: true, width: 'w-28' });
-    }
-
-    // Remove Machine ID column if hideMachineId is true
-    if (hideMachineId) {
-      baseColumns = baseColumns.filter(col => col.key !== 'machine_id');
+      baseColumns.splice(showMachineId ? 1 : 0, 0, { key: 'Device_ID', label: 'Device ID', sortable: true, width: 'w-28' });
     }
 
     return baseColumns;
-  }, [showDeviceId, hideMachineId]);
+  }, [showDeviceId, showMachineId]);
 
   // Format cell value based on column type
   const formatCellValue = useCallback((value, columnKey, row) => {
@@ -231,62 +312,55 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       case 'Device_ID':
         return row?.Device_ID || '-';
       case 'machine_id':
-        // Use machine_id from cloud_dashboard_hkmi if available
         return row?.machine_id || row?.Device_ID || '-';
       case 'div_rly':
         return row?.div_rly || '-';
       case 'section':
         return row?.section || '-';
       case 'curve_number':
-        // Use curve_number from cloud_dashboard_hkmi if available, otherwise extract from machine_id
-        if (row?.curve_number) {
-          return row.curve_number;
-        }
+        if (row?.curve_number) return row.curve_number;
         const machineId = row?.machine_id || row?.Device_ID || '';
         const curveMatch = machineId.match(/RTM([^-]+)/);
         return curveMatch ? curveMatch[1] : '-';
       case 'line':
-        // Use line from cloud_dashboard_hkmi if available, otherwise extract from machine_id
-        if (row?.line) {
-          return row.line;
-        }
+        if (row?.line) return row.line;
         const lineMatch = (row?.machine_id || '').match(/-([A-Z]{2})-/);
         return lineMatch ? lineMatch[1] : '-';
       case 'gps_location':
-        const lat = row?.Longitude;
-        const lng = row?.Latitude;
+        const lat = row?.Latitude;
+        const lng = row?.Longitude;
         if (lat && lng && lat !== 0 && lng !== 0) {
           return `${parseFloat(lat).toFixed(4)},${parseFloat(lng).toFixed(4)}`;
         }
         return '-';
       case 'grease_left':
-        // Use grease_left from cloud_dashboard_hkmi table
         return row?.grease_left ? parseFloat(row.grease_left).toFixed(1) : '-';
-      case 'motor_run_count':
-        // Display motor run count for last 24 hours
-        return row?.Motor_Run_Count_Last_24Hrs || 0;
-      case 'status':
-        // Determine status based on record count in last 1 hour
-        const recordCount = row?.Record_Count_Last_1Hr || 0;
-        if (recordCount >= 12) return 'Active';
-        return 'Signal Loss';
+      case 'Motor_Runs':
+        return row?.Motor_Runs || 0;
+      case 'Train_Passed_Count':
+        return row?.Train_Passed_Count || 0;
+      case 'Device_Status':
+        return row?.Device_Status || 'Unknown';
       case 'days_since_service':
-        // Calculate days since service from last_service_date
         if (row?.last_service_date) {
-          // Parse date without timezone conversion
           const dateStr = String(row.last_service_date).split('T')[0];
           const [year, month, day] = dateStr.split('-').map(num => parseInt(num, 10));
           const lastServiceDate = new Date(year, month - 1, day);
-
-          // Get today's date at midnight
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-
           const diffTime = Math.abs(today - lastServiceDate);
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           return diffDays;
         }
         return '-';
+      case 'last_cof_date':
+        if (row?.last_cof_date) {
+          const dateStr = String(row.last_cof_date).split('T')[0];
+          return dateStr;
+        }
+        return '-';
+      case 'last_cof_value':
+        return row?.last_cof_value ? parseFloat(row.last_cof_value).toFixed(2) : '-';
       default:
         return value || '-';
     }
@@ -295,13 +369,13 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
   // Handle search
   const handleSearch = useCallback(async (e) => {
     e.preventDefault();
-    await fetchIoTData({
+    await loadP3Data({
       search: searchTerm,
       page: 1,
-      sortField,
-      sortOrder
+      sortFieldParam: sortField,
+      sortOrderParam: sortOrder
     });
-  }, [searchTerm, sortField, sortOrder, fetchIoTData]);
+  }, [searchTerm, sortField, sortOrder, loadP3Data]);
 
   // Handle sort
   const handleSort = useCallback(async (field) => {
@@ -309,51 +383,59 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
     setSortField(field);
     setSortOrder(newSortOrder);
 
-    await fetchIoTData({
+    await loadP3Data({
       search: searchTerm,
-      sortField: field,
-      sortOrder: newSortOrder,
+      sortFieldParam: field,
+      sortOrderParam: newSortOrder,
       page: 1
     });
-  }, [sortField, sortOrder, searchTerm, fetchIoTData]);
+  }, [sortField, sortOrder, searchTerm, loadP3Data]);
 
   // Handle pagination
   const handlePageChange = useCallback(async (newPage) => {
-    await fetchIoTData({
+    await loadP3Data({
       search: searchTerm,
-      sortField,
-      sortOrder,
+      sortFieldParam: sortField,
+      sortOrderParam: sortOrder,
       page: newPage
     });
-  }, [searchTerm, sortField, sortOrder, fetchIoTData]);
+  }, [searchTerm, sortField, sortOrder, loadP3Data]);
 
   // Handle export
   const handleExport = useCallback(async (format = 'csv') => {
     setIsExporting(true);
     try {
       if (format === 'csv') {
-        // Use the download method from iotDataService for CSV
-        const { iotDataService } = await import('../../services/iotDataService');
-        await iotDataService.downloadCSVExport({
+        await downloadP3CSVExport({
           deviceIds: filteredDeviceIds,
           search: searchTerm,
-          filename: `iot_data_export_${new Date().toISOString().split('T')[0]}.csv`
+          filename: `p3_data_export_${new Date().toISOString().split('T')[0]}.csv`,
+          sden: hierarchyFilters.sden,
+          den: hierarchyFilters.den,
+          aen: hierarchyFilters.aen,
+          sse: hierarchyFilters.sse,
+          eventDate: eventDate || null
         });
       } else {
-        // For JSON, use the export method from context
-        const result = await exportIoTData(format, {
-          search: searchTerm
+        const result = await exportP3Data({
+          deviceIds: filteredDeviceIds,
+          search: searchTerm,
+          format: 'json',
+          sden: hierarchyFilters.sden,
+          den: hierarchyFilters.den,
+          aen: hierarchyFilters.aen,
+          sse: hierarchyFilters.sse,
+          eventDate: eventDate || null
         });
 
         if (result.success) {
-          // Create and download JSON file
           const blob = new Blob([JSON.stringify(result.data, null, 2)], {
             type: 'application/json'
           });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `iot_data_export_${new Date().toISOString().split('T')[0]}.json`;
+          link.download = `p3_data_export_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -365,7 +447,14 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
     } finally {
       setIsExporting(false);
     }
-  }, [filteredDeviceIds, searchTerm, exportIoTData]);
+  }, [filteredDeviceIds, searchTerm, hierarchyFilters, eventDate]);
+
+  // Handle row click - Navigate to P3-specific device detail page
+  const handleRowClick = useCallback((row) => {
+    if (row.Entry_ID) {
+      navigate(`/dashboard/p3-device/${row.Entry_ID}`);
+    }
+  }, [navigate]);
 
   if (filteredDeviceIds.length === 0) {
     return (
@@ -376,7 +465,7 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">No Data Available</h3>
           <p className="mt-2 text-sm text-gray-500">
-            Please apply hierarchy filters to view IoT data for specific devices.
+            Please apply hierarchy filters to view P3 IoT data for specific devices.
           </p>
         </div>
       </div>
@@ -389,23 +478,48 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Device Management</h3>
+            <h3 className="text-lg font-semibold text-gray-900">P3 Device Data</h3>
+            <p className="text-sm text-gray-500">Event-based SICK sensor data with motor runs and train detection</p>
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* Date Filter for Motor Runs & Train Passed */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Event Date:</label>
+              <input
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                className="block w-40 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                title="Filter Motor Runs and Train Passed counts by date"
+              />
+              {eventDate && (
+                <button
+                  type="button"
+                  onClick={() => setEventDate('')}
+                  className="inline-flex items-center px-2 py-2 text-gray-400 hover:text-gray-600"
+                  title="Clear date filter"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
             {/* Search */}
             <form onSubmit={handleSearch} className="flex items-center space-x-2">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search devices, messages..."
-                className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                placeholder="Search devices, sections..."
+                className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
               <button
                 type="submit"
-                disabled={iotDataLoading}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                disabled={loading}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -413,38 +527,54 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
               </button>
             </form>
 
+            {/* Refresh Button */}
+            <button
+              onClick={() => loadP3Data({ page: pagination.page })}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              title="Refresh data"
+            >
+              <svg
+                className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+
             {/* Export Buttons */}
-            {!hideExport && (
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleExport('csv')}
-                  disabled={isExporting || iotDataLoading}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                >
-                  {isExporting && <LoadingSpinner size="sm" className="mr-2" />}
-                  Export CSV
-                </button>
-                <button
-                  onClick={() => handleExport('json')}
-                  disabled={isExporting || iotDataLoading}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                >
-                  Export JSON
-                </button>
-              </div>
-            )}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={isExporting || loading}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {isExporting && <LoadingSpinner size="sm" className="mr-2" />}
+                Export CSV
+              </button>
+              <button
+                onClick={() => handleExport('json')}
+                disabled={isExporting || loading}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Export JSON
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Error State */}
-      {iotDataError && (
+      {error && (
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-md">
             <svg className="h-5 w-5 text-red-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
-            <p className="text-sm text-red-800">{iotDataError}</p>
+            <p className="text-sm text-red-800">{error}</p>
           </div>
         </div>
       )}
@@ -470,7 +600,7 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
                         <svg
                           className={`w-3 h-3 ${
                             sortField === column.key && sortOrder === 'ASC'
-                              ? 'text-green-600'
+                              ? 'text-blue-600'
                               : 'text-gray-300'
                           }`}
                           fill="currentColor"
@@ -481,7 +611,7 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
                         <svg
                           className={`w-3 h-3 -mt-1 ${
                             sortField === column.key && sortOrder === 'DESC'
-                              ? 'text-green-600'
+                              ? 'text-blue-600'
                               : 'text-gray-300'
                           }`}
                           fill="currentColor"
@@ -497,34 +627,30 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {iotDataLoading ? (
+            {loading ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-12 text-center">
                   <LoadingSpinner size="lg" />
-                  <p className="mt-4 text-sm text-gray-500">Loading IoT data...</p>
+                  <p className="mt-4 text-sm text-gray-500">Loading P3 data...</p>
                 </td>
               </tr>
-            ) : iotData.length === 0 ? (
+            ) : p3Data.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-12 text-center text-sm text-gray-500">
-                  No data found for the selected filters.
+                  No P3 data found for the selected filters.
                 </td>
               </tr>
             ) : (
-              iotData.map((row, index) => (
+              p3Data.map((row, index) => (
                 <tr
                   key={row.Entry_ID || index}
-                  className={`transition-colors duration-150 ${
-                    canViewDeviceDetails
-                      ? 'hover:bg-gray-50 cursor-pointer'
-                      : 'cursor-default'
-                  }`}
-                  onClick={() => handleRowClick(row)}
-                  title={canViewDeviceDetails ? `Click to view details for device ${row.Device_ID}` : ''}
+                  className={`transition-colors duration-150 ${enableRowClick ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                  onClick={enableRowClick ? () => handleRowClick(row) : undefined}
+                  title={enableRowClick ? `Click to view details for device ${row.Device_ID}` : undefined}
                 >
                   {columns.map((column) => (
                     <td key={column.key} className={`px-2 py-2 text-sm text-gray-900 ${column.width} break-words`}>
-                      {column.key === 'GSM_Signal_Strength' ? (
+                      {column.key === 'Signal_Strength' ? (
                         <GSMSignalBars strength={row[column.key]} />
                       ) : column.key === 'management_hierarchy' ? (
                         <ManagementHierarchy
@@ -533,14 +659,21 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
                           aen={row.aen}
                           sse={row.sse}
                         />
-                      ) : column.key === 'status' ? (
-                        <HKMIStatusBadge status={formatCellValue(row[column.key], column.key, row)} />
                       ) : column.key === 'grease_left' ? (
                         <GreaseLevel greaseLeft={parseFloat(formatCellValue(row[column.key], column.key, row))} />
                       ) : column.key === 'gps_location' ? (
-                        <span className="font-mono text-xs text-green-600">
+                        <span className="font-mono text-xs text-blue-600">
                           {formatCellValue(row[column.key], column.key, row)}
                         </span>
+                      ) : column.key === 'Motor_Runs' || column.key === 'Train_Passed_Count' ? (
+                        <span className="font-semibold text-blue-700">
+                          {formatCellValue(row[column.key], column.key, row)}
+                        </span>
+                      ) : column.key === 'Device_Status' ? (
+                        <DeviceStatusBadge
+                          status={row.Device_Status}
+                          minutesSinceLastData={row.Minutes_Since_Last_Data}
+                        />
                       ) : (
                         <span className={column.key === 'machine_id' ? 'font-medium' : ''}>
                           {formatCellValue(row[column.key], column.key, row)}
@@ -556,9 +689,9 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
       </div>
 
       {/* Pagination */}
-      {iotData.length > 0 && (
+      {p3Data.length > 0 && (
         <Pagination
-          pagination={iotDataPagination}
+          pagination={pagination}
           onPageChange={handlePageChange}
         />
       )}
@@ -566,4 +699,4 @@ const IoTDataTable = ({ className = "", disableRowClick = false, hideExport = fa
   );
 };
 
-export default IoTDataTable;
+export default P3DataTable;
