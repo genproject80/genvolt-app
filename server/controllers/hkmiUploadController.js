@@ -195,35 +195,37 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
         continue;
       }
 
-      // Check 1: Validate device_id exists in device table
-      const deviceCheckQuery = `
-        SELECT COUNT(*) as count
+      // Check 1: Validate device_id and machine_id combination in device table
+      const deviceComboCheckQuery = `
+        SELECT device_id, machin_id
         FROM device
-        WHERE device_id = @deviceId
+        WHERE device_id = @deviceId OR machin_id = @machineId
       `;
 
-      const deviceCheckResult = await pool.request()
-        .input('deviceId', sql.VarChar, deviceId)
-        .query(deviceCheckQuery);
-
-      if (deviceCheckResult.recordset[0].count === 0) {
-        rejectionReasons.push('device_id does not exist in device table');
-      }
-
-      // Check 2: Validate device_id and machine_id combination exists in cloud_dashboard_hkmi table
-      const hkmiComboCheckQuery = `
-        SELECT COUNT(*) as count
-        FROM cloud_dashboard_hkmi
-        WHERE RTRIM(LTRIM(device_id)) = @deviceId AND RTRIM(LTRIM(machine_id)) = @machineId
-      `;
-
-      const hkmiComboCheckResult = await pool.request()
+      const deviceComboCheckResult = await pool.request()
         .input('deviceId', sql.VarChar, deviceId)
         .input('machineId', sql.VarChar, machineId)
-        .query(hkmiComboCheckQuery);
+        .query(deviceComboCheckQuery);
 
-      if (hkmiComboCheckResult.recordset[0].count === 0) {
-        rejectionReasons.push('device_id and machine_id combination does not exist in cloud_dashboard_hkmi table');
+      let deviceTableValid = false;
+      let shouldInsert = false;
+
+      if (deviceComboCheckResult.recordset.length === 0) {
+        // Neither device_id nor machin_id exists in device table
+        rejectionReasons.push('Please Add Device Id and Machine id through Device Management');
+      } else {
+        // Check if the exact combination exists
+        const exactMatch = deviceComboCheckResult.recordset.find(
+          row => row.device_id === deviceId && row.machin_id === machineId
+        );
+
+        if (!exactMatch) {
+          // Device_id or machin_id exists but the mapping doesn't match
+          rejectionReasons.push('Please update Device Id and Machine id mapping through Device Management');
+        } else {
+          // Exact match found in device table
+          deviceTableValid = true;
+        }
       }
 
       // Check 3: Validate grease_left is a number
@@ -273,7 +275,7 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
           reasons: rejectionReasons
         });
       } else {
-        // All validations passed, update the database
+        // All validations passed, check if record exists in cloud_dashboard_hkmi
         try {
           // Convert JavaScript Date to YYYY-MM-DD string to avoid timezone issues
           const serviceDateString = `${parsedServiceDate.getFullYear()}-${String(parsedServiceDate.getMonth() + 1).padStart(2, '0')}-${String(parsedServiceDate.getDate()).padStart(2, '0')}`;
@@ -283,89 +285,190 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
             cofDateString = `${parsedCofDate.getFullYear()}-${String(parsedCofDate.getMonth() + 1).padStart(2, '0')}-${String(parsedCofDate.getDate()).padStart(2, '0')}`;
           }
 
-          // Build dynamic UPDATE query based on available fields
-          let updateFields = [
-            'grease_left = @greaseLeft',
-            'last_service_date = @lastServiceDate',
-            'updated_at = GETDATE()'
-          ];
-
-          const request = pool.request()
-            .input('greaseLeft', sql.Decimal(10, 3), greaseLeftNumber)
-            .input('lastServiceDate', sql.Date, serviceDateString)
-            .input('machineId', sql.VarChar, machineId);
-
-          // Add optional fields if they exist
-          if (divRly) {
-            updateFields.push('div_rly = @divRly');
-            request.input('divRly', sql.VarChar, divRly);
-          }
-          if (section) {
-            updateFields.push('section = @section');
-            request.input('section', sql.VarChar, section);
-          }
-          if (curveNumber) {
-            updateFields.push('curve_number = @curveNumber');
-            request.input('curveNumber', sql.VarChar, curveNumber);
-          }
-          if (line) {
-            updateFields.push('line = @line');
-            request.input('line', sql.VarChar, line);
-          }
-          if (den) {
-            updateFields.push('den = @den');
-            request.input('den', sql.VarChar, den);
-          }
-          if (aen) {
-            updateFields.push('aen = @aen');
-            request.input('aen', sql.VarChar, aen);
-          }
-          if (sse) {
-            updateFields.push('sse = @sse');
-            request.input('sse', sql.VarChar, sse);
-          }
-          if (sden) {
-            updateFields.push('sden = @sden');
-            request.input('sden', sql.VarChar, sden);
-          }
-          if (cofDateString) {
-            updateFields.push('last_cof_date = @lastCofDate');
-            request.input('lastCofDate', sql.Date, cofDateString);
-          }
-          if (cofValueNumber !== null) {
-            updateFields.push('last_cof_value = @lastCofValue');
-            request.input('lastCofValue', sql.Decimal(10, 2), cofValueNumber);
-          }
-
-          const updateQuery = `
-            UPDATE cloud_dashboard_hkmi
-            SET ${updateFields.join(', ')}
-            WHERE RTRIM(LTRIM(machine_id)) = @machineId
+          // Check if combination exists in cloud_dashboard_hkmi
+          const hkmiCheckQuery = `
+            SELECT COUNT(*) as count
+            FROM cloud_dashboard_hkmi
+            WHERE RTRIM(LTRIM(device_id)) = @deviceId AND RTRIM(LTRIM(machine_id)) = @machineId
           `;
 
-          await request.query(updateQuery);
+          const hkmiCheckResult = await pool.request()
+            .input('deviceId', sql.VarChar, deviceId)
+            .input('machineId', sql.VarChar, machineId)
+            .query(hkmiCheckQuery);
 
-          const successRow = {
-            row_number: rowNumber,
-            device_id: deviceId,
-            machine_id: machineId,
-            grease_left: greaseLeftNumber,
-            last_service_date: serviceDateString
-          };
+          const recordExists = hkmiCheckResult.recordset[0].count > 0;
 
-          if (cofDateString) successRow.last_cof_date = cofDateString;
-          if (cofValueNumber !== null) successRow.last_cof_value = cofValueNumber;
+          if (recordExists) {
+            // UPDATE existing record
+            let updateFields = [
+              'grease_left = @greaseLeft',
+              'last_service_date = @lastServiceDate',
+              'updated_at = GETDATE()'
+            ];
 
-          successfulRows.push(successRow);
-        } catch (updateError) {
-          logger.error(`Error updating row ${rowNumber}:`, updateError);
+            const request = pool.request()
+              .input('greaseLeft', sql.Decimal(10, 3), greaseLeftNumber)
+              .input('lastServiceDate', sql.Date, serviceDateString)
+              .input('deviceId', sql.VarChar, deviceId)
+              .input('machineId', sql.VarChar, machineId);
+
+            // Add optional fields if they exist
+            if (divRly) {
+              updateFields.push('div_rly = @divRly');
+              request.input('divRly', sql.VarChar, divRly);
+            }
+            if (section) {
+              updateFields.push('section = @section');
+              request.input('section', sql.VarChar, section);
+            }
+            if (curveNumber) {
+              updateFields.push('curve_number = @curveNumber');
+              request.input('curveNumber', sql.VarChar, curveNumber);
+            }
+            if (line) {
+              updateFields.push('line = @line');
+              request.input('line', sql.VarChar, line);
+            }
+            if (den) {
+              updateFields.push('den = @den');
+              request.input('den', sql.VarChar, den);
+            }
+            if (aen) {
+              updateFields.push('aen = @aen');
+              request.input('aen', sql.VarChar, aen);
+            }
+            if (sse) {
+              updateFields.push('sse = @sse');
+              request.input('sse', sql.VarChar, sse);
+            }
+            if (sden) {
+              updateFields.push('sden = @sden');
+              request.input('sden', sql.VarChar, sden);
+            }
+            if (cofDateString) {
+              updateFields.push('last_cof_date = @lastCofDate');
+              request.input('lastCofDate', sql.Date, cofDateString);
+            }
+            if (cofValueNumber !== null) {
+              updateFields.push('last_cof_value = @lastCofValue');
+              request.input('lastCofValue', sql.Decimal(10, 2), cofValueNumber);
+            }
+
+            const updateQuery = `
+              UPDATE cloud_dashboard_hkmi
+              SET ${updateFields.join(', ')}
+              WHERE RTRIM(LTRIM(device_id)) = @deviceId AND RTRIM(LTRIM(machine_id)) = @machineId
+            `;
+
+            await request.query(updateQuery);
+
+            const successRow = {
+              row_number: rowNumber,
+              device_id: deviceId,
+              machine_id: machineId,
+              grease_left: greaseLeftNumber,
+              last_service_date: serviceDateString,
+              operation: 'updated'
+            };
+
+            if (cofDateString) successRow.last_cof_date = cofDateString;
+            if (cofValueNumber !== null) successRow.last_cof_value = cofValueNumber;
+
+            successfulRows.push(successRow);
+          } else {
+            // INSERT new record
+            let insertColumns = ['device_id', 'machine_id', 'grease_left', 'last_service_date', 'created_at', 'updated_at'];
+            let insertValues = ['@deviceId', '@machineId', '@greaseLeft', '@lastServiceDate', 'GETDATE()', 'GETDATE()'];
+
+            const request = pool.request()
+              .input('deviceId', sql.VarChar, deviceId)
+              .input('machineId', sql.VarChar, machineId)
+              .input('greaseLeft', sql.Decimal(10, 3), greaseLeftNumber)
+              .input('lastServiceDate', sql.Date, serviceDateString);
+
+            // Add optional fields if they exist
+            if (divRly) {
+              insertColumns.push('div_rly');
+              insertValues.push('@divRly');
+              request.input('divRly', sql.VarChar, divRly);
+            }
+            if (section) {
+              insertColumns.push('section');
+              insertValues.push('@section');
+              request.input('section', sql.VarChar, section);
+            }
+            if (curveNumber) {
+              insertColumns.push('curve_number');
+              insertValues.push('@curveNumber');
+              request.input('curveNumber', sql.VarChar, curveNumber);
+            }
+            if (line) {
+              insertColumns.push('line');
+              insertValues.push('@line');
+              request.input('line', sql.VarChar, line);
+            }
+            if (den) {
+              insertColumns.push('den');
+              insertValues.push('@den');
+              request.input('den', sql.VarChar, den);
+            }
+            if (aen) {
+              insertColumns.push('aen');
+              insertValues.push('@aen');
+              request.input('aen', sql.VarChar, aen);
+            }
+            if (sse) {
+              insertColumns.push('sse');
+              insertValues.push('@sse');
+              request.input('sse', sql.VarChar, sse);
+            }
+            if (sden) {
+              insertColumns.push('sden');
+              insertValues.push('@sden');
+              request.input('sden', sql.VarChar, sden);
+            }
+            if (cofDateString) {
+              insertColumns.push('last_cof_date');
+              insertValues.push('@lastCofDate');
+              request.input('lastCofDate', sql.Date, cofDateString);
+            }
+            if (cofValueNumber !== null) {
+              insertColumns.push('last_cof_value');
+              insertValues.push('@lastCofValue');
+              request.input('lastCofValue', sql.Decimal(10, 2), cofValueNumber);
+            }
+
+            const insertQuery = `
+              INSERT INTO cloud_dashboard_hkmi (${insertColumns.join(', ')})
+              VALUES (${insertValues.join(', ')})
+            `;
+
+            await request.query(insertQuery);
+
+            const successRow = {
+              row_number: rowNumber,
+              device_id: deviceId,
+              machine_id: machineId,
+              grease_left: greaseLeftNumber,
+              last_service_date: serviceDateString,
+              operation: 'inserted'
+            };
+
+            if (cofDateString) successRow.last_cof_date = cofDateString;
+            if (cofValueNumber !== null) successRow.last_cof_value = cofValueNumber;
+
+            successfulRows.push(successRow);
+          }
+        } catch (dbError) {
+          logger.error(`Error processing row ${rowNumber}:`, dbError);
           rejectedRows.push({
             row_number: rowNumber,
             device_id: deviceId,
             machine_id: machineId,
             grease_left: greaseLeft,
             last_service_date: lastServiceDate,
-            reasons: [`Database update failed: ${updateError.message}`]
+            reasons: [`Database operation failed: ${dbError.message}`]
           });
         }
       }
