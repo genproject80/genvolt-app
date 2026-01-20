@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -24,6 +25,7 @@ const Sidebar = () => {
 
   const { dashboards, activeDashboard, setActiveDashboard } = useDashboard();
   const { user } = useAuth();
+  const { hasAnyPermission } = usePermissions();
 
   const handleDashboardClick = (dashboard) => {
     setActiveDashboard(dashboard);
@@ -152,19 +154,21 @@ const Sidebar = () => {
                     Client Management
                   </NavLink>
 
-                  <NavLink
-                    to="/admin/roles"
-                    className={({ isActive }) =>
-                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-primary-50 text-primary-700'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                      }`
-                    }
-                  >
-                    <ShieldCheckIcon className="w-4 h-4 mr-2" />
-                    Role Management
-                  </NavLink>
+                  {hasAnyPermission(['Create Role', 'Edit Role']) && (
+                    <NavLink
+                      to="/admin/roles"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <ShieldCheckIcon className="w-4 h-4 mr-2" />
+                      Role Management
+                    </NavLink>
+                  )}
 
                   <NavLink
                     to="/admin/devices"
