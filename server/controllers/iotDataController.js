@@ -310,12 +310,20 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const dataResult = await request.query(dataQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_VIEW', 'Retrieved IoT data', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'IOT_DATA_VIEW',
+      message: 'Retrieved IoT data',
+      target_type: 'IOT_DATA',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        search_term: search || null,
+        page: currentPage,
+        limit: pageSize,
+        total_results: totalCount
+      })
     });
 
     res.json({
@@ -543,12 +551,20 @@ export const exportIoTData = asyncHandler(async (req, res) => {
     const result = await request.query(exportQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_EXPORT', 'Exported IoT data', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      format: format,
-      exported_count: result.recordset.length,
-      max_limit: maxExportLimit
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'IOT_DATA_EXPORT',
+      message: 'Exported IoT data',
+      target_type: 'IOT_DATA',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        search_term: search || null,
+        format: format,
+        exported_count: result.recordset.length,
+        max_limit: maxExportLimit
+      })
     });
 
     if (format === 'csv') {
@@ -678,10 +694,18 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
     const deviceStatsResult = await request.query(deviceStatsQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_STATS', 'Retrieved IoT data statistics', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      total_records: stats.total_records,
-      unique_devices: stats.unique_devices
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'IOT_DATA_STATS',
+      message: 'Retrieved IoT data statistics',
+      target_type: 'IOT_DATA',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        total_records: stats.total_records,
+        unique_devices: stats.unique_devices
+      })
     });
 
     res.json({

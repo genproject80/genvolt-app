@@ -175,10 +175,18 @@ export const getDeviceDetails = asyncHandler(async (req, res) => {
 
 
     // Create audit log
-    await createAuditLog(user.id, 'DEVICE_DETAIL_VIEW', `Viewed device details for entry ${entryId} (device ${deviceData.Device_ID})`, 'device_detail', entryId, {
-      entry_id: entryId,
-      device_id: deviceData.Device_ID,
-      access_method: 'device_details_api'
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'DEVICE_DETAIL_VIEW',
+      message: `Viewed device details for entry ${entryId} (device ${deviceData.Device_ID})`,
+      target_type: 'DEVICE_DETAIL',
+      target_id: entryId,
+      details: JSON.stringify({
+        entry_id: entryId,
+        device_id: deviceData.Device_ID,
+        access_method: 'device_details_api'
+      })
     });
 
     res.json({
@@ -374,15 +382,23 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
     const formattedData = dataResult.recordset;
 
     // Create audit log
-    await createAuditLog(user.id, 'DEVICE_HISTORY_VIEW', `Viewed device history for entry ${entryId} (device ${deviceId})`, 'device_history', entryId, {
-      entry_id: entryId,
-      device_id: deviceId,
-      time_range: timeRange,
-      status_filter: status,
-      search_term: search || null,
-      date_filter: date || null,
-      page: parseInt(page),
-      limit: parseInt(limit)
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'DEVICE_HISTORY_VIEW',
+      message: `Viewed device history for entry ${entryId} (device ${deviceId})`,
+      target_type: 'DEVICE_HISTORY',
+      target_id: entryId,
+      details: JSON.stringify({
+        entry_id: entryId,
+        device_id: deviceId,
+        time_range: timeRange,
+        status_filter: status,
+        search_term: search || null,
+        date_filter: date || null,
+        page: parseInt(page),
+        limit: parseInt(limit)
+      })
     });
 
     res.json({

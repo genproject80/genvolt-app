@@ -57,11 +57,19 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
       .query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'DASHBOARD_VIEW', 'Viewed dashboard list', 'dashboard', null, {
-      client_id: user.client_id,
-      descendant_count: descendantClients.length,
-      total_clients_included: allClientIds.length,
-      dashboards_count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'DASHBOARD_VIEW',
+      message: 'Viewed dashboard list',
+      target_type: 'DASHBOARD',
+      target_id: null,
+      details: JSON.stringify({
+        client_id: user.client_id,
+        descendant_count: descendantClients.length,
+        total_clients_included: allClientIds.length,
+        dashboards_count: result.recordset.length
+      })
     });
 
     console.log('Dashboards found:', result.recordset.length);
@@ -137,9 +145,17 @@ export const getDashboardById = asyncHandler(async (req, res) => {
     const dashboard = result.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'DASHBOARD_VIEW', 'Viewed dashboard details', 'dashboard', id, {
-      dashboard_name: dashboard.name,
-      client_id: dashboard.client_id
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'DASHBOARD_VIEW',
+      message: 'Viewed dashboard details',
+      target_type: 'DASHBOARD',
+      target_id: id,
+      details: JSON.stringify({
+        dashboard_name: dashboard.name,
+        client_id: dashboard.client_id
+      })
     });
 
     res.json({
@@ -181,15 +197,23 @@ export const createDashboard = asyncHandler(async (req, res) => {
       .input('display_name', sql.NVarChar, display_name)
       .input('description', sql.NVarChar, description)
       .input('client_id', sql.NVarChar, client_id)
-      .input('created_by', sql.Int, user.id)
+      .input('created_by', sql.Int, user.user_id)
       .query(query);
 
     const newDashboard = result.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'DASHBOARD_CREATE', 'Created new dashboard', 'dashboard', newDashboard.id, {
-      dashboard_name: name,
-      client_id: client_id
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'DASHBOARD_CREATE',
+      message: 'Created new dashboard',
+      target_type: 'DASHBOARD',
+      target_id: newDashboard.id,
+      details: JSON.stringify({
+        dashboard_name: name,
+        client_id: client_id
+      })
     });
 
     res.status(201).json({
@@ -249,9 +273,17 @@ export const updateDashboard = asyncHandler(async (req, res) => {
     const updatedDashboard = result.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'DASHBOARD_UPDATE', 'Updated dashboard', 'dashboard', id, {
-      dashboard_name: name,
-      client_id: client_id
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'DASHBOARD_UPDATE',
+      message: 'Updated dashboard',
+      target_type: 'DASHBOARD',
+      target_id: id,
+      details: JSON.stringify({
+        dashboard_name: name,
+        client_id: client_id
+      })
     });
 
     res.json({
@@ -301,9 +333,17 @@ export const deleteDashboard = asyncHandler(async (req, res) => {
     const deletedDashboard = result.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'DASHBOARD_DELETE', 'Deleted dashboard', 'dashboard', id, {
-      dashboard_name: deletedDashboard.name,
-      client_id: deletedDashboard.client_id
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'DASHBOARD_DELETE',
+      message: 'Deleted dashboard',
+      target_type: 'DASHBOARD',
+      target_id: id,
+      details: JSON.stringify({
+        dashboard_name: deletedDashboard.name,
+        client_id: deletedDashboard.client_id
+      })
     });
 
     res.json({

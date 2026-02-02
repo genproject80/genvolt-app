@@ -51,10 +51,18 @@ export const getOverallManagers = asyncHandler(async (req, res) => {
       .query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_VIEW', 'Retrieved Overall Managers (SDEN)', 'hierarchy_filter', null, {
-      filter_type: 'sden',
-      count: result.recordset.length,
-      dashboard_id: dashboard_id || null
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'HIERARCHY_FILTER_VIEW',
+      message: 'Retrieved Overall Managers (SDEN)',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filter_type: 'sden',
+        count: result.recordset.length,
+        dashboard_id: dashboard_id || null
+      })
     });
 
     res.json({
@@ -104,10 +112,18 @@ export const getLevel2Managers = asyncHandler(async (req, res) => {
     const result = await request.query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_VIEW', 'Retrieved Level 2 Managers (DEN)', 'hierarchy_filter', null, {
-      filter_type: 'den',
-      parent_filter: sden || null,
-      count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'HIERARCHY_FILTER_VIEW',
+      message: 'Retrieved Level 2 Managers (DEN)',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filter_type: 'den',
+        parent_filter: sden || null,
+        count: result.recordset.length
+      })
     });
 
     res.json({
@@ -163,10 +179,18 @@ export const getLevel3Managers = asyncHandler(async (req, res) => {
     const result = await request.query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_VIEW', 'Retrieved Level 3 Managers (AEN)', 'hierarchy_filter', null, {
-      filter_type: 'aen',
-      parent_filters: { sden: sden || null, den: den || null },
-      count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'HIERARCHY_FILTER_VIEW',
+      message: 'Retrieved Level 3 Managers (AEN)',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filter_type: 'aen',
+        parent_filters: { sden: sden || null, den: den || null },
+        count: result.recordset.length
+      })
     });
 
     res.json({
@@ -227,10 +251,18 @@ export const getLevel4Managers = asyncHandler(async (req, res) => {
     const result = await request.query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_VIEW', 'Retrieved Level 4 Managers (SSE)', 'hierarchy_filter', null, {
-      filter_type: 'sse',
-      parent_filters: { sden: sden || null, den: den || null, aen: aen || null },
-      count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'HIERARCHY_FILTER_VIEW',
+      message: 'Retrieved Level 4 Managers (SSE)',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filter_type: 'sse',
+        parent_filters: { sden: sden || null, den: den || null, aen: aen || null },
+        count: result.recordset.length
+      })
     });
 
     res.json({
@@ -324,9 +356,17 @@ export const getFilteredDevices = asyncHandler(async (req, res) => {
     const result = await request.query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_APPLY', 'Applied hierarchy filters to get devices', 'hierarchy_filter', null, {
-      filters_applied: appliedFilters,
-      device_count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'CONFIGURATION',
+      action: 'HIERARCHY_FILTER_APPLY',
+      message: 'Applied hierarchy filters to get devices',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filters_applied: appliedFilters,
+        device_count: result.recordset.length
+      })
     });
 
     res.json({
@@ -440,9 +480,17 @@ export const applyHierarchyFilters = asyncHandler(async (req, res) => {
     const result = await request.query(query);
 
     // Create audit log
-    await createAuditLog(user.id, 'HIERARCHY_FILTER_APPLY', 'Applied hierarchy filters via POST', 'hierarchy_filter', null, {
-      filters_applied: appliedFilters,
-      device_count: result.recordset.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'CONFIGURATION',
+      action: 'HIERARCHY_FILTER_APPLY',
+      message: 'Applied hierarchy filters via POST',
+      target_type: 'HIERARCHY_FILTER',
+      target_id: null,
+      details: JSON.stringify({
+        filters_applied: appliedFilters,
+        device_count: result.recordset.length
+      })
     });
 
     res.json({

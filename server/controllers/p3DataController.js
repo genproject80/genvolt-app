@@ -328,12 +328,20 @@ export const getP3Data = asyncHandler(async (req, res) => {
     const dataResult = await request.query(dataQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_VIEW', 'Retrieved P3 IoT data', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_DATA_VIEW',
+      message: 'Retrieved P3 IoT data',
+      target_type: 'IOT_DATA_P3',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        search_term: search || null,
+        page: currentPage,
+        limit: pageSize,
+        total_results: totalCount
+      })
     });
 
     res.json({
@@ -582,12 +590,20 @@ export const exportP3Data = asyncHandler(async (req, res) => {
     const result = await request.query(exportQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_EXPORT', 'Exported P3 IoT data', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      format: format,
-      exported_count: result.recordset.length,
-      max_limit: maxExportLimit
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_DATA_EXPORT',
+      message: 'Exported P3 IoT data',
+      target_type: 'IOT_DATA_P3',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        search_term: search || null,
+        format: format,
+        exported_count: result.recordset.length,
+        max_limit: maxExportLimit
+      })
     });
 
     if (format === 'csv') {
@@ -750,11 +766,19 @@ export const getP3StatusMetrics = asyncHandler(async (req, res) => {
     const metrics = metricsResult.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_STATUS_METRICS', 'Retrieved P3 device status metrics', 'iot_data_sick_p3', null, {
-      device_ids_filter: deviceIds,
-      active_devices: metrics.active_devices,
-      inactive_devices: metrics.inactive_devices,
-      total_devices: metrics.total_devices
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_STATUS_METRICS',
+      message: 'Retrieved P3 device status metrics',
+      target_type: 'IOT_DATA_SICK_P3',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        active_devices: metrics.active_devices,
+        inactive_devices: metrics.inactive_devices,
+        total_devices: metrics.total_devices
+      })
     });
 
     res.json({
@@ -876,10 +900,18 @@ export const getP3GreaseMetrics = asyncHandler(async (req, res) => {
     const metrics = metricsResult.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_GREASE_METRICS', 'Retrieved P3 grease metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_low_grease: metrics.curves_low_grease,
-      total_curves: metrics.total_curves
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_GREASE_METRICS',
+      message: 'Retrieved P3 grease metrics',
+      target_type: 'CLOUD_DASHBOARD_HKMI',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        curves_low_grease: metrics.curves_low_grease,
+        total_curves: metrics.total_curves
+      })
     });
 
     res.json({
@@ -1000,10 +1032,18 @@ export const getP3CofDateMetrics = asyncHandler(async (req, res) => {
     const metrics = metricsResult.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_COF_DATE_METRICS', 'Retrieved P3 CoF date metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_old_cof_measurement: metrics.curves_old_cof_measurement,
-      total_curves: metrics.total_curves
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_COF_DATE_METRICS',
+      message: 'Retrieved P3 CoF date metrics',
+      target_type: 'CLOUD_DASHBOARD_HKMI',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        curves_old_cof_measurement: metrics.curves_old_cof_measurement,
+        total_curves: metrics.total_curves
+      })
     });
 
     res.json({
@@ -1124,10 +1164,18 @@ export const getP3CofMetrics = asyncHandler(async (req, res) => {
     const metrics = metricsResult.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_COF_METRICS', 'Retrieved P3 CoF metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_high_cof: metrics.curves_high_cof,
-      total_curves: metrics.total_curves
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_COF_METRICS',
+      message: 'Retrieved P3 CoF metrics',
+      target_type: 'CLOUD_DASHBOARD_HKMI',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        curves_high_cof: metrics.curves_high_cof,
+        total_curves: metrics.total_curves
+      })
     });
 
     res.json({
@@ -1248,10 +1296,18 @@ export const getP3ServiceMetrics = asyncHandler(async (req, res) => {
     const metrics = metricsResult.recordset[0];
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_SERVICE_METRICS', 'Retrieved P3 service metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_needing_service: metrics.curves_needing_service,
-      total_curves: metrics.total_curves
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_SERVICE_METRICS',
+      message: 'Retrieved P3 service metrics',
+      target_type: 'CLOUD_DASHBOARD_HKMI',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        curves_needing_service: metrics.curves_needing_service,
+        total_curves: metrics.total_curves
+      })
     });
 
     res.json({
@@ -1336,10 +1392,18 @@ export const getP3Stats = asyncHandler(async (req, res) => {
     const eventBreakdownResult = await request.query(eventBreakdownQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_STATS', 'Retrieved P3 IoT data statistics', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      total_records: stats.total_records,
-      unique_devices: stats.unique_devices
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'P3_DATA_STATS',
+      message: 'Retrieved P3 IoT data statistics',
+      target_type: 'IOT_DATA_P3',
+      target_id: null,
+      details: JSON.stringify({
+        device_ids_filter: deviceIds,
+        total_records: stats.total_records,
+        unique_devices: stats.unique_devices
+      })
     });
 
     res.json({

@@ -18,7 +18,7 @@ export const requirePermission = (requiredPermission) => {
       }
 
       if (!user.role_id) {
-        logSecurity(`Permission check failed - User ${user.id} has no role assigned`);
+        logSecurity(`Permission check failed - User ${user.user_id} has no role assigned`);
         throw new AuthorizationError('User has no role assigned');
       }
 
@@ -26,12 +26,12 @@ export const requirePermission = (requiredPermission) => {
       const hasPermission = await Permission.roleHasPermission(user.role_id, requiredPermission);
 
       if (!hasPermission) {
-        logSecurity(`Permission denied - User ${user.id} (role ${user.role_id}) lacks permission: ${requiredPermission}`);
+        logSecurity(`Permission denied - User ${user.user_id} (role ${user.role_id}) lacks permission: ${requiredPermission}`);
         throw new AuthorizationError(`Insufficient permissions. Required: ${requiredPermission}`);
       }
 
       // Log successful permission check
-      logger.debug(`Permission granted - User ${user.id} has permission: ${requiredPermission}`);
+      logger.debug(`Permission granted - User ${user.user_id} has permission: ${requiredPermission}`);
 
       next();
     } catch (error) {
@@ -61,7 +61,7 @@ export const requireAnyPermission = (requiredPermissions) => {
       }
 
       if (!user.role_id) {
-        logSecurity(`Permission check failed - User ${user.id} has no role assigned`);
+        logSecurity(`Permission check failed - User ${user.user_id} has no role assigned`);
         throw new AuthorizationError('User has no role assigned');
       }
 
@@ -71,13 +71,13 @@ export const requireAnyPermission = (requiredPermissions) => {
         const hasPermission = await Permission.roleHasPermission(user.role_id, permission);
         if (hasPermission) {
           hasAnyPermission = true;
-          logger.debug(`Permission granted - User ${user.id} has permission: ${permission}`);
+          logger.debug(`Permission granted - User ${user.user_id} has permission: ${permission}`);
           break;
         }
       }
 
       if (!hasAnyPermission) {
-        logSecurity(`Permission denied - User ${user.id} (role ${user.role_id}) lacks any of permissions: ${requiredPermissions.join(', ')}`);
+        logSecurity(`Permission denied - User ${user.user_id} (role ${user.role_id}) lacks any of permissions: ${requiredPermissions.join(', ')}`);
         throw new AuthorizationError(`Insufficient permissions. Required any of: ${requiredPermissions.join(', ')}`);
       }
 
@@ -109,7 +109,7 @@ export const requireAllPermissions = (requiredPermissions) => {
       }
 
       if (!user.role_id) {
-        logSecurity(`Permission check failed - User ${user.id} has no role assigned`);
+        logSecurity(`Permission check failed - User ${user.user_id} has no role assigned`);
         throw new AuthorizationError('User has no role assigned');
       }
 
@@ -123,11 +123,11 @@ export const requireAllPermissions = (requiredPermissions) => {
       const missingPermissions = requiredPermissions.filter((permission, index) => !permissionChecks[index]);
 
       if (missingPermissions.length > 0) {
-        logSecurity(`Permission denied - User ${user.id} (role ${user.role_id}) lacks permissions: ${missingPermissions.join(', ')}`);
+        logSecurity(`Permission denied - User ${user.user_id} (role ${user.role_id}) lacks permissions: ${missingPermissions.join(', ')}`);
         throw new AuthorizationError(`Insufficient permissions. Missing: ${missingPermissions.join(', ')}`);
       }
 
-      logger.debug(`All permissions granted - User ${user.id} has permissions: ${requiredPermissions.join(', ')}`);
+      logger.debug(`All permissions granted - User ${user.user_id} has permissions: ${requiredPermissions.join(', ')}`);
       
       next();
     } catch (error) {
@@ -156,7 +156,7 @@ export const requireSystemAdmin = () => {
       }
 
       if (!user.role_id) {
-        logSecurity(`System admin check failed - User ${user.id} has no role assigned`);
+        logSecurity(`System admin check failed - User ${user.user_id} has no role assigned`);
         throw new AuthorizationError('User has no role assigned');
       }
 
@@ -168,11 +168,11 @@ export const requireSystemAdmin = () => {
                            await Permission.roleHasPermission(user.role_id, 'Delete User');
 
       if (!isSystemAdmin) {
-        logSecurity(`System admin check failed - User ${user.id} (role ${user.role_id}) is not system admin`);
+        logSecurity(`System admin check failed - User ${user.user_id} (role ${user.role_id}) is not system admin`);
         throw new AuthorizationError('System administrator access required');
       }
 
-      logger.debug(`System admin access granted - User ${user.id}`);
+      logger.debug(`System admin access granted - User ${user.user_id}`);
       
       next();
     } catch (error) {

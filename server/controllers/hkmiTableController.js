@@ -153,11 +153,19 @@ export const getHKMITableData = asyncHandler(async (req, res) => {
     const dataResult = await request.query(dataQuery);
 
     // Create audit log
-    await createAuditLog(user.id, 'HKMI_TABLE_VIEW', 'Retrieved HKMI table data', 'hkmi_table', null, {
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'HKMI_TABLE_VIEW',
+      message: 'Retrieved HKMI table data',
+      target_type: 'HKMI_TABLE',
+      target_id: null,
+      details: JSON.stringify({
+        search_term: search || null,
+        page: currentPage,
+        limit: pageSize,
+        total_results: totalCount
+      })
     });
 
     res.json({

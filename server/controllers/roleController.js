@@ -29,10 +29,18 @@ export const getAllRoles = asyncHandler(async (req, res) => {
     const totalCount = await Role.getCount(options);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_VIEW', 'Viewed role list', 'role', null, {
-      search,
-      limit: pageSize,
-      page: currentPage
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_VIEW',
+      message: 'Viewed role list',
+      target_type: 'ROLE',
+      target_id: null,
+      details: JSON.stringify({
+        search,
+        limit: pageSize,
+        page: currentPage
+      })
     });
 
     res.json({
@@ -78,7 +86,14 @@ export const getRoleById = asyncHandler(async (req, res) => {
     const permissions = await Permission.getRolePermissions(roleId);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_VIEW', `Viewed role: ${role.role_name}`, 'role', roleId);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_VIEW',
+      message: `Viewed role: ${role.role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId
+    });
 
     res.json({
       success: true,
@@ -139,11 +154,19 @@ export const createRole = asyncHandler(async (req, res) => {
     const rolePermissions = await Permission.getRolePermissions(newRole.role_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_CREATE', `Created role: ${role_name}`, 'role', newRole.role_id, {
-      permission_ids
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'ROLE_CREATE',
+      message: `Created role: ${role_name}`,
+      target_type: 'ROLE',
+      target_id: newRole.role_id,
+      details: JSON.stringify({
+        permission_ids
+      })
     });
 
-    logSecurity(`Role created: ${role_name} by user ${req.user.id}`);
+    logSecurity(`Role created: ${role_name} by user ${req.user.user_id}`);
 
     res.status(201).json({
       success: true,
@@ -191,12 +214,20 @@ export const updateRole = asyncHandler(async (req, res) => {
     const updatedRole = await Role.update(roleId, { role_name });
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_UPDATE', `Updated role: ${existingRole.role_name} to ${role_name}`, 'role', roleId, {
-      old_name: existingRole.role_name,
-      new_name: role_name
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'ROLE_UPDATE',
+      message: `Updated role: ${existingRole.role_name} to ${role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId,
+      details: JSON.stringify({
+        old_name: existingRole.role_name,
+        new_name: role_name
+      })
     });
 
-    logSecurity(`Role updated: ${existingRole.role_name} to ${role_name} by user ${req.user.id}`);
+    logSecurity(`Role updated: ${existingRole.role_name} to ${role_name} by user ${req.user.user_id}`);
 
     res.json({
       success: true,
@@ -243,9 +274,16 @@ export const deleteRole = asyncHandler(async (req, res) => {
     }
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_DELETE', `Deleted role: ${role.role_name}`, 'role', roleId);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'ROLE_DELETE',
+      message: `Deleted role: ${role.role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId
+    });
 
-    logSecurity(`Role deleted: ${role.role_name} by user ${req.user.id}`);
+    logSecurity(`Role deleted: ${role.role_name} by user ${req.user.user_id}`);
 
     res.json({
       success: true,
@@ -279,7 +317,14 @@ export const getRolePermissions = asyncHandler(async (req, res) => {
     const allPermissions = await Permission.findAll();
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_PERMISSION_VIEW', `Viewed permissions for role: ${role.role_name}`, 'role', roleId);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_PERMISSION_VIEW',
+      message: `Viewed permissions for role: ${role.role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId
+    });
 
     res.json({
       success: true,
@@ -339,13 +384,21 @@ export const updateRolePermissions = asyncHandler(async (req, res) => {
     const newPermissions = await Permission.getRolePermissions(roleId);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_PERMISSION_UPDATE', `Updated permissions for role: ${role.role_name}`, 'role', roleId, {
-      old_permissions: oldPermissions.map(p => p.permission_name),
-      new_permissions: newPermissions.map(p => p.permission_name),
-      added_count: newPermissions.length - oldPermissions.length
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'ROLE_PERMISSION_UPDATE',
+      message: `Updated permissions for role: ${role.role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId,
+      details: JSON.stringify({
+        old_permissions: oldPermissions.map(p => p.permission_name),
+        new_permissions: newPermissions.map(p => p.permission_name),
+        added_count: newPermissions.length - oldPermissions.length
+      })
     });
 
-    logSecurity(`Role permissions updated for ${role.role_name} by user ${req.user.id}`);
+    logSecurity(`Role permissions updated for ${role.role_name} by user ${req.user.user_id}`);
 
     res.json({
       success: true,
@@ -382,7 +435,14 @@ export const getRoleUsers = asyncHandler(async (req, res) => {
     const users = await Role.getRoleUsers(roleId);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_USERS_VIEW', `Viewed users for role: ${role.role_name}`, 'role', roleId);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_USERS_VIEW',
+      message: `Viewed users for role: ${role.role_name}`,
+      target_type: 'ROLE',
+      target_id: roleId
+    });
 
     res.json({
       success: true,
@@ -417,7 +477,14 @@ export const getRoleStats = asyncHandler(async (req, res) => {
     const permissionStats = await Permission.getStats();
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_STATS_VIEW', 'Viewed role statistics', 'role', null);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_STATS_VIEW',
+      message: 'Viewed role statistics',
+      target_type: 'ROLE',
+      target_id: null
+    });
 
     res.json({
       success: true,
@@ -472,7 +539,14 @@ export const getPermissionMatrix = asyncHandler(async (req, res) => {
     const matrix = await RolePermission.getPermissionMatrix();
 
     // Create audit log
-    await createAuditLog(req.user.id, 'ROLE_PERMISSION_MATRIX_VIEW', 'Viewed role permission matrix', 'role', null);
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'ROLE_PERMISSION_MATRIX_VIEW',
+      message: 'Viewed role permission matrix',
+      target_type: 'ROLE',
+      target_id: null
+    });
 
     res.json({
       success: true,

@@ -83,19 +83,20 @@ export const saveUserPreference = asyncHandler(async (req, res) => {
       .query(query);
 
     // Create audit log
-    await createAuditLog(
-      user.user_id,
-      'USER_PREFERENCE_SAVE',
-      `User preference ${action}`,
-      'user_preference',
-      null,
-      {
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'USER_PREFERENCE_SAVE',
+      message: `User preference ${action}`,
+      target_type: 'USER_PREFERENCE',
+      target_id: null,
+      details: JSON.stringify({
         preference_name,
         preference_value,
         dashboard_id: dashboard_id || null,
         action
-      }
-    );
+      })
+    });
 
     res.status(200).json({
       success: true,
@@ -186,18 +187,19 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
     console.log('===============================================');
 
     // Create audit log
-    await createAuditLog(
-      user.user_id,
-      'USER_PREFERENCE_VIEW',
-      'Retrieved user preferences',
-      'user_preference',
-      null,
-      {
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DATA_ACCESS',
+      action: 'USER_PREFERENCE_VIEW',
+      message: 'Retrieved user preferences',
+      target_type: 'USER_PREFERENCE',
+      target_id: null,
+      details: JSON.stringify({
         preference_name: preference_name || 'all',
         dashboard_id: dashboard_id || null,
         count: result.recordset.length
-      }
-    );
+      })
+    });
 
     // If a specific preference was requested and found, return just that one
     if (preference_name && result.recordset.length > 0) {
@@ -281,18 +283,19 @@ export const deleteUserPreference = asyncHandler(async (req, res) => {
       .query(query);
 
     // Create audit log
-    await createAuditLog(
-      user.user_id,
-      'USER_PREFERENCE_DELETE',
-      'Deleted user preference',
-      'user_preference',
-      null,
-      {
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'USER_MANAGEMENT',
+      action: 'USER_PREFERENCE_DELETE',
+      message: 'Deleted user preference',
+      target_type: 'USER_PREFERENCE',
+      target_id: null,
+      details: JSON.stringify({
         preference_name,
         dashboard_id: dashboard_id || null,
         rows_affected: result.rowsAffected[0]
-      }
-    );
+      })
+    });
 
     res.json({
       success: true,
