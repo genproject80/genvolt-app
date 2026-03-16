@@ -74,6 +74,7 @@ const corsOptions = {
     // Fallback: check against allowed origins
     const allowedOrigins = [
       process.env.CORS_ORIGIN || 'http://localhost:3008',
+      'https://iot.cloudsynk.net', // Custom domain PROD frontend
       'https://thankful-bay-0638b7700.3.azurestaticapps.net', // DEV frontend
       'https://lively-sand-08d4b6900.3.azurestaticapps.net', // PROD frontend
       'https://gray-sea-04f43a100.4.azurestaticapps.net', // NEW PROD frontend
