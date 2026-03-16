@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: 'genvolt-backend-api-prod'  
-  NODE_VERSION: '18.x'
+  AZURE_WEBAPP_NAME: 'cloudsynk-backend-api-prod'  
+  NODE_VERSION: '22.x'
 
 jobs:
   build-and-deploy:
