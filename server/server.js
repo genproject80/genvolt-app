@@ -76,6 +76,7 @@ const corsOptions = {
       process.env.CORS_ORIGIN || 'http://localhost:3008',
       'https://thankful-bay-0638b7700.3.azurestaticapps.net', // DEV frontend
       'https://lively-sand-08d4b6900.3.azurestaticapps.net', // PROD frontend
+      'https://gray-sea-04f43a100.4.azurestaticapps.net', // NEW PROD frontend
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
@@ -84,7 +85,8 @@ const corsOptions = {
       'http://localhost:3005',
       'http://localhost:3006',
       'http://localhost:3007',
-      'http://localhost:3009'
+      'http://localhost:3009',
+      'https://ayesha-ungainsaid-superinquisitively.ngrok-free.dev' // ngrok frontend
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -164,6 +166,8 @@ app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
+app.use('/api/iot-data/p3', p3DataRoutes);
+app.use('/api/p3-device-details', p3DeviceDetailRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
