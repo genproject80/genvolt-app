@@ -474,18 +474,6 @@ export const getUserPermissions = asyncHandler(async (req, res) => {
     const permissions = await Permission.getRolePermissions(user.role_id);
     const permissionNames = permissions.map(p => p.permission_name);
 
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'PERMISSION_CHECK',
-      action: 'PERMISSIONS_VIEWED',
-      message: 'User viewed their permissions',
-      target_type: 'USER',
-      target_id: user.user_id,
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
-
     res.json({
       success: true,
       message: 'User permissions retrieved successfully',

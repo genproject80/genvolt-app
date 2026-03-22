@@ -65,21 +65,8 @@ export class Client {
         query += ` OFFSET ${offset || 0} ROWS FETCH NEXT ${limit} ROWS ONLY`;
       }
 
-      console.log('=== CLIENT FINDALL QUERY ===');
-      console.log('Query:', query);
 
       const result = await executeQuery(query);
-
-      console.log('Query results count:', result.recordset.length);
-      if (result.recordset.length > 0) {
-        console.log('Sample client with device count:', {
-          client_id: result.recordset[0].client_id,
-          name: result.recordset[0].name,
-          device_count: result.recordset[0].device_count
-        });
-      }
-      console.log('============================');
-
       return result.recordset.map(row => new Client(row));
     } catch (error) {
       logDB('error', 'Failed to find all clients', { error: error.message });

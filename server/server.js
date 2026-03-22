@@ -93,7 +93,7 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin);
+      console.error('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -147,7 +147,6 @@ app.get('/health', async (req, res) => {
 
 // Debug logging for all API requests
 app.use('/api', (req, res, next) => {
-  console.log(`API Request: ${req.method} ${req.originalUrl}`);
   next();
 });
 

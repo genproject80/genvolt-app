@@ -31,14 +31,12 @@ export const UserProvider = ({ children }) => {
 
   const getAllUsers = useCallback(async (options = {}) => {
     try {
-      console.log('👥 UserContext: Fetching users with options:', options);
       setLoading(true);
       setError(null);
 
       const response = await userService.getAllUsers(options);
 
       if (response.success) {
-        console.log('👥 UserContext: Users fetched successfully:', response.data.data?.length, 'users');
         setUsers(response.data.data || []);
         setPagination(response.data.pagination || {});
         return response;
@@ -210,13 +208,11 @@ export const UserProvider = ({ children }) => {
 
   const getUserStats = useCallback(async () => {
     try {
-      console.log('📊 UserContext: Fetching user statistics...');
       setError(null);
 
       const response = await userService.getUserStats();
 
       if (response.success) {
-        console.log('📊 UserContext: User statistics fetched successfully');
         setUserStats(response.data);
         return response.data;
       } else {

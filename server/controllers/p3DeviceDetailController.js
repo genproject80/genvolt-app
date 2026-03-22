@@ -1,9 +1,7 @@
 import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { logger } from '../utils/logger.js';
-import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
-import { validationResult } from 'express-validator';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
  * Get detailed P3 device information for specific IoT entry
@@ -206,21 +204,6 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
       }
     };
 
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'P3_DEVICE_DETAIL_VIEW',
-      message: `Viewed P3 device details for entry ${entryId} (device ${deviceData.Device_ID})`,
-      target_type: 'P3_DEVICE_DETAIL',
-      target_id: entryId,
-      details: JSON.stringify({
-        entry_id: entryId,
-        device_id: deviceData.Device_ID,
-        access_method: 'p3_device_details_api'
-      })
-    });
-
     res.json({
       success: true,
       message: 'P3 device details retrieved successfully',
@@ -387,26 +370,6 @@ export const getP3DeviceHistory = asyncHandler(async (req, res) => {
     `;
 
     const dataResult = await request.query(dataQuery);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'P3_DEVICE_HISTORY_VIEW',
-      message: `Viewed P3 device history for entry ${entryId} (device ${deviceId})`,
-      target_type: 'P3_DEVICE_HISTORY',
-      target_id: entryId,
-      details: JSON.stringify({
-        entry_id: entryId,
-        device_id: deviceId,
-        time_range: timeRange,
-        status_filter: status,
-        search_term: search || null,
-        date_filter: date || null,
-        page: parseInt(page),
-        limit: parseInt(limit)
-      })
-    });
 
     res.json({
       success: true,

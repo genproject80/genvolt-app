@@ -31,14 +31,12 @@ export const DeviceProvider = ({ children }) => {
 
   const getAllDevices = useCallback(async (options = {}) => {
     try {
-      console.log('🔧 DeviceContext: Fetching devices with options:', options);
       setLoading(true);
       setError(null);
 
       const response = await deviceService.getAllDevices(options);
 
       if (response.success) {
-        console.log('🔧 DeviceContext: Devices fetched successfully:', response.data.data?.length, 'devices');
         setDevices(response.data.data || []);
         setPagination(response.data.pagination || {});
         return response;
@@ -47,7 +45,6 @@ export const DeviceProvider = ({ children }) => {
       }
     } catch (err) {
       setError(err.message);
-      console.error('🔧 DeviceContext: Failed to fetch devices:', err);
       throw err;
     } finally {
       setLoading(false);
@@ -212,13 +209,11 @@ export const DeviceProvider = ({ children }) => {
 
   const getDeviceStats = useCallback(async () => {
     try {
-      console.log('📊 DeviceContext: Fetching device statistics...');
       setError(null);
 
       const response = await deviceService.getDeviceStats();
 
       if (response.success) {
-        console.log('📊 DeviceContext: Device statistics fetched successfully');
         setDeviceStats(response.data);
         return response.data;
       } else {

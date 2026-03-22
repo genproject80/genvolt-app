@@ -46,7 +46,6 @@ export class Role {
 
       logDB('Role.findAll', query, params);
       const result = await executeQuery(query, Object.keys(params).length > 0 ? params : undefined);
-      console.log("executed")
       return result.recordset.map(role => new Role(role));
     } catch (error) {
       logger.error('Role.findAll error:', error);

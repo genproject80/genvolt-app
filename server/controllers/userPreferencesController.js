@@ -142,18 +142,6 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
       }
     }
 
-    console.log('=== GET USER PREFERENCES - QUERY PARAMETERS ===');
-    console.log('Request params from frontend:');
-    console.log('  - dashboard_id:', dashboard_id);
-    console.log('  - preference_name:', preference_name);
-    console.log('Logged-in user info:');
-    console.log('  - user.user_id:', user.user_id);
-    console.log('  - user.client_id:', user.client_id);
-    console.log('Resolved client_id for query:', clientId);
-    console.log('Query will use:');
-    console.log('  - userId:', user.user_id);
-    console.log('  - clientId:', clientId);
-    console.log('  - preferenceName:', preference_name);
 
     let query = `
       SELECT
@@ -175,31 +163,8 @@ export const getUserPreferences = asyncHandler(async (req, res) => {
       request.input('preferenceName', sql.NVarChar, preference_name);
     }
 
-    console.log('Executing query:', query);
 
     const result = await request.query(query);
-
-    console.log('Query results:');
-    console.log('  - Records found:', result.recordset.length);
-    if (result.recordset.length > 0) {
-      console.log('  - Preference data:', result.recordset[0]);
-    }
-    console.log('===============================================');
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'USER_PREFERENCE_VIEW',
-      message: 'Retrieved user preferences',
-      target_type: 'USER_PREFERENCE',
-      target_id: null,
-      details: JSON.stringify({
-        preference_name: preference_name || 'all',
-        dashboard_id: dashboard_id || null,
-        count: result.recordset.length
-      })
-    });
 
     // If a specific preference was requested and found, return just that one
     if (preference_name && result.recordset.length > 0) {

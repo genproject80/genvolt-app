@@ -28,7 +28,6 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
   const loadClients = async () => {
     try {
       setLoadingData(true);
-      console.log('🔄 TransferDeviceModal: Loading descendant clients...');
 
       const clientsResponse = await clientService.getDescendantClients();
 
@@ -49,27 +48,21 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
           return;
         }
 
-        console.log('📊 TransferDeviceModal: Raw clients data:', clientsData);
-
         // Filter: Include user's own client (level 0) and all descendants
         // Only exclude the client that currently owns this device (can't transfer to same client)
         let availableClients = clientsData.filter(client => {
           // Filter out the current device owner
           if (device?.client_id && client.client_id === device.client_id) {
-            console.log(`🚫 Excluding current device owner: ${client.name} (ID: ${client.client_id})`);
             return false;
           }
           return true;
         });
 
         setClients(availableClients);
-        console.log('✅ TransferDeviceModal: Available clients for transfer (including user\'s own client):', availableClients);
       } else {
-        console.warn('⚠️ TransferDeviceModal: Failed to load clients:', clientsResponse);
         setError('Failed to load clients data');
       }
     } catch (error) {
-      console.error('❌ TransferDeviceModal: Failed to load descendant clients:', error);
       setError('Failed to load form data. Please try again.');
     } finally {
       setLoadingData(false);

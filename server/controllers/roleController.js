@@ -1,7 +1,7 @@
 import { Role } from '../models/Role.js';
 import { Permission } from '../models/Permission.js';
 import { RolePermission } from '../models/RolePermission.js';
-import { logger, logAuth, logSecurity } from '../utils/logger.js';
+import { logger, logSecurity } from '../utils/logger.js';
 import { asyncHandler, ValidationError, ConflictError, NotFoundError } from '../middleware/errorHandler.js';
 import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
@@ -27,21 +27,6 @@ export const getAllRoles = asyncHandler(async (req, res) => {
 
     const roles = await Role.findAll(options);
     const totalCount = await Role.getCount(options);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_VIEW',
-      message: 'Viewed role list',
-      target_type: 'ROLE',
-      target_id: null,
-      details: JSON.stringify({
-        search,
-        limit: pageSize,
-        page: currentPage
-      })
-    });
 
     res.json({
       success: true,
@@ -84,16 +69,6 @@ export const getRoleById = asyncHandler(async (req, res) => {
 
     // Get role permissions
     const permissions = await Permission.getRolePermissions(roleId);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_VIEW',
-      message: `Viewed role: ${role.role_name}`,
-      target_type: 'ROLE',
-      target_id: roleId
-    });
 
     res.json({
       success: true,
@@ -316,16 +291,6 @@ export const getRolePermissions = asyncHandler(async (req, res) => {
     const permissions = await Permission.getRolePermissions(roleId);
     const allPermissions = await Permission.findAll();
 
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_PERMISSION_VIEW',
-      message: `Viewed permissions for role: ${role.role_name}`,
-      target_type: 'ROLE',
-      target_id: roleId
-    });
-
     res.json({
       success: true,
       message: 'Role permissions retrieved successfully',
@@ -434,16 +399,6 @@ export const getRoleUsers = asyncHandler(async (req, res) => {
 
     const users = await Role.getRoleUsers(roleId);
 
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_USERS_VIEW',
-      message: `Viewed users for role: ${role.role_name}`,
-      target_type: 'ROLE',
-      target_id: roleId
-    });
-
     res.json({
       success: true,
       message: 'Role users retrieved successfully',
@@ -475,16 +430,6 @@ export const getRoleStats = asyncHandler(async (req, res) => {
   try {
     const roleStats = await Role.getStats();
     const permissionStats = await Permission.getStats();
-
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_STATS_VIEW',
-      message: 'Viewed role statistics',
-      target_type: 'ROLE',
-      target_id: null
-    });
 
     res.json({
       success: true,
@@ -537,16 +482,6 @@ export const checkRoleNameAvailability = asyncHandler(async (req, res) => {
 export const getPermissionMatrix = asyncHandler(async (req, res) => {
   try {
     const matrix = await RolePermission.getPermissionMatrix();
-
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'ROLE_PERMISSION_MATRIX_VIEW',
-      message: 'Viewed role permission matrix',
-      target_type: 'ROLE',
-      target_id: null
-    });
 
     res.json({
       success: true,

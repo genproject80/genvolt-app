@@ -84,32 +84,24 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    console.log('🚪 AuthContext: Logout function called');
     try {
       // Call API to invalidate token on server
-      console.log('🚪 AuthContext: Calling authService.logout()...');
       await authService.logout();
-      console.log('🚪 AuthContext: authService.logout() completed');
 
       // Clear state
-      console.log('🚪 AuthContext: Clearing authentication state...');
       setUser(null);
       setIsAuthenticated(false);
 
       // Redirect to login page
-      console.log('🚪 AuthContext: Redirecting to /login...');
       window.location.href = '/login';
 
       return { success: true };
     } catch (error) {
-      console.error('🚪 AuthContext: Logout error:', error);
       // Even if server logout fails, clear local state
-      console.log('🚪 AuthContext: Error occurred, clearing state anyway...');
       setUser(null);
       setIsAuthenticated(false);
 
       // Redirect to login page
-      console.log('🚪 AuthContext: Redirecting to /login after error...');
       window.location.href = '/login';
 
       return { success: true };

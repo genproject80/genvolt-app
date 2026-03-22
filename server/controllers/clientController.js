@@ -26,21 +26,6 @@ export const getAllClients = asyncHandler(async (req, res) => {
     const clients = await Client.findAll(options);
     const totalCount = await Client.getCount(options);
 
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'CLIENT_VIEW',
-      message: 'Viewed client list',
-      target_type: 'CLIENT',
-      target_id: null,
-      details: JSON.stringify({
-        includeInactive: options.includeInactive,
-        limit: pageSize,
-        page: currentPage
-      })
-    });
-
     res.json({
       success: true,
       message: 'Clients retrieved successfully',
@@ -74,19 +59,6 @@ export const getClientById = asyncHandler(async (req, res) => {
   if (!client) {
     throw new NotFoundError('Client not found');
   }
-
-  // Create audit log
-  await createAuditLog({
-    user_id: req.user.user_id,
-    activity_type: 'DATA_ACCESS',
-    action: 'CLIENT_VIEW',
-    message: 'Viewed client details',
-    target_type: 'CLIENT',
-    target_id: client.client_id,
-    details: JSON.stringify({
-      clientName: client.name
-    })
-  });
 
   res.json({
     success: true,
@@ -454,17 +426,6 @@ export const getClientStats = asyncHandler(async (req, res) => {
       totalDevices,
       avgDevicesPerClient
     };
-
-    // Create audit log
-    await createAuditLog({
-      user_id: req.user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'CLIENT_STATS',
-      message: 'Viewed client statistics',
-      target_type: 'CLIENT',
-      target_id: null,
-      details: JSON.stringify(stats)
-    });
 
     res.json({
       success: true,

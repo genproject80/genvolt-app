@@ -77,7 +77,6 @@ const DeviceDetailPage = () => {
   };
 
   const handleHistoryFiltersChange = (newFilters) => {
-    console.log('DeviceDetailPage: handleHistoryFiltersChange called with:', newFilters);
     updateHistoryFilters(newFilters);
   };
 

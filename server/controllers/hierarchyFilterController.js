@@ -50,21 +50,6 @@ export const getOverallManagers = asyncHandler(async (req, res) => {
     const result = await pool.request()
       .query(query);
 
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'HIERARCHY_FILTER_VIEW',
-      message: 'Retrieved Overall Managers (SDEN)',
-      target_type: 'HIERARCHY_FILTER',
-      target_id: null,
-      details: JSON.stringify({
-        filter_type: 'sden',
-        count: result.recordset.length,
-        dashboard_id: dashboard_id || null
-      })
-    });
-
     res.json({
       success: true,
       message: 'Overall Managers retrieved successfully',
@@ -110,21 +95,6 @@ export const getLevel2Managers = asyncHandler(async (req, res) => {
     query += ` ORDER BY h.den`;
 
     const result = await request.query(query);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'HIERARCHY_FILTER_VIEW',
-      message: 'Retrieved Level 2 Managers (DEN)',
-      target_type: 'HIERARCHY_FILTER',
-      target_id: null,
-      details: JSON.stringify({
-        filter_type: 'den',
-        parent_filter: sden || null,
-        count: result.recordset.length
-      })
-    });
 
     res.json({
       success: true,
@@ -177,21 +147,6 @@ export const getLevel3Managers = asyncHandler(async (req, res) => {
     query += ` ORDER BY h.aen`;
 
     const result = await request.query(query);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'HIERARCHY_FILTER_VIEW',
-      message: 'Retrieved Level 3 Managers (AEN)',
-      target_type: 'HIERARCHY_FILTER',
-      target_id: null,
-      details: JSON.stringify({
-        filter_type: 'aen',
-        parent_filters: { sden: sden || null, den: den || null },
-        count: result.recordset.length
-      })
-    });
 
     res.json({
       success: true,
@@ -249,21 +204,6 @@ export const getLevel4Managers = asyncHandler(async (req, res) => {
     query += ` ORDER BY h.sse`;
 
     const result = await request.query(query);
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'HIERARCHY_FILTER_VIEW',
-      message: 'Retrieved Level 4 Managers (SSE)',
-      target_type: 'HIERARCHY_FILTER',
-      target_id: null,
-      details: JSON.stringify({
-        filter_type: 'sse',
-        parent_filters: { sden: sden || null, den: den || null, aen: aen || null },
-        count: result.recordset.length
-      })
-    });
 
     res.json({
       success: true,
@@ -423,11 +363,6 @@ export const applyHierarchyFilters = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(parseInt(dashboardClientId));
     const allClientIds = [parseInt(dashboardClientId), ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== HIERARCHY FILTER - CLIENT HIERARCHY ===');
-    console.log('Dashboard client_id:', dashboardClientId);
-    console.log('Descendant clients (children):', descendantClients.map(c => c.client_id));
-    console.log('All client IDs (self + children):', allClientIds);
-    console.log('==========================================');
 
     let query = `
       SELECT

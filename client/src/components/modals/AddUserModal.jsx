@@ -52,17 +52,12 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const loadRolesAndClients = async () => {
     try {
       setLoadingData(true);
-      console.log('🔄 AddUserModal: Loading roles and clients...');
 
       // Load roles and hierarchical clients (descendants only)
       const [rolesResponse, clientsResponse] = await Promise.all([
         roleService.getAllRoles({ limit: 100 }),
         clientService.getDescendantClients() // Fetch only user's client and descendants
       ]);
-
-      console.log('📊 AddUserModal: Roles response:', rolesResponse);
-      console.log('📊 AddUserModal: Clients response (hierarchical):', clientsResponse);
-
 
       if (rolesResponse && rolesResponse.success) {
         // Extract the actual roles array from the response
@@ -79,9 +74,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         }
 
         setRoles(rolesData);
-        console.log('✅ AddUserModal: Loaded roles:', rolesData);
       } else {
-        console.warn('⚠️ AddUserModal: Failed to load roles:', rolesResponse);
         setErrors({ submit: 'Failed to load roles data' });
       }
 
@@ -100,16 +93,12 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         }
 
         setClients(clientsData);
-        console.log('✅ AddUserModal: Loaded clients:', clientsData);
       } else {
-        console.warn('⚠️ AddUserModal: Failed to load clients:', clientsResponse);
         setErrors({ submit: 'Failed to load clients data' });
       }
     } catch (error) {
-      console.error('❌ AddUserModal: Failed to load roles and clients:', error);
       setErrors({ submit: 'Failed to load form data. Please try again.' });
     } finally {
-      console.log('🏁 AddUserModal: Loading complete, setting loadingData to false');
       setLoadingData(false);
     }
   };

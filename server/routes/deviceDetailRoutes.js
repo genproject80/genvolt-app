@@ -7,8 +7,6 @@ const router = express.Router();
 
 // Debug logging for all device detail routes
 router.use((req, res, next) => {
-  console.log(`Device Detail Route Hit: ${req.method} ${req.originalUrl}`);
-  console.log(`Route params:`, req.params);
   next();
 });
 

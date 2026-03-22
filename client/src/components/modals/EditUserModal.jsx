@@ -194,15 +194,11 @@ const EditUserModal = ({ isOpen, onClose, user, onSuccess }) => {
         throw new Error('Invalid client selected');
       }
 
-      console.log('📝 EditUserModal: Sending update data:', updateData);
       await updateUser(user.user_id, updateData);
       setErrors({});
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('❌ EditUserModal: Failed to update user:', error);
-      console.error('❌ EditUserModal: Error details:', error.response?.data);
-      console.error('❌ EditUserModal: Status code:', error.response?.status);
 
       // Extract error message from server response
       let errorMessage = 'Failed to update user';

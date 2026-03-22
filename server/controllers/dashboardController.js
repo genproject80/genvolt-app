@@ -29,11 +29,6 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== DASHBOARD FETCHING - CLIENT HIERARCHY ===');
-    console.log('User client_id:', user.client_id);
-    console.log('Descendant clients:', descendantClients.map(c => ({ id: c.client_id, name: c.name, level: c.level })));
-    console.log('All client IDs (self + all descendants):', allClientIds);
-    console.log('=============================================');
 
     // STEP 2: Get dashboards for all these clients
     const query = `
@@ -56,24 +51,6 @@ export const getUserDashboards = asyncHandler(async (req, res) => {
     const result = await pool.request()
       .query(query);
 
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'DASHBOARD_VIEW',
-      message: 'Viewed dashboard list',
-      target_type: 'DASHBOARD',
-      target_id: null,
-      details: JSON.stringify({
-        client_id: user.client_id,
-        descendant_count: descendantClients.length,
-        total_clients_included: allClientIds.length,
-        dashboards_count: result.recordset.length
-      })
-    });
-
-    console.log('Dashboards found:', result.recordset.length);
-    console.log('Dashboard details:', result.recordset.map(d => ({ id: d.id, name: d.display_name, client_id: d.client_id, client_name: d.client_name })));
 
     res.json({
       success: true,
@@ -143,20 +120,6 @@ export const getDashboardById = asyncHandler(async (req, res) => {
     }
 
     const dashboard = result.recordset[0];
-
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'DATA_ACCESS',
-      action: 'DASHBOARD_VIEW',
-      message: 'Viewed dashboard details',
-      target_type: 'DASHBOARD',
-      target_id: id,
-      details: JSON.stringify({
-        dashboard_name: dashboard.name,
-        client_id: dashboard.client_id
-      })
-    });
 
     res.json({
       success: true,

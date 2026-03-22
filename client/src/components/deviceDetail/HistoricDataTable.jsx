@@ -13,14 +13,12 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
   // Sync local filters with prop filters when they change
   useEffect(() => {
     if (filters) {
-      console.log('Syncing localFilters with prop filters:', filters);
       setLocalFilters(filters);
     }
   }, [filters]);
 
   const handleFilterChange = useCallback((key, value) => {
     const newFilters = { ...localFilters, [key]: value };
-    console.log('Filter changed:', key, value, 'New filters:', newFilters);
     setLocalFilters(newFilters);
     if (onFiltersChange) {
       onFiltersChange(newFilters);

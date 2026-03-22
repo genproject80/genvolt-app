@@ -71,10 +71,6 @@ export const DashboardProvider = ({ children }) => {
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
       const token = localStorage.getItem('accessToken');
-
-      console.log('Making request to:', `${API_BASE}${url}`);
-      console.log('Token available:', !!token);
-
       const response = await fetch(`${API_BASE}${url}`, {
         ...options,
         headers: {
@@ -84,12 +80,9 @@ export const DashboardProvider = ({ children }) => {
         },
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('Error response:', errorText);
 
         let errorData;
         try {
@@ -102,10 +95,8 @@ export const DashboardProvider = ({ children }) => {
       }
 
       const responseData = await response.json();
-      console.log('Response data:', responseData);
       return responseData;
     } catch (error) {
-      console.error('API request failed:', error);
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
         throw new Error('Unable to connect to server. Please check if the server is running on port 5001.');
       }
@@ -548,19 +539,13 @@ export const DashboardProvider = ({ children }) => {
         try {
           const savedPreferences = await loadUserPreference('filter_preferences');
 
-          console.log('Raw saved preferences from API:', savedPreferences);
-
           // Check if any filter values are actually set (not null/undefined/empty string)
           const hasActiveFilters = savedPreferences &&
             Object.values(savedPreferences).some(value =>
               value !== null && value !== undefined && value !== ''
             );
 
-          console.log('Has active filters:', hasActiveFilters);
-
           if (hasActiveFilters) {
-            console.log('Loading saved filter preferences:', savedPreferences);
-
             // Set the filters
             setHierarchyFilters(savedPreferences);
 
@@ -568,7 +553,6 @@ export const DashboardProvider = ({ children }) => {
             await applyFilters(savedPreferences);
           } else {
             // No saved preferences or all values are null/empty, clear filters and fetch all devices
-            console.log('No active filters found, showing all data');
             setHierarchyFilters({
               sden: null,
               den: null,

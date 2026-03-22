@@ -114,18 +114,6 @@ export const getDevices = asyncHandler(async (req, res) => {
 
   const devices = await Device.findAll(filters, options);
 
-  // Log device access
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.DEVICE_MANAGEMENT,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: 'Devices list accessed',
-    target_type: TARGET_TYPES.DEVICE,
-    details: JSON.stringify({ page, limit, search, sortBy, sortOrder }),
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
-
   res.json({
     success: true,
     data: devices
@@ -150,18 +138,6 @@ export const getDeviceById = asyncHandler(async (req, res) => {
   if (!(await canAccessDevice(currentUser, device))) {
     throw new AuthorizationError('Access denied to this device');
   }
-
-  // Log device access
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.DEVICE_MANAGEMENT,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: `Device accessed: ${device.device_id}`,
-    target_type: TARGET_TYPES.DEVICE,
-    target_id: device.id,
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
 
   res.json({
     success: true,
@@ -573,18 +549,6 @@ export const getDeviceTransferHistory = asyncHandler(async (req, res) => {
 
   const history = await Device.getTransferHistory(device.id);
 
-  // Log access to transfer history
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.DATA_ACCESS,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: `Device transfer history accessed: ${device.device_id}`,
-    target_type: TARGET_TYPES.DEVICE,
-    target_id: device.id,
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
-
   res.json({
     success: true,
     data: {
@@ -619,17 +583,6 @@ export const getDeviceStats = asyncHandler(async (req, res) => {
   }
 
   const stats = await Device.getStatistics(clientFilter);
-
-  // Create audit log
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.DATA_ACCESS,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: 'Device statistics accessed',
-    target_type: TARGET_TYPES.SYSTEM,
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
 
   res.json({
     success: true,
