@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, ArrowsRightLeftIcon, CheckCircleIcon, NoSymbolIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useDevice } from '../../context/DeviceContext';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,8 @@ import EditDeviceModal from '../../components/modals/EditDeviceModal';
 import DeleteDeviceModal from '../../components/modals/DeleteDeviceModal';
 import TransferDeviceModal from '../../components/modals/TransferDeviceModal';
 import DeviceDetailsModal from '../../components/modals/DeviceDetailsModal';
+import ActivateDeviceModal from '../../components/modals/ActivateDeviceModal';
+import DeactivateDeviceModal from '../../components/modals/DeactivateDeviceModal';
 
 const DeviceManagement = () => {
   const {
@@ -20,6 +22,8 @@ const DeviceManagement = () => {
     pagination,
     getAllDevices,
     getDeviceStats,
+    getPendingDevices,
+    reactivateDevice,
     clearError
   } = useDevice();
 
@@ -40,11 +44,16 @@ const DeviceManagement = () => {
   const [clients, setClients] = useState([]); // New state for clients list
   const [loadingClients, setLoadingClients] = useState(false); // New state for loading clients
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending'
+  const [pendingDevices, setPendingDevices] = useState([]);
+  const [loadingPending, setLoadingPending] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState(null);
 
   // Ref to prevent multiple concurrent API calls
@@ -178,6 +187,27 @@ const DeviceManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess]);
 
+  // Load pending devices
+  const loadPendingDevices = useCallback(async () => {
+    try {
+      setLoadingPending(true);
+      const data = await getPendingDevices();
+      setPendingDevices(data?.devices || data || []);
+    } catch (err) {
+      console.error('Failed to load pending devices:', err);
+    } finally {
+      setLoadingPending(false);
+    }
+  }, [getPendingDevices]);
+
+  // Switch tab
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'pending') {
+      loadPendingDevices();
+    }
+  };
+
   // Handle Show Device button click
   const handleShowDevices = () => {
     setCurrentPage(1); // Reset to first page
@@ -224,6 +254,30 @@ const DeviceManagement = () => {
     }
   };
 
+  const handleActivateDevice = (device) => {
+    if (canOnboardDevice) {
+      setSelectedDevice(device);
+      setShowActivateModal(true);
+    }
+  };
+
+  const handleDeactivateDevice = (device) => {
+    if (canEditDevice) {
+      setSelectedDevice(device);
+      setShowDeactivateModal(true);
+    }
+  };
+
+  const handleReactivateDevice = async (device) => {
+    if (!canEditDevice) return;
+    try {
+      await reactivateDevice(device.device_id);
+      loadDevices();
+    } catch (err) {
+      console.error('Reactivate failed:', err);
+    }
+  };
+
   const handleViewDetails = (device) => {
     setSelectedDevice(device);
     setShowDetailsModal(true);
@@ -233,6 +287,20 @@ const DeviceManagement = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const ActivationBadge = ({ status }) => {
+    if (!status) return <span className="text-xs text-gray-400">—</span>;
+    const styles = {
+      PENDING:  'bg-yellow-100 text-yellow-800',
+      ACTIVE:   'bg-green-100 text-green-800',
+      INACTIVE: 'bg-red-100 text-red-800',
+    };
+    return (
+      <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${styles[status] || 'bg-gray-100 text-gray-700'}`}>
+        {status}
+      </span>
+    );
   };
 
   // Permission check for entire page access
@@ -271,6 +339,39 @@ const DeviceManagement = () => {
         )}
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-6">
+          <button
+            onClick={() => handleTabChange('all')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'all'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            All Devices
+          </button>
+          {canOnboardDevice && (
+            <button
+              onClick={() => handleTabChange('pending')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center space-x-1.5 ${
+                activeTab === 'pending'
+                  ? 'border-yellow-500 text-yellow-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span>Pending Activation</span>
+              {pendingDevices.length > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-yellow-100 text-yellow-800 rounded-full">
+                  {pendingDevices.length}
+                </span>
+              )}
+            </button>
+          )}
+        </nav>
+      </div>
+
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -289,6 +390,74 @@ const DeviceManagement = () => {
           </div>
         </div>
       )}
+
+      {/* ── Pending Devices Tab ── */}
+      {activeTab === 'pending' && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">Devices awaiting activation</h3>
+            <button
+              onClick={loadPendingDevices}
+              disabled={loadingPending}
+              className="flex items-center text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50"
+            >
+              <ArrowPathIcon className={`w-4 h-4 mr-1 ${loadingPending ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MAC Address</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Firmware</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Seen</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loadingPending ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center">
+                    <LoadingSpinner />
+                  </td>
+                </tr>
+              ) : pendingDevices.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 text-sm">
+                    No pending devices
+                  </td>
+                </tr>
+              ) : (
+                pendingDevices.map((device) => (
+                  <tr key={device.device_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{device.device_id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{device.device_type || '—'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">{device.mac_address || '—'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{device.firmware_version || '—'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(device.first_seen)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {canOnboardDevice && (
+                        <button
+                          onClick={() => handleActivateDevice(device)}
+                          className="flex items-center px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <CheckCircleIcon className="w-3.5 h-3.5 mr-1" />
+                          Activate
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── All Devices Tab ── */}
+      {activeTab === 'all' && <>
 
       {/* Statistics Cards */}
       {deviceStats && deviceStats.summary && (
@@ -388,6 +557,9 @@ const DeviceManagement = () => {
                 Client
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Onboarding Date
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -398,7 +570,7 @@ const DeviceManagement = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {devices.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                   {loading ? 'Loading devices...' : 'No devices found'}
                 </td>
               </tr>
@@ -433,6 +605,9 @@ const DeviceManagement = () => {
                     ) : (
                       <span className="text-xs text-gray-400">No Client</span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <ActivationBadge status={device.activation_status} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(device.onboarding_date)}
@@ -474,6 +649,33 @@ const DeviceManagement = () => {
                           title="Delete Device"
                         >
                           <TrashIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canOnboardDevice && device.activation_status === 'PENDING' && (
+                        <button
+                          onClick={() => handleActivateDevice(device)}
+                          className="text-green-600 hover:text-green-900 cursor-pointer"
+                          title="Activate Device"
+                        >
+                          <CheckCircleIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canEditDevice && device.activation_status === 'ACTIVE' && (
+                        <button
+                          onClick={() => handleDeactivateDevice(device)}
+                          className="text-amber-600 hover:text-amber-900 cursor-pointer"
+                          title="Deactivate Device"
+                        >
+                          <NoSymbolIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canEditDevice && device.activation_status === 'INACTIVE' && (
+                        <button
+                          onClick={() => handleReactivateDevice(device)}
+                          className="text-blue-600 hover:text-blue-900 cursor-pointer"
+                          title="Reactivate Device"
+                        >
+                          <ArrowPathIcon className="w-4 h-4" />
                         </button>
                       )}
                       {!canEditDevice && !canRemoveDevice && !canTransferDevice && (
@@ -523,6 +725,8 @@ const DeviceManagement = () => {
           </div>
         </div>
       )}
+
+      </> /* end activeTab === 'all' */}
 
       {/* Modals */}
       <AddDeviceModal
@@ -580,6 +784,29 @@ const DeviceManagement = () => {
           setSelectedDevice(null);
         }}
         device={selectedDevice}
+      />
+
+      <ActivateDeviceModal
+        isOpen={showActivateModal}
+        onClose={() => {
+          setShowActivateModal(false);
+          setSelectedDevice(null);
+        }}
+        device={selectedDevice}
+        onSuccess={() => {
+          loadDevices();
+          if (activeTab === 'pending') loadPendingDevices();
+        }}
+      />
+
+      <DeactivateDeviceModal
+        isOpen={showDeactivateModal}
+        onClose={() => {
+          setShowDeactivateModal(false);
+          setSelectedDevice(null);
+        }}
+        device={selectedDevice}
+        onSuccess={() => loadDevices()}
       />
     </div>
   );

@@ -4,6 +4,11 @@ import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError, NotFoundError, AuthorizationError, ConflictError } from '../middleware/errorHandler.js';
 import { createAuditLog, ACTIVITY_TYPES, AUDIT_ACTIONS, TARGET_TYPES } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
+import sql from 'mssql';
+import { getPool } from '../config/database.js';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import mqttService from '../services/mqttService.js';
 
 /**
  * Helper function to check if current user can access target device
@@ -598,5 +603,231 @@ export default {
   deleteDevice,
   transferDevice,
   getDeviceTransferHistory,
-  getDeviceStats
+  getDeviceStats,
 };
+
+// =============================================================================
+// DEVICE LIFECYCLE — MQTT activation flow
+// =============================================================================
+
+/**
+ * GET /api/devices/pending
+ * List all devices that have self-registered via the pre-activation topic
+ * but have not yet been assigned to a client.
+ */
+export const getPendingDevices = asyncHandler(async (req, res) => {
+  const pool = await getPool();
+
+  const result = await pool.request().query(`
+    SELECT
+      id,
+      device_id,
+      device_type,
+      firmware_version,
+      mac_address,
+      first_seen,
+      last_seen
+    FROM device
+    WHERE activation_status = 'PENDING'
+    ORDER BY last_seen DESC
+  `);
+
+  res.json({
+    success: true,
+    data: result.recordset,
+    meta: { total: result.recordset.length },
+  });
+});
+
+/**
+ * POST /api/devices/:deviceId/activate
+ * Assign a PENDING device to a client and activate it.
+ * Generates MQTT credentials and pushes an activation payload to the device.
+ * Body: { client_id, initial_config? }
+ */
+export const activateDevice = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const { client_id, initial_config } = req.body;
+
+  if (!client_id) throw new ValidationError('client_id is required');
+  const parsedClientId = parseInt(client_id, 10);
+  if (isNaN(parsedClientId) || parsedClientId < 1)
+    throw new ValidationError('client_id must be a positive integer');
+
+  const pool = await getPool();
+
+  // Check device exists and is PENDING
+  const check = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT id, activation_status FROM device WHERE device_id = @deviceId`);
+
+  if (check.recordset.length === 0) throw new NotFoundError('Device not found');
+  if (check.recordset[0].activation_status !== 'PENDING') {
+    throw new ValidationError(`Device is already ${check.recordset[0].activation_status}`);
+  }
+
+  // Generate MQTT credentials
+  const mqttPassword = crypto.randomBytes(16).toString('hex'); // plain — sent once to device
+  const mqttPasswordHash = await bcrypt.hash(mqttPassword, 10);
+
+  const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
+
+  await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .input('clientId', sql.Int, parsedClientId)
+    .input('mqttPassword', sql.NVarChar, mqttPasswordHash)
+    .input('activatedBy', sql.Int, req.user.user_id)
+    .query(`
+      UPDATE device
+      SET activation_status = 'ACTIVE',
+          client_id         = @clientId,
+          mqtt_password     = @mqttPassword,
+          mqtt_username     = device_id,
+          activated_at      = GETUTCDATE(),
+          activated_by      = @activatedBy,
+          last_seen         = GETUTCDATE()
+      WHERE device_id = @deviceId AND activation_status = 'PENDING'
+    `);
+
+  // Push activation payload to device (retained — device gets it on next connect)
+  try {
+    await mqttService.publishActivationPayload(deviceId, parsedClientId, mqttPassword, config);
+    // Seed the device's config topic with a retained initial config so the device
+    // receives it immediately when it subscribes after reconnecting as ACTIVE.
+    await mqttService.pushConfigUpdate(parsedClientId, deviceId, config, true);
+  } catch (mqttErr) {
+    logger.error('Activation MQTT publish failed (device will re-register on next boot):', mqttErr.message);
+  }
+
+  await createAuditLog({
+    user_id: req.user.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action: 'DEVICE_ACTIVATE',
+    message: `Device ${deviceId} activated and assigned to client ${parsedClientId}`,
+    target_type: 'DEVICE',
+    target_id: deviceId,
+    details: JSON.stringify({ client_id: parsedClientId, config }),
+  });
+
+  res.json({
+    success: true,
+    message: 'Device activated successfully',
+    data: { device_id: deviceId, client_id: parsedClientId, activation_status: 'ACTIVE' },
+  });
+});
+
+/**
+ * POST /api/devices/:deviceId/deactivate
+ * Deactivate an ACTIVE device. Sends a deactivation notice via MQTT first.
+ * Body: { reason? }
+ */
+export const deactivateDevice = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const { reason = 'admin_action' } = req.body;
+
+  const pool = await getPool();
+
+  const check = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT client_id, activation_status FROM device WHERE device_id = @deviceId`);
+
+  if (check.recordset.length === 0) throw new NotFoundError('Device not found');
+  if (check.recordset[0].activation_status !== 'ACTIVE') {
+    throw new ValidationError(`Device is not ACTIVE (current: ${check.recordset[0].activation_status})`);
+  }
+
+  const { client_id } = check.recordset[0];
+
+  // Notify device before cutting access
+  try {
+    await mqttService.publishDeactivationNotice(client_id, deviceId, reason);
+  } catch (mqttErr) {
+    logger.error('Deactivation notice MQTT publish failed:', mqttErr.message);
+  }
+
+  await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .input('deactivatedBy', sql.Int, req.user.user_id)
+    .query(`
+      UPDATE device
+      SET activation_status = 'INACTIVE',
+          deactivated_at    = GETUTCDATE(),
+          deactivated_by    = @deactivatedBy,
+          mqtt_password     = NULL
+      WHERE device_id = @deviceId
+    `);
+
+  await createAuditLog({
+    user_id: req.user.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action: 'DEVICE_DEACTIVATE',
+    message: `Device ${deviceId} deactivated`,
+    target_type: 'DEVICE',
+    target_id: deviceId,
+    details: JSON.stringify({ reason }),
+  });
+
+  res.json({ success: true, message: 'Device deactivated successfully' });
+});
+
+/**
+ * POST /api/devices/:deviceId/reactivate
+ * Re-activate an INACTIVE device (generates fresh credentials).
+ * Body: { initial_config? }
+ */
+export const reactivateDevice = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const { initial_config } = req.body;
+
+  const pool = await getPool();
+
+  const check = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT id, client_id, activation_status FROM device WHERE device_id = @deviceId`);
+
+  if (check.recordset.length === 0) throw new NotFoundError('Device not found');
+  if (check.recordset[0].activation_status !== 'INACTIVE') {
+    throw new ValidationError(`Device is not INACTIVE (current: ${check.recordset[0].activation_status})`);
+  }
+
+  const { client_id } = check.recordset[0];
+  const mqttPassword = crypto.randomBytes(16).toString('hex');
+  const mqttPasswordHash = await bcrypt.hash(mqttPassword, 10);
+  const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
+
+  await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .input('mqttPassword', sql.NVarChar, mqttPasswordHash)
+    .input('activatedBy', sql.Int, req.user.user_id)
+    .query(`
+      UPDATE device
+      SET activation_status = 'ACTIVE',
+          mqtt_password     = @mqttPassword,
+          mqtt_username     = device_id,
+          activated_at      = GETUTCDATE(),
+          activated_by      = @activatedBy,
+          deactivated_at    = NULL,
+          deactivated_by    = NULL
+      WHERE device_id = @deviceId
+    `);
+
+  try {
+    await mqttService.publishActivationPayload(deviceId, client_id, mqttPassword, config);
+    // Seed the device's config topic with a retained initial config.
+    await mqttService.pushConfigUpdate(client_id, deviceId, config, true);
+  } catch (mqttErr) {
+    logger.error('Reactivation MQTT publish failed:', mqttErr.message);
+  }
+
+  await createAuditLog({
+    user_id: req.user.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action: 'DEVICE_REACTIVATE',
+    message: `Device ${deviceId} reactivated`,
+    target_type: 'DEVICE',
+    target_id: deviceId,
+    details: JSON.stringify({ config }),
+  });
+
+  res.json({ success: true, message: 'Device reactivated successfully' });
+});

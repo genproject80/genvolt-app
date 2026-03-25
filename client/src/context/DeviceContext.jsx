@@ -207,6 +207,81 @@ export const DeviceProvider = ({ children }) => {
     }
   }, []);
 
+  const getPendingDevices = useCallback(async () => {
+    try {
+      setError(null);
+      const response = await deviceService.getPendingDevices();
+      if (response.success) {
+        return response.data;
+      } else {
+        throw new Error(response.message || 'Failed to fetch pending devices');
+      }
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const activateDevice = useCallback(async (deviceId, data) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await deviceService.activateDevice(deviceId, data);
+      if (response.success) {
+        setDevices(prev => prev.map(d => d.device_id === deviceId ? { ...d, activation_status: 'ACTIVE' } : d));
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to activate device');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to activate device';
+      setError(msg);
+      const e = new Error(msg); e.response = err.response; throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const deactivateDevice = useCallback(async (deviceId, data) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await deviceService.deactivateDevice(deviceId, data);
+      if (response.success) {
+        setDevices(prev => prev.map(d => d.device_id === deviceId ? { ...d, activation_status: 'INACTIVE' } : d));
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to deactivate device');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to deactivate device';
+      setError(msg);
+      const e = new Error(msg); e.response = err.response; throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reactivateDevice = useCallback(async (deviceId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await deviceService.reactivateDevice(deviceId);
+      if (response.success) {
+        setDevices(prev => prev.map(d => d.device_id === deviceId ? { ...d, activation_status: 'ACTIVE' } : d));
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to reactivate device');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to reactivate device';
+      setError(msg);
+      const e = new Error(msg); e.response = err.response; throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const getDeviceStats = useCallback(async () => {
     try {
       setError(null);
@@ -243,6 +318,10 @@ export const DeviceProvider = ({ children }) => {
     transferDevice,
     getDeviceTransferHistory,
     getDeviceStats,
+    getPendingDevices,
+    activateDevice,
+    deactivateDevice,
+    reactivateDevice,
     clearError
   };
 

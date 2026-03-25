@@ -14,6 +14,7 @@ import morgan from 'morgan';
 import { connectDB } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import mqttService from './services/mqttService.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -30,6 +31,7 @@ import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
 import p3DataRoutes from './routes/p3DataRoutes.js';
 import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
+import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -87,7 +89,9 @@ const corsOptions = {
       'http://localhost:3006',
       'http://localhost:3007',
       'http://localhost:3009',
-      'https://ayesha-ungainsaid-superinquisitively.ngrok-free.dev' // ngrok frontend
+      ...(process.env.CORS_EXTRA_ORIGINS
+        ? process.env.CORS_EXTRA_ORIGINS.split(',').map(s => s.trim())
+        : []),
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -106,8 +110,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(compression());
 app.use(cookieParser());
-// Temporarily disable rate limiting for debugging
-// app.use(limiter);
+app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -168,6 +171,8 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
 app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/p3-device-details', p3DeviceDetailRoutes);
+// MQTT hooks — called by EMQX broker, no JWT auth
+app.use('/api', mqttAuthRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -203,11 +208,13 @@ app.use(errorHandler);
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
+  mqttService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received. Shutting down gracefully...');
+  mqttService.disconnect();
   process.exit(0);
 });
 
@@ -223,7 +230,10 @@ const startServer = async () => {
       logger.warn('⚠️  Please check your database configuration in .env file');
       logger.warn('⚠️  Authentication endpoints will not work until database is connected');
     }
-    
+
+    // Connect to MQTT broker (non-blocking — server starts even if MQTT is unavailable)
+    mqttService.connect();
+
     app.listen(PORT, () => {
       logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
       logger.info(`📊 Health check: http://localhost:${PORT}/health`);

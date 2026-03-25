@@ -174,6 +174,46 @@ export const deviceService = {
       console.error(`🔧 DeviceService: Failed to fetch transfer history for device ${deviceId}:`, error);
       throw error;
     }
+  },
+
+  async getPendingDevices() {
+    try {
+      const response = await api.get('/devices/pending');
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to fetch pending devices:', error);
+      throw error;
+    }
+  },
+
+  async activateDevice(deviceId, data) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/activate`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to activate device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async deactivateDevice(deviceId, data) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/deactivate`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to deactivate device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async reactivateDevice(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/reactivate`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to reactivate device ${deviceId}:`, error);
+      throw error;
+    }
   }
 };
 

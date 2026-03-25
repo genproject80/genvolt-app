@@ -7,6 +7,7 @@ import {
   updateDeviceValidation,
   transferDeviceValidation,
   validateDeviceId,
+  validateDeviceStringId,
   validateDeviceFilters
 } from '../middleware/deviceValidation.js';
 import {
@@ -17,7 +18,11 @@ import {
   deleteDevice,
   transferDevice,
   getDeviceTransferHistory,
-  getDeviceStats
+  getDeviceStats,
+  getPendingDevices,
+  activateDevice,
+  deactivateDevice,
+  reactivateDevice,
 } from '../controllers/deviceController.js';
 
 const router = express.Router();
@@ -32,6 +37,47 @@ router.use(authenticate);
 router.get('/stats',
   requirePermission('View Device'),
   getDeviceStats
+);
+
+/**
+ * GET /api/devices/pending
+ * List PENDING devices waiting for admin activation
+ */
+router.get('/pending',
+  requirePermission('Onboard Device'),
+  getPendingDevices
+);
+
+/**
+ * POST /api/devices/:deviceId/activate
+ * Assign PENDING device to a client and activate it
+ * Body: { client_id, initial_config? }
+ */
+router.post('/:deviceId/activate',
+  requirePermission('Onboard Device'),
+  validateDeviceStringId,
+  activateDevice
+);
+
+/**
+ * POST /api/devices/:deviceId/deactivate
+ * Deactivate an ACTIVE device
+ * Body: { reason? }
+ */
+router.post('/:deviceId/deactivate',
+  requirePermission('Edit Device'),
+  validateDeviceStringId,
+  deactivateDevice
+);
+
+/**
+ * POST /api/devices/:deviceId/reactivate
+ * Re-activate an INACTIVE device
+ */
+router.post('/:deviceId/reactivate',
+  requirePermission('Onboard Device'),
+  validateDeviceStringId,
+  reactivateDevice
 );
 
 /**
