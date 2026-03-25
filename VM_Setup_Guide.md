@@ -1,7 +1,8 @@
 # CloudSynk MQTT Broker - Azure VM Setup Guide
 
-**Reference Document:** CloudSynk_MQTT_Broker_Guide_v4.docx (Section 6.1)
+**Reference Document:** MQTT_Implementation_Functional_Document.md (v2.1)
 **Date Started:** 2026-03-18
+**Updated:** 2026-03-23
 **Status:** VM Infrastructure Ready, Subscriber Code Pending
 
 ---
@@ -10,30 +11,36 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                         DEVICE LAYER (500-600 devices)                 │
+│                    DEVICE LAYER (500-600 devices)                      │
 ├────────────────────────────────────────────────────────────────────────┤
-│  On Startup:                                                           │
+│  PENDING (First Boot):                                                 │
+│    → MQTT PUBLISH: cloudsynk/pre-activation                           │
+│      Payload: { device_id, device_type, firmware_version, mac }       │
+│    ← MQTT SUBSCRIBE: cloudsynk/pre-activation/response/{device_id}    │
+│      (activation payload with credentials + assigned topics)          │
+│                                                                        │
+│  ACTIVE (Post Activation):                                             │
 │    → HTTP GET /api/v1/device-config (Device Config Function App)      │
 │      ← Initial config: mqtt_broker, topics, device_settings           │
-│                                                                        │
-│  Continuous Operation:                                                 │
 │    → MQTT PUBLISH: cloudsynk/{client_id}/{device_id}/telemetry        │
 │    ← MQTT SUBSCRIBE: cloudsynk/{client_id}/{device_id}/config         │
-│      (receives instant config updates from dashboard)                 │
+│                                                                        │
+│  INACTIVE:                                                             │
+│    → MQTT connection rejected by EMQX auth hook                       │
 └────────────────────────────────────────────────────────────────────────┘
-                              ↓↑ MQTT TLS Port 8883
+                         ↓↑ MQTT TLS Port 8883
 ┌────────────────────────────────────────────────────────────────────────┐
 │              Azure VM (vm-cloudsynk-emqx) - MQTT BROKER                │
 ├────────────────────────────────────────────────────────────────────────┤
 │  EMQX Broker (Docker)                                                  │
-│    ├─ Port 1883 (internal only - for subscriber)                      │
+│    ├─ Port 1883 (internal only - for local subscriber)               │
 │    ├─ Port 8883 (TLS external - for devices & Express backend)        │
 │    ├─ Port 18083 (dashboard)                                          │
-│    └─ ACL: Devices publish to own /telemetry, subscribe to own /config│
+│    └─ Auth/ACL: HTTP hooks → Express Backend (lifecycle-aware)        │
 │                                                                        │
-│  Python Subscriber (systemd service)                                   │
-│    ├─ Connects to: localhost:1883                                     │
-│    ├─ Subscribes to: cloudsynk/+/+/telemetry (all device telemetry)   │
+│  Python Subscriber (systemd, persistent session)                       │
+│    ├─ Subscribes to: cloudsynk/pre-activation (register PENDING devs) │
+│    ├─ Subscribes to: cloudsynk/+/+/telemetry (ACTIVE device data)     │
 │    ├─ Decodes hex payload using existing decoders                     │
 │    └─ Inserts to Azure SQL: IoT_Raw_Messages + IoT_Data_*             │
 └────────────────────────────────────────────────────────────────────────┘
@@ -43,7 +50,8 @@
 │                         Database: cs_db_prod                           │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Tables:                                                               │
-│    ├─ device (device_id, client_id, debugmode, user_func_config)      │
+│    ├─ device (device_id, client_id, activation_status, mqtt_password) │
+│    ├─ client_subscription, payment_plan, payment_transaction          │
 │    ├─ IoT_Raw_Messages (raw MQTT payloads)                            │
 │    ├─ IoT_Data_Sick (decoded SICK P1/P2/P3 data)                      │
 │    ├─ IoT_Data_HKMI (decoded HKMI data)                               │
@@ -54,21 +62,29 @@
 │            Express Backend (genvolt-app-main/server)                   │
 ├────────────────────────────────────────────────────────────────────────┤
 │  HTTP API:                                                             │
-│    ├─ GET /api/dashboard/* (read telemetry data)                      │
-│    ├─ PUT /api/device-config/:deviceId (update config)                │
-│    └─ PATCH /api/device-config/:deviceId/debugmode (toggle debug)     │
+│    ├─ GET  /api/devices/pending        (pre-activation list)          │
+│    ├─ POST /api/devices/:id/activate   (assign + enable)              │
+│    ├─ POST /api/devices/:id/deactivate (disable)                      │
+│    ├─ POST /api/mqtt/auth              (EMQX auth hook)               │
+│    ├─ POST /api/mqtt/acl               (EMQX ACL hook)                │
+│    ├─ GET  /api/dashboard/*            (read telemetry data)          │
+│    ├─ PUT  /api/device-config/:deviceId (update config)               │
+│    ├─ PATCH /api/device-config/:deviceId/debugmode (toggle debug)    │
+│    └─ POST /api/webhooks/razorpay      (payment events)               │
 │                                                                        │
 │  MQTT Publisher (mqttService.js):                                     │
 │    ├─ Connects to: vm-cloudsynk-emqx:8883 (TLS)                       │
-│    ├─ On config update → PUBLISH to cloudsynk/{client_id}/{device_id}/config│
-│    └─ Pushes real-time config updates to devices                      │
+│    ├─ Publishes activation payload on device activation               │
+│    └─ Pushes real-time config updates to ACTIVE devices               │
 └────────────────────────────────────────────────────────────────────────┘
                               ↓ React App
 ┌────────────────────────────────────────────────────────────────────────┐
 │              React Frontend (genvolt-app-main/client)                  │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Admin actions:                                                        │
-│    ├─ Toggle Debug Mode ON → Backend → MQTT push config update        │
+│    ├─ Pending Devices page → Assign & Activate flow                   │
+│    ├─ Deactivate / Re-activate device                                 │
+│    ├─ Toggle Debug Mode → Backend → MQTT push config update           │
 │    ├─ Change Motor_On_Time → Backend → MQTT push config update        │
 │    └─ View real-time telemetry from SQL database                      │
 └────────────────────────────────────────────────────────────────────────┘
@@ -76,29 +92,39 @@
 
 ### Key Concepts
 
+**Device Lifecycle:**
+
+| State | MQTT Access | How to enter |
+|-------|-------------|--------------|
+| `PENDING` | Pre-activation topic only | Device first powers on |
+| `ACTIVE` | Full telemetry + config topics | Admin assigns + activates |
+| `INACTIVE` | Blocked | Admin deactivates / payment lapses |
+
 **Topic Structure:**
-- Telemetry (device publishes): `cloudsynk/{client_id}/{device_id}/telemetry`
-- Config (device subscribes): `cloudsynk/{client_id}/{device_id}/config`
+- Pre-activation (any device): `cloudsynk/pre-activation`
+- Activation response (one-time): `cloudsynk/pre-activation/response/{device_id}`
+- Telemetry (active device publishes): `cloudsynk/{client_id}/{device_id}/telemetry`
+- Config (active device subscribes): `cloudsynk/{client_id}/{device_id}/config`
 
 **Multi-Tenant Support:**
-- Each device belongs to a `client_id` (stored in database)
-- Topic pattern automatically isolates clients
-- No new topics needed for different clients
+- Each active device belongs to a `client_id` stored in the database
+- Topic pattern automatically isolates clients; PENDING devices share one pre-activation topic
 
 **Debug Mode (UI Concept Only):**
-- `debugmode` flag stored in database for UI state tracking
-- When toggled ON, backend translates to actual config changes:
-  - `telemetry_interval`: 300s → 30s (faster telemetry)
+- `debugmode` flag stored in database for UI state tracking only
+- When toggled ON, backend translates to actual config changes sent to device:
+  - `telemetry_interval`: 300s → 30s
   - `log_level`: "normal" → "verbose"
-- Device receives actual config values, not the debugmode flag
-- No device firmware changes needed to support debug mode
+- Device receives actual config values — never sees "debugmode"
+- No device firmware changes needed
 
-**Device Authentication (Database-Backed):**
-- Device credentials stored in SQL database (`device` table)
-- EMQX authenticates via HTTP call to Express Backend
-- Express Backend queries SQL Server and validates credentials
-- **Zero manual EMQX configuration per device** - scales to 1000s of devices
-- ACL enforcement automatic via HTTP ACL check (pattern-based)
+**Device Authentication (Database-Backed, Lifecycle-Aware):**
+- EMQX calls Express Backend for every connection attempt (`/api/mqtt/auth`)
+- EMQX calls Express Backend for every topic access (`/api/mqtt/acl`)
+- PENDING devices: allowed to connect, restricted to pre-activation topic by ACL
+- ACTIVE devices: verified by bcrypt password comparison
+- INACTIVE devices: always denied
+- Zero manual EMQX configuration per device
 
 ---
 
@@ -116,7 +142,7 @@
 | **Username** | mqttvm |
 | **SSH Key** | vm-cloudsynk-emqx_key.pem |
 | **Public IP** | 20.198.101.175 |
-| **Cost** | ~$17.96/month (~Rs.1,526/month) |
+| **Current Cost** | ~$24/month |
 
 ### NSG Rules (vm-cloudsynk-emqx-nsg)
 
@@ -127,36 +153,39 @@
 | 1020 | MQTT-TLS | 8883 | TCP | Any |
 | 1030/1040 | EMQX-Dashboard | 18083 | TCP | My IP |
 
-### Quota Change
+### ⚠️ Planned Infrastructure Changes (Scaling)
 
-- **Standard Basv2 Family vCPUs** in Central India: increased from 0 to 2
+When device count grows beyond ~300 or uptime requirements tighten, apply these changes (see [Scaling & HA](#scaling--ha) section below):
+
+| Change | When | Cost Impact |
+|--------|------|-------------|
+| Add second EMQX VM + Azure Load Balancer | > 300 devices or first prod incident | +~$24/month |
+| Azure Cache for Redis (auth/ACL caching) | > 200 devices in debug mode | +~$13/month |
+| Azure Service Bus (webhook reliability) | Before payment gateway goes live | +~$1/month |
 
 ---
 
 ## Completed Steps
 
-### 1. Azure VM Created
+### 1. Azure VM Created ✅
 - [x] Resource group: CloudSynk_Prod
 - [x] VM: vm-cloudsynk-emqx (Standard B2als_v2)
 - [x] Ubuntu Server 24.04 LTS
 - [x] SSH key generated and downloaded
 - [x] NSG rules configured (SSH, MQTT, MQTT-TLS, EMQX Dashboard)
-- [x] Quota increased for Basv2 family (0 -> 2 vCPUs)
+- [x] Quota increased for Basv2 family (0 → 2 vCPUs)
 
-### 2. Docker Installed
-- [x] `sudo apt update && sudo apt install -y docker.io`
-- [x] `sudo systemctl enable docker && sudo systemctl start docker`
-- [x] `sudo usermod -aG docker $USER`
+### 2. Docker Installed ✅
+```bash
+sudo apt update && sudo apt install -y docker.io
+sudo systemctl enable docker && sudo systemctl start docker
+sudo usermod -aG docker $USER
+```
 
-### 3. EMQX Broker Running
-- [x] Docker container: `cloudsynk-emqxmqtt-broker`
-- [x] Image: `emqx/emqx:latest`
-- [x] Ports: 1883 (MQTT), 8883 (MQTT-TLS), 18083 (Dashboard)
-- [x] Restart policy: `always`
-- [x] Dashboard accessible at `http://20.198.101.175:18083`
-- [x] Default login: admin / public (CHANGE THIS)
+### 3. EMQX Broker Running ✅
 
-**Command used:**
+Docker container: `cloudsynk-emqxmqtt-broker`, Image: `emqx/emqx:latest`
+
 ```bash
 sudo docker run -d --name cloudsynk-emqxmqtt-broker \
   --restart always \
@@ -166,66 +195,18 @@ sudo docker run -d --name cloudsynk-emqxmqtt-broker \
   emqx/emqx:latest
 ```
 
-### 4. Python Environment Prepared
-- [x] Python 3.12 installed (came with Ubuntu 24.04)
+Dashboard: `http://20.198.101.175:18083` — default login changed ✅
+
+### 4. Python Environment Prepared ✅
+- [x] Python 3.12 (came with Ubuntu 24.04)
 - [x] python3-pip, python3-venv installed
-- [x] Virtual environment created at `/opt/cloudsynk-subscriber/venv`
+- [x] Virtual environment at `/opt/cloudsynk-subscriber/venv`
 - [x] `paho-mqtt` 2.1.0 installed
 - [x] `pyodbc` 5.3.0 installed
 
----
+### 5. EMQX Dashboard Password Changed ✅
 
-## Remaining Steps
-
-### 5. Change EMQX Dashboard Password
-- [x] Login to `http://20.198.101.175:18083` with admin/public
-- [x] Default password changed
-
-### 6. Write local_subscriber.py
-- [ ] Create the MQTT subscriber script that:
-  - Connects to EMQX on `localhost:1883`
-  - Subscribes to: `cloudsynk/+/+/telemetry` (wildcard for all clients/devices)
-  - Parses topic to extract `client_id` and `device_id`
-  - Uses existing Decoder Registry to decode hex payloads (P1/P2/P3/H1/Gas)
-  - Inserts decoded data into Azure SQL (IoT_Raw_Messages + IoT_Data_*)
-  - **Does NOT publish responses** (one-way telemetry ingestion only)
-- [ ] Location on VM: `/opt/cloudsynk-subscriber/local_subscriber.py`
-
-**Topic Parsing Example:**
-```python
-# Topic: cloudsynk/123/SICK_001/telemetry
-# Extract: client_id=123, device_id=SICK_001
-```
-
-**Subscriber Responsibilities:**
-- ✅ Receive telemetry from devices
-- ✅ Decode payloads using existing decoders
-- ✅ Insert to SQL database
-- ❌ Does NOT handle config updates (Express Backend handles this)
-
-### 7. Copy Decoders to VM
-- [ ] Copy existing decoders from local machine to VM:
-```bash
-scp -i ~/Downloads/vm-cloudsynk-emqx_key.pem -r \
-  "E:/OneDrive/Genvolt/Development/Sick_Sensor/Http_Ingest/decoders" \
-  mqttvm@20.198.101.175:/opt/cloudsynk-subscriber/
-```
-- [ ] Existing decoders available locally at:
-  - `Sick_Sensor/Http_Ingest/decoders/factory.py`
-  - `Sick_Sensor/Http_Ingest/decoders/base.py`
-  - `Sick_Sensor/Http_Ingest/decoders/device_decoders/p1_fault_decoder.py`
-  - `Sick_Sensor/Http_Ingest/decoders/device_decoders/p2_sick_decoder.py`
-  - `Sick_Sensor/Http_Ingest/decoders/device_decoders/p3_sick_decoder.py`
-  - `Sick_Sensor/Http_Ingest/decoders/device_decoders/h1_hypure_decoder.py`
-  - `Sick_Sensor/Http_Ingest/decoders/device_decoders/default.py`
-
-### 8. Install ODBC Driver on VM
-- [x] Microsoft signing key added
-- [x] Microsoft repo added to apt sources
-- [x] `msodbcsql18` (ODBC Driver 18) installed
-- [x] `unixodbc-dev` installed
-
-**Commands used:**
+### 8. ODBC Driver Installed ✅
 ```bash
 curl -s https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
 curl -s https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
@@ -233,13 +214,122 @@ curl -s https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee 
 sudo apt update && sudo ACCEPT_EULA=Y apt install -y msodbcsql18 unixodbc-dev
 ```
 
-### 9. Set Up Environment Variables on VM
-- [x] `.env` file created at `/opt/cloudsynk-subscriber/.env`
-- [x] File permissions set to 600 (owner-only read/write)
-- [x] Contains: DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD, MQTT_BROKER, MQTT_PORT
+### 9. Environment Variables on VM ✅
+- `.env` at `/opt/cloudsynk-subscriber/.env`, permissions 600
+- Contains: `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `MQTT_BROKER`, `MQTT_PORT`
+
+---
+
+## Remaining Steps
+
+### 6. Write local_subscriber.py
+
+**Location on VM:** `/opt/cloudsynk-subscriber/local_subscriber.py`
+
+**Responsibilities:**
+- ✅ Subscribe to `cloudsynk/pre-activation` — register new PENDING devices in SQL
+- ✅ Subscribe to `cloudsynk/+/+/telemetry` — receive telemetry from ACTIVE devices
+- ✅ Decode payloads using existing decoders (P1/P2/P3/H1/Gas)
+- ✅ Insert decoded data to SQL (IoT_Raw_Messages + IoT_Data_*)
+- ❌ Does NOT handle config updates or activation (Express Backend handles those)
+
+**Key implementation notes:**
+
+```python
+import paho.mqtt.client as mqtt
+import json
+import pyodbc
+import os
+from decoders.factory import DecoderFactory
+
+MQTT_CLIENT_ID = "cloudsynk-subscriber-prod"  # Fixed ID — required for persistent session
+
+def on_connect(client, userdata, flags, rc):
+    # Subscribe to both topics on every connect (required for persistent session recovery)
+    client.subscribe("cloudsynk/pre-activation", qos=1)
+    client.subscribe("cloudsynk/+/+/telemetry", qos=1)
+
+def on_message(client, userdata, message):
+    topic = message.topic
+    if topic == "cloudsynk/pre-activation":
+        handle_pre_activation(message)
+    else:
+        # Topic: cloudsynk/{client_id}/{device_id}/telemetry
+        parts = topic.split('/')
+        client_id = parts[1]
+        device_id = parts[2]
+        handle_telemetry(client_id, device_id, message)
+
+def handle_pre_activation(message):
+    """Register or update a PENDING device when it first powers on."""
+    payload = json.loads(message.payload)
+    device_id    = payload.get("device_id")
+    device_type  = payload.get("device_type")
+    firmware     = payload.get("firmware_version")
+    mac_address  = payload.get("mac_address")
+
+    conn = get_db_connection()
+    conn.execute("""
+        MERGE device AS target
+        USING (VALUES (?, ?, ?, ?, GETUTCDATE()))
+          AS source (device_id, device_type, firmware_version, mac_address, last_seen)
+        ON target.device_id = source.device_id
+        WHEN MATCHED THEN
+            UPDATE SET last_seen = source.last_seen
+        WHEN NOT MATCHED THEN
+            INSERT (device_id, device_type, firmware_version, mac_address,
+                    activation_status, first_seen, last_seen)
+            VALUES (source.device_id, source.device_type, source.firmware_version,
+                    source.mac_address, 'PENDING', GETUTCDATE(), GETUTCDATE());
+    """, device_id, device_type, firmware, mac_address)
+    conn.commit()
+
+def handle_telemetry(client_id, device_id, message):
+    """Decode and store telemetry from an ACTIVE device."""
+    payload = json.loads(message.payload)
+    decoder = DecoderFactory.get_decoder(device_id)
+    decoded = decoder.decode(payload.get("data"))
+
+    conn = get_db_connection()
+    # Insert raw
+    conn.execute(
+        "INSERT INTO IoT_Raw_Messages (device_id, client_id, raw_payload, timestamp) VALUES (?, ?, ?, GETUTCDATE())",
+        device_id, client_id, message.payload.decode()
+    )
+    # Insert decoded
+    decoded_insert(conn, device_id, client_id, decoded)
+    conn.commit()
+
+# IMPORTANT: clean_session=False keeps EMQX buffering messages while subscriber is offline
+client = mqtt.Client(client_id=MQTT_CLIENT_ID, clean_session=False)
+client.username_pw_set(os.getenv("MQTT_USER"), os.getenv("MQTT_PASSWORD"))
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect(os.getenv("MQTT_BROKER"), int(os.getenv("MQTT_PORT", 1883)))
+client.loop_forever()
+```
+
+**Why `clean_session=False`:** If the subscriber service restarts or the VM is patched, EMQX will buffer any messages published during the downtime and replay them when the subscriber reconnects. Without this, messages published while the subscriber is offline are lost.
+
+### 7. Copy Decoders to VM
+
+```bash
+scp -i ~/Downloads/vm-cloudsynk-emqx_key.pem -r \
+  "E:/OneDrive/Genvolt/Development/Sick_Sensor/Http_Ingest/decoders" \
+  mqttvm@20.198.101.175:/opt/cloudsynk-subscriber/
+```
+
+Decoder files needed:
+- `decoders/factory.py`
+- `decoders/base.py`
+- `decoders/device_decoders/p1_fault_decoder.py`
+- `decoders/device_decoders/p2_sick_decoder.py`
+- `decoders/device_decoders/p3_sick_decoder.py`
+- `decoders/device_decoders/h1_hypure_decoder.py`
+- `decoders/device_decoders/default.py`
 
 ### 10. Create systemd Service
-- [ ] Create service file so subscriber auto-starts:
+
 ```bash
 sudo tee /etc/systemd/system/cloudsynk-subscriber.service > /dev/null <<'EOF'
 [Unit]
@@ -266,21 +356,26 @@ sudo systemctl enable cloudsynk-subscriber
 sudo systemctl start cloudsynk-subscriber
 ```
 
+**After starting, verify:**
+```bash
+sudo systemctl status cloudsynk-subscriber
+# Expected: Active: active (running)
+
+sudo journalctl -u cloudsynk-subscriber -f
+# Expected: "Connected to EMQX" and "Subscribed to cloudsynk/pre-activation"
+```
+
 ### 10a. Configure Express Backend MQTT Publisher
 
-**Purpose:** Enable Express Backend to push real-time config updates to devices via MQTT
+**Purpose:** Enable Express Backend to push activation payloads and real-time config updates to devices via MQTT.
 
-**Location:** `/genvolt-app-main/server/services/mqttService.js`
-
-**Installation Steps:**
-
-1. **Install MQTT client library:**
+**1. Install MQTT client library:**
 ```bash
 cd /path/to/genvolt-app-main/server
 npm install mqtt
 ```
 
-2. **Add environment variables to Express Backend `.env`:**
+**2. Add environment variables to Express Backend `.env`:**
 ```env
 MQTT_BROKER_HOST=20.198.101.175
 MQTT_BROKER_PORT=8883
@@ -289,10 +384,11 @@ MQTT_BACKEND_USER=backend_publisher
 MQTT_BACKEND_PASSWORD=your_secure_password_here
 ```
 
-3. **Create MQTT service:** (file: `server/services/mqttService.js`)
+**3. Create MQTT service** (`server/services/mqttService.js`):
+
 ```javascript
 import mqtt from 'mqtt';
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 
 class MQTTService {
   constructor() {
@@ -352,6 +448,37 @@ class MQTTService {
     });
   }
 
+  async publishActivationPayload(deviceId, clientId, mqttPassword, initialConfig) {
+    if (!this.connected) {
+      logger.warn('MQTT not connected, cannot publish activation payload');
+      return false;
+    }
+
+    const topic = `cloudsynk/pre-activation/response/${deviceId}`;
+    const payload = {
+      status: 'activated',
+      client_id: clientId,
+      telemetry_topic: `cloudsynk/${clientId}/${deviceId}/telemetry`,
+      config_topic: `cloudsynk/${clientId}/${deviceId}/config`,
+      mqtt_username: deviceId,
+      mqtt_password: mqttPassword,
+      config: initialConfig
+    };
+
+    return new Promise((resolve, reject) => {
+      // retain: true ensures device gets the payload even if it reconnects after activation
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true }, (err) => {
+        if (err) {
+          logger.error(`Failed to publish activation to ${topic}:`, err);
+          reject(err);
+        } else {
+          logger.info(`Activation payload published to ${topic}`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
   disconnect() {
     if (this.client) {
       this.client.end();
@@ -362,116 +489,137 @@ class MQTTService {
 export default new MQTTService();
 ```
 
-4. **Initialize in server.js:**
+**4. Initialize in server.js:**
 ```javascript
 import mqttService from './services/mqttService.js';
 
-// After database connection
-mqttService.connect();
+mqttService.connect();  // After database connection
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   mqttService.disconnect();
-  // ... existing shutdown code
 });
 ```
 
-5. **Use in deviceConfigController.js:**
+**5. Use in deviceConfigController.js:**
 ```javascript
 import mqttService from '../services/mqttService.js';
 
 export const updateDeviceConfig = async (req, res) => {
   // ... validation and database update ...
 
-  // Push config via MQTT
   try {
-    await mqttService.pushConfigUpdate(
-      device.client_id,
-      deviceId,
-      {
-        telemetry_interval: config.telemetry_interval,
-        device_settings: config.device_settings
-      }
-    );
+    await mqttService.pushConfigUpdate(device.client_id, deviceId, {
+      telemetry_interval: config.telemetry_interval,
+      device_settings: config.device_settings
+    });
   } catch (mqttError) {
     logger.error('MQTT push failed:', mqttError);
-    // Don't fail the request if MQTT push fails
+    // Don't fail the API response — config is saved in SQL regardless
   }
 
   res.json({ success: true, config_pushed: true });
 };
 ```
 
-**Testing:**
-```bash
-# From Express Backend logs, you should see:
-# "MQTT Service connected to broker"
-# "Config pushed to cloudsynk/123/SICK_001/config"
-```
-
 ### 11. Configure TLS (Production)
+
 - [ ] Obtain TLS certificate (Let's Encrypt or purchased)
 - [ ] Configure EMQX for TLS on port 8883
-- [ ] Disable plain MQTT port 1883 for external access
-- [ ] Update NSG to remove port 1883 rule
+- [ ] Disable plain MQTT port 1883 for external access (keep for internal subscriber)
+- [ ] Update NSG to remove port 1883 rule for external IPs
 
-### 12. Configure EMQX Authentication & ACL (Database-Backed - SCALABLE)
+### 12. Configure EMQX Authentication & ACL
 
-**⚠️ IMPORTANT: Use database-backed authentication to avoid manual configuration per device!**
+**⚠️ IMPORTANT: HTTP-based authentication — zero manual config per device, lifecycle-aware**
 
-This setup allows EMQX to authenticate devices directly from your SQL database. No manual user creation needed for each of the 500-600 devices.
+#### Step 12a: Database Schema
 
-#### Step 12a: Database Schema Changes
-
-Add MQTT credentials to existing device table:
+Run on `cs_db_prod`:
 
 ```sql
--- Run on cs_db_prod database
+-- MQTT credentials columns (v1.0 — already added)
 ALTER TABLE device
-ADD mqtt_username NVARCHAR(100) NULL,
+ADD mqtt_username      NVARCHAR(100) NULL,
     mqtt_password_hash NVARCHAR(255) NULL,
-    mqtt_enabled BIT DEFAULT 1;
+    mqtt_enabled       BIT DEFAULT 1;
 
--- Create index for faster authentication lookups
 CREATE NONCLUSTERED INDEX IX_device_mqtt_username
-ON device (mqtt_username)
-WHERE mqtt_enabled = 1;
+ON device (mqtt_username) WHERE mqtt_enabled = 1;
 
--- Update existing devices with MQTT credentials (one-time migration)
--- Note: In production, use a script to generate secure passwords
-UPDATE device
-SET mqtt_username = device_id,
-    mqtt_enabled = 1
-WHERE mqtt_username IS NULL;
+-- Lifecycle columns (v2.0 — new)
+ALTER TABLE device ADD
+  activation_status  NVARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+  -- PENDING | ACTIVE | INACTIVE
+  mqtt_password      NVARCHAR(255) NULL,
+  -- bcrypt-hashed, generated on activation (replaces mqtt_password_hash above)
+  device_type        NVARCHAR(50)  NULL,
+  -- P1 | P2 | P3 | HKMI | GAS
+  firmware_version   NVARCHAR(50)  NULL,
+  mac_address        NVARCHAR(50)  NULL,
+  first_seen         DATETIME      NULL,
+  last_seen          DATETIME      NULL,
+  activated_at       DATETIME      NULL,
+  activated_by       INT           NULL,
+  deactivated_at     DATETIME      NULL,
+  deactivated_by     INT           NULL;
+
+CREATE INDEX IX_device_activation_status ON device (activation_status);
+
+-- Payment / subscription tables (v2.1 — new)
+CREATE TABLE payment_plan (
+  id               INT           IDENTITY PRIMARY KEY,
+  name             NVARCHAR(50)  NOT NULL,
+  device_quota     INT           NOT NULL,
+  price_monthly    DECIMAL(10,2) NOT NULL,
+  price_annual     DECIMAL(10,2) NOT NULL,
+  currency         NVARCHAR(10)  NOT NULL DEFAULT 'INR',
+  razorpay_plan_id NVARCHAR(100) NULL,
+  features         NVARCHAR(MAX) NULL,
+  is_active        BIT           NOT NULL DEFAULT 1,
+  created_at       DATETIME      NOT NULL DEFAULT GETUTCDATE()
+);
+
+CREATE TABLE client_subscription (
+  id                       INT           IDENTITY PRIMARY KEY,
+  client_id                INT           NOT NULL,
+  plan_id                  INT           NOT NULL REFERENCES payment_plan(id),
+  status                   NVARCHAR(20)  NOT NULL DEFAULT 'trialing',
+  -- trialing | active | past_due | cancelled | expired
+  razorpay_subscription_id NVARCHAR(100) NULL,
+  billing_cycle            NVARCHAR(10)  NOT NULL DEFAULT 'monthly',
+  current_period_start     DATETIME      NULL,
+  current_period_end       DATETIME      NULL,
+  grace_period_end         DATETIME      NULL,
+  trial_end                DATETIME      NULL,
+  cancelled_at             DATETIME      NULL,
+  created_at               DATETIME      NOT NULL DEFAULT GETUTCDATE(),
+  updated_at               DATETIME      NOT NULL DEFAULT GETUTCDATE()
+);
+
+CREATE TABLE payment_transaction (
+  id                 INT           IDENTITY PRIMARY KEY,
+  client_id          INT           NOT NULL,
+  subscription_id    INT           NULL REFERENCES client_subscription(id),
+  gateway            NVARCHAR(20)  NOT NULL,
+  gateway_payment_id NVARCHAR(100) NOT NULL,
+  amount             DECIMAL(10,2) NOT NULL,
+  currency           NVARCHAR(10)  NOT NULL DEFAULT 'INR',
+  status             NVARCHAR(20)  NOT NULL,
+  event_type         NVARCHAR(50)  NOT NULL,
+  raw_payload        NVARCHAR(MAX) NULL,
+  created_at         DATETIME      NOT NULL DEFAULT GETUTCDATE()
+);
+
+ALTER TABLE device ADD subscription_id INT NULL REFERENCES client_subscription(id);
 ```
 
-#### Step 12b: Configure EMQX Database Authentication
+#### Step 12b: Configure EMQX HTTP Auth Plugin
 
 **Access EMQX Dashboard:** `http://20.198.101.175:18083`
 
-**1. Create SQL Server Authentication (Management → Authentication → Create)**
+---
 
-- **Type:** PostgreSQL or MySQL (EMQX doesn't support SQL Server directly)
-
-**⚠️ Workaround for SQL Server:**
-Since EMQX doesn't natively support SQL Server, use one of these approaches:
-
-**Option A: HTTP Authentication (Recommended)**
-- Create a lightweight API endpoint on Express Backend that EMQX calls to verify credentials
-- EMQX → HTTP GET to Express Backend → Backend queries SQL Server → Returns auth result
-
-**Option B: Sync to PostgreSQL/MySQL**
-- Create a lightweight PostgreSQL/MySQL instance on the VM
-- Sync device credentials from SQL Server to PostgreSQL every hour
-- EMQX queries PostgreSQL for authentication
-
-**Option C: Built-in Database + Sync Script**
-- Use EMQX built-in database
-- Create a script on Express Backend that syncs device credentials to EMQX via HTTP API when devices are created/updated
-
-**For this guide, we'll use Option A (HTTP Authentication):**
-
-**Step 1: Create Auth Endpoint on Express Backend**
+**Step 1: Create Auth & ACL Endpoints on Express Backend**
 
 File: `/genvolt-app-main/server/routes/mqttAuthRoutes.js`
 
@@ -479,85 +627,106 @@ File: `/genvolt-app-main/server/routes/mqttAuthRoutes.js`
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import sql from 'mssql';
+import { getPool } from '../config/database.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
 // EMQX HTTP Authentication Hook
+// Called on every device connection attempt
 router.post('/mqtt/auth', async (req, res) => {
-  const { clientid, username, password } = req.body;
+  const { username, password } = req.body;
 
   try {
-    const pool = await sql.connect();
+    const pool = await getPool();
     const result = await pool.request()
-      .input('username', sql.NVarChar, username)
+      .input('deviceId', sql.NVarChar, username)
       .query(`
-        SELECT mqtt_password_hash, mqtt_enabled, client_id
-        FROM device
-        WHERE mqtt_username = @username
+        SELECT activation_status, mqtt_password, client_id
+        FROM device WHERE device_id = @deviceId
       `);
 
     if (result.recordset.length === 0) {
-      return res.status(404).json({ result: 'deny', reason: 'User not found' });
+      return res.status(404).json({ result: 'deny', reason: 'Device not found' });
     }
 
     const device = result.recordset[0];
 
-    if (!device.mqtt_enabled) {
-      return res.status(403).json({ result: 'deny', reason: 'Device disabled' });
+    if (device.activation_status === 'INACTIVE') {
+      return res.status(403).json({ result: 'deny', reason: 'Device deactivated' });
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(password, device.mqtt_password_hash);
-
-    if (isValid) {
-      res.json({
-        result: 'allow',
-        is_superuser: false
-      });
-    } else {
-      res.status(401).json({ result: 'deny', reason: 'Invalid password' });
+    // PENDING: allow connection, ACL will restrict topics
+    if (device.activation_status === 'PENDING') {
+      return res.json({ result: 'allow', is_superuser: false });
     }
+
+    // ACTIVE: verify bcrypt password
+    if (device.activation_status === 'ACTIVE') {
+      if (!device.mqtt_password || !password) {
+        return res.status(401).json({ result: 'deny', reason: 'No credentials' });
+      }
+      const isValid = await bcrypt.compare(password, device.mqtt_password);
+      return isValid
+        ? res.json({ result: 'allow', is_superuser: false })
+        : res.status(401).json({ result: 'deny', reason: 'Invalid password' });
+    }
+
+    res.status(403).json({ result: 'deny', reason: 'Unknown state' });
   } catch (error) {
-    console.error('MQTT auth error:', error);
+    logger.error('MQTT auth error:', error);
     res.status(500).json({ result: 'deny', reason: 'Internal error' });
   }
 });
 
-// EMQX HTTP ACL Check Hook
+// EMQX HTTP ACL Hook
+// Called before allowing publish/subscribe to any topic
 router.post('/mqtt/acl', async (req, res) => {
-  const { clientid, username, topic, action } = req.body;
+  const { username, topic, action } = req.body;
 
   try {
-    const pool = await sql.connect();
+    const pool = await getPool();
     const result = await pool.request()
-      .input('username', sql.NVarChar, username)
-      .query('SELECT client_id FROM device WHERE mqtt_username = @username');
+      .input('deviceId', sql.NVarChar, username)
+      .query('SELECT activation_status, client_id FROM device WHERE device_id = @deviceId');
 
     if (result.recordset.length === 0) {
       return res.json({ result: 'deny', reason: 'Device not found' });
     }
 
     const device = result.recordset[0];
-    const allowedClientId = device.client_id;
 
-    // Pattern-based ACL
-    if (action === 'publish') {
-      const expectedTopic = `cloudsynk/${allowedClientId}/${username}/telemetry`;
-      if (topic === expectedTopic) {
-        return res.json({ result: 'allow' });
-      }
+    // INACTIVE: deny everything
+    if (device.activation_status === 'INACTIVE') {
+      return res.json({ result: 'deny', reason: 'Device deactivated' });
     }
 
-    if (action === 'subscribe') {
-      const expectedTopic = `cloudsynk/${allowedClientId}/${username}/config`;
-      if (topic === expectedTopic) {
+    // PENDING: pre-activation topic only
+    if (device.activation_status === 'PENDING') {
+      if (action === 'publish' && topic === 'cloudsynk/pre-activation') {
         return res.json({ result: 'allow' });
       }
+      if (action === 'subscribe' && topic === `cloudsynk/pre-activation/response/${username}`) {
+        return res.json({ result: 'allow' });
+      }
+      return res.json({ result: 'deny', reason: 'Pending device: pre-activation topic only' });
     }
 
-    res.json({ result: 'deny', reason: 'Topic not allowed' });
+    // ACTIVE: own client/device topics only
+    if (device.activation_status === 'ACTIVE') {
+      const clientId = device.client_id;
+      if (action === 'publish' && topic === `cloudsynk/${clientId}/${username}/telemetry`) {
+        return res.json({ result: 'allow' });
+      }
+      if (action === 'subscribe' && topic === `cloudsynk/${clientId}/${username}/config`) {
+        return res.json({ result: 'allow' });
+      }
+      return res.json({ result: 'deny', reason: 'Topic not allowed' });
+    }
+
+    res.json({ result: 'deny', reason: 'Unknown device state' });
   } catch (error) {
-    console.error('MQTT ACL error:', error);
+    logger.error('MQTT ACL error:', error);
     res.status(500).json({ result: 'deny', reason: 'Internal error' });
   }
 });
@@ -571,364 +740,487 @@ import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
 app.use('/api', mqttAuthRoutes);
 ```
 
-**Step 2: Configure EMQX HTTP Auth Plugin**
+---
 
-In EMQX Dashboard:
+**Step 2: Configure EMQX HTTP Auth Plugin (EMQX Dashboard)**
 
 **Management → Authentication → Create**
 - **Type:** HTTP
 - **Method:** POST
-- **Authentication URL:** `http://your-express-backend.azurewebsites.net/api/mqtt/auth`
+- **URL:** `http://your-express-backend.azurewebsites.net/api/mqtt/auth`
 - **Request Body:**
   ```json
-  {
-    "clientid": "${clientid}",
-    "username": "${username}",
-    "password": "${password}"
-  }
+  { "clientid": "${clientid}", "username": "${username}", "password": "${password}" }
   ```
-- **Success Condition:** HTTP Status = 200 and response contains `"result": "allow"`
+- **Success Condition:** HTTP 200 + `"result": "allow"`
 
 **Management → Authorization → Create**
 - **Type:** HTTP
 - **Method:** POST
-- **ACL URL:** `http://your-express-backend.azurewebsites.net/api/mqtt/acl`
+- **URL:** `http://your-express-backend.azurewebsites.net/api/mqtt/acl`
 - **Request Body:**
   ```json
-  {
-    "clientid": "${clientid}",
-    "username": "${username}",
-    "topic": "${topic}",
-    "action": "${action}"
-  }
+  { "clientid": "${clientid}", "username": "${username}", "topic": "${topic}", "action": "${action}" }
   ```
-- **Success Condition:** HTTP Status = 200 and response contains `"result": "allow"`
+- **Success Condition:** HTTP 200 + `"result": "allow"`
 
-**Step 3: Create Backend/Subscriber Users (Manual - One Time Only)**
+---
 
-Create separate users for backend_publisher and local_subscriber in EMQX built-in database:
+**Step 3: Create Backend/Subscriber Service Accounts (One-Time Only)**
+
+These accounts bypass the device lifecycle HTTP auth — create them in EMQX built-in database.
 
 **Management → Authentication → Built-in Database → Users → Add**
 
-**User 1: backend_publisher**
-- Username: `backend_publisher`
-- Password: `<secure_password>`
-- Is Superuser: No
+| Username | Password | Is Superuser |
+|----------|----------|--------------|
+| `backend_publisher` | `<secure_password>` | No |
+| `local_subscriber` | `<secure_password>` | No |
 
-**User 2: local_subscriber**
-- Username: `local_subscriber`
-- Password: `<secure_password>`
-- Is Superuser: No
+Update Express Backend `.env` and VM `.env` with these passwords:
+```env
+# Express Backend .env
+MQTT_BACKEND_USER=backend_publisher
+MQTT_BACKEND_PASSWORD=<same as above>
+
+# VM /opt/cloudsynk-subscriber/.env
+MQTT_USER=local_subscriber
+MQTT_PASSWORD=<same as above>
+```
 
 **Management → Authorization → Built-in Database → Rules → Add**
 
-**Rules for backend_publisher:**
+For `backend_publisher`:
 ```
 ALLOW publish cloudsynk/+/+/config
-DENY subscribe #
+ALLOW publish cloudsynk/pre-activation/response/+
+DENY  subscribe #
 ```
 
-**Rules for local_subscriber:**
+For `local_subscriber`:
 ```
 ALLOW subscribe cloudsynk/+/+/telemetry
-DENY publish #
+ALLOW subscribe cloudsynk/pre-activation
+DENY  publish #
 ```
 
-#### Step 12c: Device Provisioning Workflow (Zero Manual EMQX Work)
+#### Step 12c: Device Lifecycle Provisioning
 
-**When Admin Creates New Device in Dashboard:**
+Devices no longer need pre-created credentials. The lifecycle is:
 
-File: `/genvolt-app-main/server/controllers/deviceController.js`
+1. **Device powers on** → publishes to `cloudsynk/pre-activation` → subscriber registers it as PENDING in SQL
+2. **Admin sees it** in Pending Devices page → selects client → clicks Activate
+3. **Backend** generates credentials, sets `activation_status = ACTIVE`, publishes activation payload to device
+4. **Device** saves credentials, reconnects, starts sending telemetry
 
 ```javascript
+// server/controllers/deviceController.js — activateDevice
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import mqttService from '../services/mqttService.js';
+import paymentService from '../services/paymentService.js';
 
-export const createDevice = async (req, res) => {
-  const { device_id, client_id, model, machine_id } = req.body;
+export const activateDevice = async (req, res) => {
+  const { id } = req.params;
+  const { client_id, initial_config } = req.body;
+
+  // Check subscription quota before activating
+  const quotaCheck = await paymentService.checkDeviceQuota(client_id);
+  if (!quotaCheck.allowed) {
+    return res.status(403).json({ success: false, error: quotaCheck.reason });
+  }
+
+  const mqtt_password = crypto.randomBytes(16).toString('hex');
+  const mqtt_password_hash = await bcrypt.hash(mqtt_password, 10);
+  const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.Int, id)
+    .input('clientId', sql.Int, client_id)
+    .input('mqttPassword', sql.NVarChar, mqtt_password_hash)
+    .input('activatedBy', sql.Int, req.user.user_id)
+    .query(`
+      UPDATE device
+      SET activation_status = 'ACTIVE',
+          client_id = @clientId,
+          mqtt_password = @mqttPassword,
+          mqtt_username = device_id,
+          activated_at = GETUTCDATE(),
+          activated_by = @activatedBy
+      OUTPUT INSERTED.device_id, INSERTED.client_id
+      WHERE id = @id AND activation_status = 'PENDING'
+    `);
+
+  if (result.recordset.length === 0) {
+    return res.status(404).json({ error: 'Device not found or already active' });
+  }
+
+  const device = result.recordset[0];
 
   try {
-    // Auto-generate MQTT credentials
-    const mqtt_username = device_id;
-    const mqtt_password = crypto.randomBytes(16).toString('hex'); // 32 char random password
-    const mqtt_password_hash = await bcrypt.hash(mqtt_password, 10);
-
-    // Insert device with MQTT credentials
-    const pool = await sql.connect();
-    await pool.request()
-      .input('device_id', sql.NVarChar, device_id)
-      .input('client_id', sql.Int, client_id)
-      .input('model', sql.NVarChar, model)
-      .input('machine_id', sql.NVarChar, machine_id)
-      .input('mqtt_username', sql.NVarChar, mqtt_username)
-      .input('mqtt_password_hash', sql.NVarChar, mqtt_password_hash)
-      .input('mqtt_enabled', sql.Bit, 1)
-      .query(`
-        INSERT INTO device (
-          device_id, client_id, Model, machin_id,
-          mqtt_username, mqtt_password_hash, mqtt_enabled
-        )
-        VALUES (
-          @device_id, @client_id, @model, @machine_id,
-          @mqtt_username, @mqtt_password_hash, @mqtt_enabled
-        )
-      `);
-
-    // Return credentials (SHOW ONLY ONCE - admin must save)
-    res.json({
-      success: true,
-      device_id,
-      mqtt_credentials: {
-        broker: process.env.MQTT_BROKER_URL || 'mqtts://20.198.101.175:8883',
-        username: mqtt_username,
-        password: mqtt_password,  // ⚠️ Display only once!
-        topic_publish: `cloudsynk/${client_id}/${device_id}/telemetry`,
-        topic_subscribe: `cloudsynk/${client_id}/${device_id}/config`
-      },
-      warning: '⚠️ Save these credentials now! Password will not be shown again.'
-    });
-
-  } catch (error) {
-    console.error('Error creating device:', error);
-    res.status(500).json({ error: 'Failed to create device' });
+    // Retained publish — device gets this even if it reconnects later
+    await mqttService.publishActivationPayload(device.device_id, device.client_id, mqtt_password, config);
+  } catch (mqttErr) {
+    logger.error('Activation MQTT push failed:', mqttErr);
+    // Device will re-register via pre-activation on next boot
   }
+
+  res.json({
+    success: true,
+    message: 'Device activated',
+    data: { device_id: device.device_id, client_id: device.client_id, activation_status: 'ACTIVE' }
+  });
 };
 ```
 
-**Result:**
-- No manual EMQX configuration needed!
-- Device credentials stored in SQL database
-- EMQX authenticates via HTTP call to Express Backend
-- Express Backend queries SQL Server and validates credentials
-- Scales to 1000s of devices automatically
-
 #### Summary: No Manual Work Per Device
 
-✅ **One-time setup:** Configure HTTP authentication in EMQX
-✅ **Per device:** Just create in dashboard (auto-generates credentials)
-✅ **EMQX queries:** Express Backend → SQL Server
-✅ **Scales to:** Unlimited devices
-✅ **ACL enforcement:** Automatic via HTTP ACL check
+✅ **One-time setup:** HTTP auth/ACL hooks configured in EMQX
+✅ **PENDING devices:** Auto-register on first boot via pre-activation topic
+✅ **Activation:** Admin assigns client → credentials generated + pushed via retained MQTT message
+✅ **Deactivation:** Status set to INACTIVE → EMQX auth hook denies on next connection
+✅ **Scales to:** Unlimited devices with zero manual EMQX configuration
 
 ### 13. Test End-to-End
 
-**Test 1: Telemetry Flow (Device → SQL → Dashboard)**
-- [ ] Use MQTT test client to publish telemetry:
+**Test 1: Pre-activation Flow**
+```bash
+# Simulate new device first boot
+mosquitto_pub -h 20.198.101.175 -p 1883 \
+  -u "HK00001" \
+  -t "cloudsynk/pre-activation" \
+  -m '{"device_id":"HK00001","device_type":"P3","firmware_version":"2.1.0","mac_address":"AA:BB:CC:DD:EE:FF"}'
+```
+- [ ] Verify HK00001 appears in Pending Devices page
+- [ ] Activate via admin UI (assign to a client)
+- [ ] Verify device receives activation payload:
+```bash
+mosquitto_sub -h 20.198.101.175 -p 1883 \
+  -u "HK00001" \
+  -t "cloudsynk/pre-activation/response/HK00001" \
+  -v
+```
+
+**Test 2: Telemetry Flow (Active Device → SQL → Dashboard)**
 ```bash
 mosquitto_pub -h 20.198.101.175 -p 1883 \
-  -t "cloudsynk/123/SICK_001/telemetry" \
-  -u "SICK_001" -P "device_password" \
-  -m '{"device_id":"SICK_001","data":"0x1A2B3C4D..."}'
+  -t "cloudsynk/3/HK00001/telemetry" \
+  -u "HK00001" -P "device_mqtt_password" \
+  -m '{"device_id":"HK00001","data":"0x1A2B3C4D..."}'
 ```
-- [ ] Check Python subscriber logs: `sudo journalctl -u cloudsynk-subscriber -f`
+- [ ] Check subscriber logs: `sudo journalctl -u cloudsynk-subscriber -f`
 - [ ] Verify data decoded and inserted to Azure SQL
 - [ ] Verify data appears in web dashboard
 
-**Test 2: Config Push Flow (Dashboard → Device)**
-- [ ] Open Device Config page in dashboard
-- [ ] Select device SICK_001
-- [ ] Toggle Debug Mode ON or change Motor_On_Time
-- [ ] Check Express Backend logs for: "Config pushed to cloudsynk/123/SICK_001/config"
-- [ ] Use MQTT test client to subscribe to config topic:
+**Test 3: Config Push Flow (Dashboard → Device)**
+- [ ] Toggle Debug Mode ON for HK00001 in dashboard
+- [ ] Check Express Backend logs for: `"Config pushed to cloudsynk/3/HK00001/config"`
 ```bash
 mosquitto_sub -h 20.198.101.175 -p 1883 \
-  -t "cloudsynk/123/SICK_001/config" \
-  -u "SICK_001" -P "device_password" \
-  -v
+  -t "cloudsynk/3/HK00001/config" \
+  -u "HK00001" -P "device_mqtt_password" -v
 ```
-- [ ] Verify config update received:
+- [ ] Verify config received:
 ```json
 {
   "type": "config_update",
-  "timestamp": "2026-03-18T10:30:00Z",
+  "timestamp": "2026-03-23T10:30:00Z",
   "telemetry_interval": 30,
-  "device_settings": {
-    "Motor_On_Time": 600,
-    "log_level": "verbose"
-  }
+  "device_settings": { "Motor_On_Time": 600, "log_level": "verbose" }
 }
 ```
 
-**Test 3: Multi-Client Isolation**
-- [ ] Create devices for different clients (client_id: 123, 456)
-- [ ] Verify device from client 123 cannot subscribe to client 456 topics
-- [ ] Verify ACL rules enforced by EMQX
+**Test 4: Multi-Client Isolation**
+- [ ] Activate devices for two different clients (client_id: 3, 5)
+- [ ] Verify device from client 3 is denied on client 5 topics
+- [ ] Verify ACL enforced by EMQX
 
-**Test 4: Express Backend Failover**
+**Test 5: Deactivation**
+- [ ] Deactivate HK00001 via admin UI
+- [ ] Attempt to connect: `mosquitto_pub -u "HK00001" -P "device_mqtt_password" ...`
+- [ ] Verify connection is rejected
+
+**Test 6: Express Backend Failover**
 - [ ] Disconnect Express Backend from MQTT
 - [ ] Update device config in dashboard
-- [ ] Verify config saved to SQL (even though MQTT push failed)
-- [ ] Reconnect Express Backend
-- [ ] Verify subsequent config updates work
+- [ ] Verify config saved to SQL despite MQTT push failure
+- [ ] Reconnect → verify subsequent pushes work
 
 ---
 
 ## Complete Data Flow Examples
 
-### Scenario 1: Device Startup
+### Scenario 1: New Device First Boot (Pre-activation)
 
 ```
-1. Device powers on
+1. Device powers on — no credentials stored
+   ↓
+2. Connects to EMQX with username=HK00001 (no password)
+   EMQX → POST /api/mqtt/auth { username: "HK00001" }
+   Express: status=PENDING → ALLOW
+   ↓
+3. Device publishes to cloudsynk/pre-activation:
+   { device_id: "HK00001", device_type: "P3", firmware_version: "2.1.0" }
+   EMQX → POST /api/mqtt/acl { topic: "cloudsynk/pre-activation", action: "publish" }
+   Express: PENDING + correct topic → ALLOW
+   ↓
+4. Python subscriber receives pre-activation message
+   Upserts device in SQL: activation_status = PENDING, first_seen = now
+   ↓
+5. Admin sees HK00001 in Pending Devices page
+   Assigns to client 3, confirms initial config
+   POST /api/devices/42/activate { client_id: 3 }
+   ↓
+6. Backend:
+   - Sets activation_status = ACTIVE, client_id = 3
+   - Generates MQTT credentials (bcrypt hashed)
+   - Publishes retained activation payload to cloudsynk/pre-activation/response/HK00001
+   ↓
+7. Device receives activation payload (retained — delivered even on reconnect)
+   Saves: mqtt_username, mqtt_password, telemetry_topic, config_topic
+   ↓
+8. Device reconnects with new credentials
+   Calls Device Config Function App for initial settings
+   Starts publishing telemetry to cloudsynk/3/HK00001/telemetry
+```
+
+### Scenario 2: Active Device Startup
+
+```
+1. Device powers on (already ACTIVE, has saved credentials)
    ↓
 2. HTTP GET to Device Config Function App:
-   GET /api/v1/device-config/communication?device_id=SICK_001
+   GET /api/v1/device-config/communication?device_id=HK00001
    ← Response:
    {
      "mqtt_broker": "20.198.101.175:8883",
-     "mqtt_topic_pub": "cloudsynk/123/SICK_001/telemetry",
-     "mqtt_topic_sub": "cloudsynk/123/SICK_001/config",
+     "mqtt_topic_pub": "cloudsynk/3/HK00001/telemetry",
+     "mqtt_topic_sub": "cloudsynk/3/HK00001/config",
      "telemetry_interval": 300,
-     "device_settings": {
-       "Motor_On_Time": 500,
-       "Motor_Off_Time": 300,
-       "log_level": "normal"
-     }
+     "device_settings": { "Motor_On_Time": 500, "log_level": "normal" }
    }
    ↓
-3. Device connects to EMQX broker (TLS)
+3. Connects to EMQX with saved credentials (TLS)
    ↓
-4. Device subscribes to: cloudsynk/123/SICK_001/config
+4. Subscribes to: cloudsynk/3/HK00001/config
    ↓
-5. Device starts telemetry loop (every 300 seconds)
+5. Starts telemetry loop (every 300 seconds)
 ```
 
-### Scenario 2: Admin Enables Debug Mode
+### Scenario 3: Admin Enables Debug Mode
 
 ```
-1. Admin opens dashboard → Device Config page
+1. Admin toggles Debug Mode ON for HK00001 in dashboard
    ↓
-2. Toggles Debug Mode ON for SICK_001
+2. PATCH /api/device-config/HK00001/debugmode { debugMode: true }
    ↓
-3. Dashboard sends: PATCH /api/device-config/SICK_001/debugmode
-   { "debugMode": true }
+3. Express Backend:
+   Updates SQL: debugmode=1, telemetry_interval=30, log_level="verbose"
+   Calls mqttService.pushConfigUpdate(3, "HK00001", {...})
    ↓
-4. Express Backend:
-   - Updates SQL: debugmode=1, telemetry_interval=30, log_level="verbose"
-   - Looks up device: client_id=123
-   - Calls mqttService.pushConfigUpdate(123, "SICK_001", {...})
-   ↓
-5. Express Backend → MQTT PUBLISH:
-   Topic: cloudsynk/123/SICK_001/config
-   Payload: {
+4. MQTT PUBLISH to cloudsynk/3/HK00001/config:
+   {
      "type": "config_update",
      "telemetry_interval": 30,
-     "device_settings": {
-       "Motor_On_Time": 500,
-       "log_level": "verbose"
-     }
+     "device_settings": { "Motor_On_Time": 500, "log_level": "verbose" }
    }
    ↓
-6. EMQX routes message to SICK_001 (subscribed)
+5. Device receives update (<1 second latency)
+   Applies: telemetry_interval=30s, log_level=verbose
    ↓
-7. Device receives config update (<1 second latency)
-   ↓
-8. Device applies new settings:
-   - telemetry_interval = 30s (was 300s)
-   - log_level = "verbose"
-   ↓
-9. Device starts sending telemetry every 30 seconds
-   ↓
-10. Admin sees near-real-time data in dashboard
+6. Device sends telemetry every 30 seconds
+   Admin sees near-real-time data in dashboard
 ```
 
-### Scenario 3: Telemetry Ingestion
+### Scenario 4: Telemetry Ingestion
 
 ```
-1. Device collects sensor data
+1. Device encodes sensor data as hex
    ↓
-2. Device encodes data as hex payload
+2. MQTT PUBLISH to cloudsynk/3/HK00001/telemetry:
+   { "device_id": "HK00001", "data": "0x1A2B3C4D5E6F..." }
    ↓
-3. MQTT PUBLISH:
-   Topic: cloudsynk/123/SICK_001/telemetry
-   Payload: {
-     "device_id": "SICK_001",
-     "data": "0x1A2B3C4D5E6F..."
-   }
+3. Python subscriber receives message
+   Parses topic → client_id=3, device_id=HK00001
+   Decodes hex using DecoderFactory (P1/P2/P3/H1)
    ↓
-4. EMQX receives message
+4. Subscriber inserts to SQL:
+   IoT_Raw_Messages (raw payload)
+   IoT_Data_Sick (decoded fields)
    ↓
-5. Python Subscriber (subscribed to cloudsynk/+/+/telemetry):
-   - Parses topic → client_id=123, device_id=SICK_001
-   - Decodes hex using DecoderFactory (P1/P2/P3/H1)
-   - Extracts fields: Motor_RPM, Runtime_Min, GPS, etc.
-   ↓
-6. Subscriber inserts to SQL:
-   - IoT_Raw_Messages (raw payload)
-   - IoT_Data_Sick (decoded fields)
-   ↓
-7. Data available in dashboard (<5 seconds total latency)
+5. Data available in dashboard (<5 seconds total latency)
 ```
 
-### How debugmode Works (UI Concept)
+### Scenario 5: Payment Failure → Device Deactivation
 
-**Important:** Device firmware never sees the `debugmode` flag. It's a dashboard convenience that translates to actual config values.
-
-**When Admin Toggles Debug Mode ON:**
 ```
-Backend sets:
-  debugmode = 1 (database only, for UI state)
-  telemetry_interval = 30 (device sees this)
-  log_level = "verbose" (device sees this)
-
-Device receives:
-  { "telemetry_interval": 30, "device_settings": { "log_level": "verbose" } }
-  (No mention of "debugmode")
+1. Client's payment fails (card expired)
+   ↓
+2. Razorpay retries over 3 days
+   ↓
+3. Razorpay sends webhook: POST /api/webhooks/razorpay
+   Event: payment.failed
+   ↓
+4. Express Backend:
+   Sets client_subscription.status = past_due
+   Sets grace_period_end = now + 7 days
+   (devices stay ACTIVE during grace period)
+   ↓
+5. Azure Function (subscription-enforcer) runs daily at 2 AM IST
+   Finds subscriptions where grace_period_end < now AND status = past_due
+   ↓
+6. For each device in client:
+   - MQTT publish: { "type": "deactivation_notice", "reason": "subscription_expired" }
+   - Sets device.activation_status = INACTIVE
+   ↓
+7. On next connection attempt: EMQX auth hook returns DENY
+   Device goes offline
+   ↓
+8. Client renews subscription → admin re-activates devices
 ```
 
-**When Admin Toggles Debug Mode OFF:**
-```
-Backend sets:
-  debugmode = 0 (database only)
-  telemetry_interval = 300 (back to normal)
-  log_level = "normal"
+---
 
-Device receives:
-  { "telemetry_interval": 300, "device_settings": { "log_level": "normal" } }
+## How Debug Mode Works (UI Concept)
+
+**Important:** Device firmware never sees the `debugmode` flag. It's a dashboard convenience.
+
+**Debug Mode ON:**
+```
+Backend sets in SQL:  debugmode=1, telemetry_interval=30, log_level="verbose"
+Device receives:      { "telemetry_interval": 30, "device_settings": { "log_level": "verbose" } }
 ```
 
-**Benefits:**
-- No device firmware changes needed to support debug mode
-- Backend has full control over debug behavior
-- Can customize debug settings per device type (P1/P2/P3/HKMI)
-- Easy to add new debug behaviors without device updates
+**Debug Mode OFF:**
+```
+Backend sets in SQL:  debugmode=0, telemetry_interval=300, log_level="normal"
+Device receives:      { "telemetry_interval": 300, "device_settings": { "log_level": "normal" } }
+```
+
+Benefits: No firmware changes needed, backend controls debug behavior per device type.
+
+---
+
+## Scaling & HA
+
+These steps are not yet needed but should be planned before production load increases.
+
+### Redis Cache for Auth/ACL Performance
+
+Every MQTT publish triggers `/api/mqtt/acl` → SQL Server. At 500 devices in debug mode (30s interval), that's ~1,000 ACL requests/minute.
+
+**Add Azure Cache for Redis (Basic tier, ~$13/month):**
+
+```bash
+# Install ioredis on Express Backend
+npm install ioredis
+```
+
+```javascript
+// In mqttAuthRoutes.js — cache device status for 60 seconds
+import Redis from 'ioredis';
+const cache = new Redis(process.env.REDIS_URL);
+
+router.post('/mqtt/acl', async (req, res) => {
+  const { username } = req.body;
+  const cacheKey = `device:state:${username}`;
+
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    const device = JSON.parse(cached);
+    return res.json(buildAclResponse(device, req.body));
+  }
+
+  const device = await queryDeviceFromSql(username);
+  await cache.setex(cacheKey, 60, JSON.stringify(device));  // 60s TTL
+  res.json(buildAclResponse(device, req.body));
+});
+
+// Call this on device activation/deactivation to invalidate immediately
+async function invalidateDeviceCache(deviceId) {
+  await cache.del(`device:state:${deviceId}`);
+}
+```
+
+Add to Express Backend `.env`:
+```env
+REDIS_URL=rediss://:password@your-cache.redis.cache.windows.net:6380
+```
+
+### EMQX High Availability (2 VMs + Load Balancer)
+
+For zero-downtime EMQX updates and device failover:
+
+```bash
+# Create second VM (vm-cloudsynk-emqx-2) with same size and setup
+# Run same Docker EMQX container setup on both VMs
+# Both point auth/ACL HTTP hooks to same Express Backend URL
+
+# Azure Load Balancer (Standard, ~$0.008/hour)
+# Frontend: port 8883, Backend pool: both VM IPs
+# Health probe: TCP port 8883
+
+# NSG update: remove direct port 8883 access to VMs,
+# route all traffic through the load balancer
+```
+
+Devices reconnect automatically via MQTT reconnect logic within seconds of failover.
+
+### Azure Service Bus (Webhook Reliability)
+
+Before the Razorpay webhook goes live, add Azure Service Bus to decouple webhook receipt from processing:
+
+```javascript
+// Webhook handler: receive and enqueue immediately, process asynchronously
+import { ServiceBusClient } from '@azure/service-bus';
+
+const sbClient = new ServiceBusClient(process.env.SERVICE_BUS_CONNECTION_STRING);
+const sender = sbClient.createSender('payment-events');
+
+router.post('/webhooks/razorpay', express.raw({ type: 'application/json' }), async (req, res) => {
+  const body = JSON.parse(req.body);
+
+  // Verify signature first
+  if (!paymentService.verifyWebhookSignature(body, req.headers['x-razorpay-signature'])) {
+    return res.status(400).end();
+  }
+
+  // Respond 200 immediately — Razorpay retries on non-200
+  res.status(200).json({ received: true });
+
+  // Enqueue for reliable async processing
+  await sender.sendMessages({ body: JSON.stringify(body) });
+});
+
+// Separate worker (Azure Function or background job) reads from queue and processes
+```
 
 ---
 
 ## SSH Access
 
-### From the original machine (key-based)
+### From original machine (key-based)
 ```bash
 ssh -i ~/Downloads/vm-cloudsynk-emqx_key.pem mqttvm@20.198.101.175
 ```
 
 ### From another machine
 
-**Option A — Copy the SSH key (recommended, more secure)**
-1. Transfer `vm-cloudsynk-emqx_key.pem` to the other machine (USB, secure file share, etc.)
-2. On Linux/Mac, set correct permissions: `chmod 400 vm-cloudsynk-emqx_key.pem`
-3. Connect:
+**Option A — Copy the SSH key (recommended)**
 ```bash
+chmod 400 vm-cloudsynk-emqx_key.pem
 ssh -i path/to/vm-cloudsynk-emqx_key.pem mqttvm@20.198.101.175
 ```
 
-**Option B — Enable password-based SSH (convenient, less secure)**
-
-Run these on the VM (from an existing SSH session):
+**Option B — Enable password SSH (less secure)**
 ```bash
-# Set a password for mqttvm
 sudo passwd mqttvm
-
-# Enable password authentication
 sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf /etc/ssh/sshd_config
-
-# Restart SSH service
 sudo systemctl restart ssh
 ```
 
-Then from any machine:
-```bash
-ssh mqttvm@20.198.101.175
-```
+---
 
 ## Useful VM Commands
 
@@ -951,23 +1243,27 @@ sudo journalctl -u cloudsynk-subscriber -f
 # View subscriber logs (last 100 lines)
 sudo journalctl -u cloudsynk-subscriber -n 100
 
-# Check disk usage
-df -h
+# Restart subscriber
+sudo systemctl restart cloudsynk-subscriber
 
-# Check memory usage
-free -h
-
-# Check CPU usage
+# Check disk / memory / CPU
+df -h && free -h
 top -bn1 | head -20
 
 # Monitor MQTT connections
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl clients list
 
-# Check MQTT topics
+# Check MQTT topics active
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl topics list
 
 # Monitor message rate
 watch -n 5 'sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl metrics'
+
+# Check active subscriptions
+sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions list
+
+# Check buffered messages for subscriber (persistent session)
+sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions show cloudsynk-subscriber-prod
 ```
 
 ---
@@ -976,31 +1272,21 @@ watch -n 5 'sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl metrics'
 
 ### Health Checks
 
-**1. EMQX Broker Health:**
+**1. EMQX Broker:**
 ```bash
-# Check if EMQX is running
-sudo docker ps | grep emqx
-
-# Check EMQX metrics
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl status
-
-# Expected output: "Node 'emqx@127.0.0.1' is started"
+# Expected: "Node 'emqx@127.0.0.1' is started"
 ```
 
-**2. Python Subscriber Health:**
+**2. Python Subscriber:**
 ```bash
-# Check service status
 sudo systemctl status cloudsynk-subscriber
-
 # Expected: "Active: active (running)"
-
-# Check recent logs for errors
 sudo journalctl -u cloudsynk-subscriber --since "5 minutes ago" | grep -i error
 ```
 
 **3. Database Connectivity:**
 ```bash
-# Test SQL connection from subscriber
 cd /opt/cloudsynk-subscriber
 source venv/bin/activate
 python -c "import pyodbc; conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL Server};...'); print('Connected')"
@@ -1008,98 +1294,110 @@ python -c "import pyodbc; conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL 
 
 **4. Express Backend MQTT Connection:**
 ```bash
-# Check Express logs for MQTT connection
-# (on your Express Backend server)
 pm2 logs genvolt-backend | grep -i mqtt
-
 # Expected: "MQTT Service connected to broker"
 ```
 
 ### Common Issues & Solutions
 
-**Issue 1: Devices Cannot Connect to EMQX**
+**Issue 1: Device Cannot Connect**
 ```bash
 # Check NSG rules
 az network nsg rule list --nsg-name vm-cloudsynk-emqx-nsg -g CloudSynk_Prod -o table
 
-# Check EMQX ports are listening
+# Check EMQX ports
 sudo netstat -tlnp | grep -E '1883|8883|18083'
 
-# Check EMQX authentication logs
+# Check auth logs
 sudo docker logs cloudsynk-emqxmqtt-broker --tail 100 | grep -i auth
 ```
 
-**Issue 2: Subscriber Not Receiving Messages**
+**Issue 2: PENDING Device Not Appearing in Admin UI**
 ```bash
-# Check subscriber is subscribed to correct topic
-sudo journalctl -u cloudsynk-subscriber -n 50 | grep -i subscribe
+# Verify subscriber received pre-activation message
+sudo journalctl -u cloudsynk-subscriber -n 50 | grep pre-activation
 
-# Test with mosquitto client
+# Manually test pre-activation topic
+mosquitto_sub -h localhost -p 1883 \
+  -u local_subscriber -P <password> \
+  -t "cloudsynk/pre-activation" -v
+```
+
+**Issue 3: Device Stuck in PENDING After Activation**
+```bash
+# Check if retained activation payload exists on broker
+sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl topics list | grep pre-activation
+
+# Verify device is subscribing to its response topic
+sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions list | grep HK00001
+
+# Re-trigger activation (idempotent) via admin UI → Activate again
+```
+
+**Issue 4: Subscriber Not Receiving Telemetry**
+```bash
+# Check subscriber is subscribed
+sudo journalctl -u cloudsynk-subscriber -n 50 | grep subscribe
+
+# Test topic directly
 mosquitto_sub -h localhost -p 1883 -t "cloudsynk/+/+/telemetry" -v
 
-# Check EMQX topic subscriptions
+# Check EMQX subscriptions
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions list
 ```
 
-**Issue 3: Config Updates Not Reaching Devices**
+**Issue 5: Config Updates Not Reaching Devices**
 ```bash
 # Check Express Backend MQTT connection
-# (on Express Backend)
 curl http://localhost:3000/api/health/mqtt
 
-# Monitor EMQX for config messages
+# Monitor config messages
 mosquitto_sub -h 20.198.101.175 -p 1883 -t "cloudsynk/+/+/config" -v
 
-# Check EMQX ACL allows backend to publish
+# Check EMQX ACL allows backend_publisher
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl acl reload
 ```
 
-**Issue 4: High Memory Usage on VM**
+**Issue 6: Data Not Appearing in Dashboard**
 ```bash
-# Check memory usage
-free -h
+# Check subscriber for SQL errors
+sudo journalctl -u cloudsynk-subscriber | grep -i "sql\|error"
 
-# Check which process is using memory
-ps aux --sort=-%mem | head -10
-
-# If EMQX is using too much memory, adjust config:
-# Edit EMQX config to limit connections or message queue
-```
-
-**Issue 5: Data Not Appearing in Dashboard**
-```bash
-# Check subscriber logs for SQL errors
-sudo journalctl -u cloudsynk-subscriber | grep -i sql
-
-# Verify data in SQL database
-# Run query: SELECT TOP 10 * FROM IoT_Raw_Messages ORDER BY timestamp DESC
+# Verify recent data in SQL
+# SELECT TOP 10 * FROM IoT_Raw_Messages ORDER BY timestamp DESC
 
 # Check decoder errors
 sudo journalctl -u cloudsynk-subscriber | grep -i "decode error"
 ```
 
+**Issue 7: Subscriber Missed Messages During Restart**
+
+If subscriber restarted and `clean_session=False` is properly set, EMQX should replay buffered messages. Verify:
+```bash
+# Check buffered message count for subscriber session
+sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions show cloudsynk-subscriber-prod
+
+# Check subscriber logs after restart for "replaying buffered messages"
+sudo journalctl -u cloudsynk-subscriber --since "restart time" | head -20
+```
+
 ### Performance Monitoring
 
-**Key Metrics to Watch:**
-
-1. **EMQX Metrics:**
+1. **EMQX:**
    - Connected clients: `sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl clients list | wc -l`
    - Message rate: `sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl metrics | grep messages`
    - CPU/Memory: `sudo docker stats cloudsynk-emqxmqtt-broker`
 
-2. **Subscriber Metrics:**
-   - Message processing rate: Check logs for "Inserted to SQL" count per minute
+2. **Subscriber:**
+   - Processing rate: check logs for "Inserted to SQL" count per minute
    - Error rate: `sudo journalctl -u cloudsynk-subscriber --since today | grep -c ERROR`
-   - Decoder failures: `sudo journalctl -u cloudsynk-subscriber | grep -c "Failed to decode"`
 
 3. **SQL Database:**
-   - Row count growth: `SELECT COUNT(*) FROM IoT_Data_Sick WHERE timestamp > DATEADD(hour, -1, GETDATE())`
-   - Insertion latency: Monitor timestamp difference between device send and SQL insert
+   - Recent rows: `SELECT COUNT(*) FROM IoT_Data_Sick WHERE timestamp > DATEADD(hour, -1, GETDATE())`
 
 4. **VM Resources:**
    - CPU: `top -bn1 | grep "Cpu(s)" | awk '{print $2}'`
    - Memory: `free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }'`
-   - Disk I/O: `iostat -x 1 5`
 
 ### Alerting Setup (Recommended)
 
@@ -1109,616 +1407,47 @@ sudo journalctl -u cloudsynk-subscriber | grep -i "decode error"
 3. VM disk space < 2GB
 4. EMQX container restart detected
 
-**Custom Alerts (via Azure Function or Logic App):**
-1. Subscriber service down for > 2 minutes
+**Custom Alerts (Azure Function or Logic App):**
+1. Subscriber service down > 2 minutes
 2. No telemetry received in last 10 minutes
 3. Error rate > 5% in subscriber logs
 4. Express Backend MQTT disconnected
+5. Subscription grace period expires (payment) → notify client admin before deactivation
+
+---
 
 ## Security Best Practices
 
 ### Production Hardening Checklist
 
-**1. EMQX Security:**
+**EMQX Security:**
 - [ ] Change default admin password (DONE)
 - [ ] Enable TLS on port 8883
-- [ ] Disable plain MQTT port 1883 for external access (keep for internal subscriber only)
-- [ ] Enable per-device authentication (username/password or client certificates)
-- [ ] Configure ACL rules (devices can only publish to own topics)
-- [ ] Enable EMQX authentication plugin (MySQL or PostgreSQL for centralized user management)
-- [ ] Set rate limits per client (prevent abuse)
+- [ ] Disable plain MQTT port 1883 for external access (keep for internal subscriber)
+- [ ] Set rate limits per client (prevent pre-activation flooding)
 - [ ] Enable connection limits (max connections per client)
+- [ ] Restrict EMQX dashboard to specific IPs (NSG rules 1030/1040)
 
-**2. VM Security:**
-- [ ] Restrict SSH access to specific IPs (update NSG rule priority 1000)
+**VM Security:**
+- [ ] Restrict SSH access to specific IPs
 - [ ] Disable password authentication for SSH (key-only)
 - [ ] Enable automatic security updates:
   ```bash
   sudo apt install unattended-upgrades
   sudo dpkg-reconfigure -plow unattended-upgrades
   ```
-- [ ] Install fail2ban for SSH brute-force protection:
+- [ ] Install fail2ban:
   ```bash
   sudo apt install fail2ban
   sudo systemctl enable fail2ban
   ```
-- [ ] Restrict EMQX dashboard to specific IPs (NSG rule 1030/1040)
 
-**3. Database Security:**
-- [ ] Use service principal or managed identity for SQL authentication (instead of username/password)
-- [ ] Restrict SQL firewall to only allow VM IP and Express Backend IP
-- [ ] Use separate SQL user for subscriber (limited permissions: INSERT only on IoT_* tables)
-- [ ] Enable SQL audit logging for suspicious queries
-
-**4. Express Backend Security:**
-- [ ] Store MQTT credentials in Azure Key Vault (not .env file)
-- [ ] Use TLS for MQTT connection (mqtts://)
-- [ ] Implement retry logic for MQTT publish failures
-- [ ] Log all config push operations for audit trail
-- [ ] Validate client_id and device_id before MQTT publish (prevent topic injection)
-
-**5. Network Security:**
-- [ ] Use Azure Private Link for SQL connection (avoid public internet)
-- [ ] Consider VPN or ExpressRoute for Express Backend → MQTT broker connection
-- [ ] Enable DDoS protection on public IP (if handling critical infrastructure)
-
-**6. Certificate Management (TLS):**
-```bash
-# Install Certbot for Let's Encrypt
-sudo apt install certbot
-
-# Obtain certificate (requires domain name pointing to VM IP)
-sudo certbot certonly --standalone -d mqtt.cloudsynk.com
-
-# Configure EMQX to use certificates
-# Edit EMQX config or use dashboard to upload:
-# Cert: /etc/letsencrypt/live/mqtt.cloudsynk.com/fullchain.pem
-# Key: /etc/letsencrypt/live/mqtt.cloudsynk.com/privkey.pem
-
-# Auto-renewal
-sudo crontab -e
-# Add: 0 3 * * * certbot renew --quiet --post-hook "docker restart cloudsynk-emqxmqtt-broker"
-```
-
-**7. Secrets Management:**
-- [ ] Never commit MQTT passwords to Git
-- [ ] Rotate MQTT passwords every 90 days
-- [ ] Use Azure Key Vault for:
-  - SQL connection strings
-  - MQTT broker credentials
-  - Device authentication credentials
-- [ ] Implement secret rotation automation
-
-**8. Monitoring & Incident Response:**
-- [ ] Set up Azure Monitor alerts (CPU, memory, disk)
-- [ ] Monitor EMQX dashboard for unusual connection patterns
-- [ ] Review subscriber logs weekly for errors
-- [ ] Create incident response playbook for:
-  - VM down
-  - Subscriber service crashed
-  - MQTT broker overwhelmed
-  - SQL connection failure
-
----
-
-## Cleanup / Delete Resources
-
-To remove everything and stop billing:
-1. Azure Portal -> Resource groups -> CloudSynk_Prod
-2. Delete the VM and associated resources (disk, NIC, public IP, NSG, VNet)
-3. Or delete the entire resource group if it only contains MQTT resources
-
-**Note:** The quota limit (Basv2 Family = 2) remains but costs nothing.
-
----
-
-## Quick Reference
-
-### Connection Details
-
-| Component | Connection | Credentials |
-|-----------|------------|-------------|
-| **EMQX Dashboard** | http://20.198.101.175:18083 | admin / <changed_password> |
-| **MQTT Broker (Internal)** | mqtt://localhost:1883 | local_subscriber / <password> |
-| **MQTT Broker (External TLS)** | mqtts://20.198.101.175:8883 | device_id / <device_password> |
-| **SSH Access** | ssh -i vm-cloudsynk-emqx_key.pem mqttvm@20.198.101.175 | Key-based |
-| **SQL Database** | sqlserver-cs-db-prod.database.windows.net | genadmin / <password> |
-
-### Topic Structure
-
-| Topic | Direction | Purpose | Who Publishes | Who Subscribes |
-|-------|-----------|---------|---------------|----------------|
-| `cloudsynk/{client_id}/{device_id}/telemetry` | Device → Cloud | Send sensor data | Device | Python Subscriber |
-| `cloudsynk/{client_id}/{device_id}/config` | Cloud → Device | Push config updates | Express Backend | Device |
-
-### Service Locations
-
-| Service | Location | Type |
-|---------|----------|------|
-| **EMQX Broker** | VM (Docker container) | MQTT Broker |
-| **Python Subscriber** | VM (systemd service) | Telemetry Processor |
-| **Express Backend** | Existing deployment | Config Publisher |
-| **Device Config Function** | Azure Function | HTTP Config API |
-| **SQL Database** | Azure SQL | Data Storage |
-
-### Key Files
-
-| File | Location | Purpose |
-|------|----------|---------|
-| **local_subscriber.py** | /opt/cloudsynk-subscriber/ | MQTT subscriber service |
-| **Decoders** | /opt/cloudsynk-subscriber/decoders/ | Payload decoders (P1/P2/P3/H1) |
-| **.env** | /opt/cloudsynk-subscriber/.env | Environment variables |
-| **systemd service** | /etc/systemd/system/cloudsynk-subscriber.service | Auto-start config |
-| **mqttService.js** | genvolt-app-main/server/services/ | Express MQTT client |
-
-### Useful Commands Summary
-
-```bash
-# VM Status
-ssh -i vm-cloudsynk-emqx_key.pem mqttvm@20.198.101.175
-sudo docker ps
-sudo systemctl status cloudsynk-subscriber
-
-# Logs
-sudo docker logs cloudsynk-emqxmqtt-broker -f
-sudo journalctl -u cloudsynk-subscriber -f
-
-# EMQX CLI
-sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl status
-sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl clients list
-sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl topics list
-
-# Test MQTT
-mosquitto_pub -h 20.198.101.175 -p 1883 -t "cloudsynk/123/TEST/telemetry" -m "test"
-mosquitto_sub -h 20.198.101.175 -p 1883 -t "cloudsynk/+/+/config" -v
-
-# Restart Services
-sudo docker restart cloudsynk-emqxmqtt-broker
-sudo systemctl restart cloudsynk-subscriber
-```
-
----
-
-## Device Credential Management Best Practices
-
-### Password Generation
-
-**For New Devices:**
-```javascript
-// Use cryptographically secure random password
-const mqtt_password = crypto.randomBytes(16).toString('hex'); // 32 characters
-// OR
-const mqtt_password = crypto.randomBytes(24).toString('base64'); // 32 characters base64
-
-// Hash with bcrypt (salt rounds: 10)
-const mqtt_password_hash = await bcrypt.hash(mqtt_password, 10);
-```
-
-**For Testing/Development:**
-```javascript
-// Simpler passwords for test devices (DO NOT USE IN PRODUCTION)
-const mqtt_password = `${device_id}_test_password`;
-```
-
-### Password Display Policy
-
-**⚠️ CRITICAL SECURITY RULE:**
-- MQTT password shown ONCE when device is created
-- Admin must save password immediately (copy to clipboard, print, etc.)
-- Password NEVER stored in plaintext in database (only bcrypt hash)
-- If password lost, admin must regenerate (cannot retrieve original)
-
-**Frontend Implementation:**
-```jsx
-// Show credentials in modal with copy button
-<Modal>
-  <h3>⚠️ Save MQTT Credentials Now!</h3>
-  <p>Password will not be shown again.</p>
-  <CodeBlock>
-    Broker: mqtts://20.198.101.175:8883
-    Username: {device_id}
-    Password: {mqtt_password}
-  </CodeBlock>
-  <Button onClick={copyToClipboard}>Copy All</Button>
-  <Button onClick={downloadAsFile}>Download .txt</Button>
-  <Checkbox required>
-    I have saved these credentials
-  </Checkbox>
-</Modal>
-```
-
-### Bulk Device Provisioning
-
-**For deploying 50+ devices at once:**
-
-```javascript
-// Backend endpoint: POST /api/devices/bulk-create
-export const bulkCreateDevices = async (req, res) => {
-  const { devices } = req.body; // Array: [{ device_id, client_id, model }, ...]
-
-  const results = [];
-
-  for (const deviceData of devices) {
-    const mqtt_password = crypto.randomBytes(16).toString('hex');
-    const mqtt_password_hash = await bcrypt.hash(mqtt_password, 10);
-
-    await pool.request()
-      .input('device_id', sql.NVarChar, deviceData.device_id)
-      .input('client_id', sql.Int, deviceData.client_id)
-      .input('mqtt_username', sql.NVarChar, deviceData.device_id)
-      .input('mqtt_password_hash', sql.NVarChar, mqtt_password_hash)
-      .input('mqtt_enabled', sql.Bit, 1)
-      .query('INSERT INTO device (...) VALUES (...)');
-
-    results.push({
-      device_id: deviceData.device_id,
-      mqtt_username: deviceData.device_id,
-      mqtt_password: mqtt_password, // Plain password for CSV export
-    });
-  }
-
-  // Return CSV file with all credentials
-  const csv = generateCSV(results);
-  res.setHeader('Content-Disposition', 'attachment; filename=mqtt_credentials.csv');
-  res.setHeader('Content-Type', 'text/csv');
-  res.send(csv);
-};
-```
-
-**CSV Format:**
-```csv
-device_id,mqtt_broker,mqtt_username,mqtt_password,topic_publish,topic_subscribe
-SICK_001,mqtts://20.198.101.175:8883,SICK_001,a3b2c1d4e5f6...,cloudsynk/123/SICK_001/telemetry,cloudsynk/123/SICK_001/config
-SICK_002,mqtts://20.198.101.175:8883,SICK_002,f6e5d4c3b2a1...,cloudsynk/123/SICK_002/telemetry,cloudsynk/123/SICK_002/config
-```
-
-### Password Rotation Schedule
-
-**Recommended Rotation:**
-- **Production devices:** Every 90 days (automated reminder)
-- **Test devices:** Every 180 days
-- **Compromised devices:** Immediate rotation
-
-**Automated Rotation Script:**
-```javascript
-// Run monthly via cron job or Azure Function Timer Trigger
-async function rotateExpiredPasswords() {
-  const devices = await pool.request()
-    .query(`
-      SELECT device_id
-      FROM device
-      WHERE mqtt_password_updated_at < DATEADD(day, -90, GETDATE())
-        AND mqtt_enabled = 1
-    `);
-
-  for (const device of devices.recordset) {
-    const new_password = crypto.randomBytes(16).toString('hex');
-    const new_hash = await bcrypt.hash(new_password, 10);
-
-    await pool.request()
-      .input('device_id', sql.NVarChar, device.device_id)
-      .input('new_hash', sql.NVarChar, new_hash)
-      .query(`
-        UPDATE device
-        SET mqtt_password_hash = @new_hash,
-            mqtt_password_updated_at = GETDATE()
-        WHERE device_id = @device_id
-      `);
-
-    // Send alert to admin
-    await sendPasswordRotationAlert(device.device_id, new_password);
-  }
-}
-```
-
-### Credential Storage on Device
-
-**Best Practice for Device Firmware:**
-```c
-// Store credentials in device flash memory (encrypted if possible)
-typedef struct {
-    char mqtt_broker[128];
-    char mqtt_username[64];
-    char mqtt_password[64];  // Encrypted at rest
-    char topic_pub[128];
-    char topic_sub[128];
-} mqtt_config_t;
-
-// Never hardcode credentials in firmware source code
-// Load from secure storage on boot
-mqtt_config_t config = load_encrypted_config();
-```
-
----
-
-## Comparison: Manual vs Automated Device Management
-
-| Aspect | Manual EMQX Config | Database-Backed (Our Approach) |
-|--------|-------------------|--------------------------------|
-| **Setup Time per Device** | 5-10 minutes | 30 seconds (via dashboard) |
-| **For 500 Devices** | 40-80 hours 😱 | 4 hours ✅ |
-| **Credential Management** | EMQX built-in DB | SQL Server (centralized) |
-| **Password Reset** | Manual via EMQX dashboard | API call (automated) |
-| **Bulk Provisioning** | ❌ Not practical | ✅ CSV export |
-| **Audit Trail** | Limited | Full audit in SQL database |
-| **Integration** | Separate from device DB | Same database as device data |
-| **Scalability** | ❌ Poor (manual work) | ✅ Excellent (unlimited) |
-| **Disable Device** | Update EMQX user | Update SQL (instant) |
-| **ACL Management** | Manual rules per device | Pattern-based (automatic) |
-| **Credential Rotation** | Manual | Automated script |
-
----
-
-## Next Steps
-
-1. ✅ Complete remaining steps (6-13)
-2. ✅ Test end-to-end with device simulator
-3. ✅ Deploy Express Backend MQTT service (including HTTP auth endpoints)
-4. ✅ Configure EMQX HTTP authentication & ACL
-5. ✅ Update device table schema (add MQTT credential columns)
-6. ✅ Implement device creation with auto-generated MQTT credentials
-7. ✅ Enable TLS for production
-8. ✅ Start pilot with 10 test devices
-9. ✅ Monitor performance and iterate
-
-**Status:** Ready for subscriber implementation (Step 6) + HTTP auth setup (Step 12)
-
----
-
-## Device Provisioning - Automated Workflow
-
-### Overview: Zero Manual EMQX Configuration Per Device
-
-With database-backed authentication via HTTP, you never need to manually configure EMQX for each device. Here's the complete flow:
-
-### 1. Admin Creates Device in Dashboard
-
-**Frontend Form (React):**
-```jsx
-// DeviceManagement.jsx
-const handleCreateDevice = async () => {
-  const response = await deviceService.createDevice({
-    device_id: 'SICK_001',
-    client_id: 123,
-    model: 'P2',
-    machine_id: 'MACHINE_001'
-  });
-
-  // Display MQTT credentials to admin (ONCE)
-  setMqttCredentials(response.mqtt_credentials);
-  showWarning('Save these credentials! They will not be shown again.');
-};
-```
-
-### 2. Backend Auto-Generates Credentials
-
-**Express Backend:**
-```javascript
-// Creates device in database with auto-generated MQTT credentials
-// Returns credentials to admin
-```
-
-**SQL Database:**
-```
-device table now contains:
-├─ device_id: SICK_001
-├─ client_id: 123
-├─ mqtt_username: SICK_001
-├─ mqtt_password_hash: $2a$10$abc123... (bcrypt hash)
-└─ mqtt_enabled: 1
-```
-
-### 3. Admin Provisions Physical Device
-
-Admin configures device firmware with credentials (one-time):
-- MQTT Broker: `mqtts://20.198.101.175:8883`
-- MQTT Username: `SICK_001`
-- MQTT Password: `<displayed_once>`
-- Topic Publish: `cloudsynk/123/SICK_001/telemetry`
-- Topic Subscribe: `cloudsynk/123/SICK_001/config`
-
-### 4. Device Connects Automatically
-
-**Device Connection Flow:**
-```
-1. Device → MQTT CONNECT (username: SICK_001, password: xxx)
-   ↓
-2. EMQX → HTTP POST /api/mqtt/auth (Express Backend)
-   ↓
-3. Express Backend → SELECT from device table (SQL Server)
-   ↓
-4. Express Backend → Verify password hash
-   ↓
-5. Express Backend → Return { result: 'allow' }
-   ↓
-6. EMQX → Connection accepted ✅
-   ↓
-7. Device → MQTT SUBSCRIBE cloudsynk/123/SICK_001/config
-   ↓
-8. EMQX → HTTP POST /api/mqtt/acl (check subscribe permission)
-   ↓
-9. Express Backend → Verify topic matches device's client_id
-   ↓
-10. Express Backend → Return { result: 'allow' }
-   ↓
-11. EMQX → Subscription accepted ✅
-```
-
-**No EMQX dashboard interaction needed!**
-
-### 5. Disable Device Remotely (If Needed)
-
-**Admin clicks "Disable" in dashboard:**
-```javascript
-// Backend updates database
-UPDATE device SET mqtt_enabled = 0 WHERE device_id = 'SICK_001';
-
-// Optionally kick device off EMQX immediately
-await axios.delete(`http://20.198.101.175:18083/api/v5/clients/SICK_001`, {
-  auth: { username: 'admin', password: process.env.EMQX_ADMIN_PASSWORD }
-});
-```
-
-When device tries to reconnect:
-- EMQX → HTTP auth call → Backend sees `mqtt_enabled = 0` → Returns `deny`
-- Device connection rejected
-
-### 6. Rotate Device Password (Security)
-
-**If device credentials compromised:**
-```javascript
-// Generate new password
-const new_password = crypto.randomBytes(16).toString('hex');
-const new_hash = await bcrypt.hash(new_password, 10);
-
-// Update database
-await pool.request()
-  .input('device_id', sql.NVarChar, 'SICK_001')
-  .input('new_hash', sql.NVarChar, new_hash)
-  .query('UPDATE device SET mqtt_password_hash = @new_hash WHERE device_id = @device_id');
-
-// Kick existing connection (device will reconnect with new password)
-await axios.delete(`http://20.198.101.175:18083/api/v5/clients/SICK_001`, {
-  auth: { username: 'admin', password: process.env.EMQX_ADMIN_PASSWORD }
-});
-
-// Display new password to admin (ONCE)
-res.json({ new_password, warning: 'Update device firmware with new password' });
-```
-
----
-
-## EMQX Dashboard Configuration
-
-### Access Dashboard
-```
-URL: http://20.198.101.175:18083
-Login: admin / <your_changed_password>
-```
-
-### Key Configuration Areas
-
-**1. Authentication** (Management → Authentication)
-- ✅ **HTTP Authentication** (configured in Step 12)
-  - Authenticates all devices via Express Backend API
-  - No manual user creation needed
-- ✅ **Built-in Database** (for backend_publisher and local_subscriber only)
-  - Only 2 users need to be manually created
-  - Device users (500+) authenticated via HTTP
-
-**2. Authorization (ACL)** (Management → Authorization)
-- ✅ **HTTP Authorization** (configured in Step 12)
-  - Pattern-based ACL via Express Backend API
-  - Automatically enforces topic restrictions per device
-- ✅ **Built-in Database ACL** (for backend_publisher and local_subscriber only)
-  - backend_publisher: Can publish to `cloudsynk/+/+/config`
-  - local_subscriber: Can subscribe to `cloudsynk/+/+/telemetry`
-
-**3. Monitoring** (Dashboard → Overview)
-- Connected clients: Should see all devices + backend + subscriber
-- Message rate: Monitor messages/second (target: ~100-200 for 500 devices)
-- Topics: View active topics (cloudsynk/*/*/telemetry and config)
-- Authentication stats: Monitor auth success/failure rate
-
-**4. Alerts** (Management → Alarms)
-- Set up alerts for:
-  - High CPU usage (> 80%)
-  - High memory usage (> 3GB)
-  - Disconnected clients threshold
-  - Message drop rate
-  - High authentication failure rate (potential attack)
-
----
-
-## Cost Summary & Scalability
-
-### Infrastructure Costs
-
-| Component | Monthly Cost | Notes |
-|---|---|---|
-| Azure VM B2als_v2 | ~$17.96 (~Rs.1,526) | 2 vCPU, 4 GB RAM |
-| Public IP (Standard) | ~$3.65 (~Rs.310) | Static IP for MQTT broker |
-| Standard SSD 30 GiB | ~$2.40 (~Rs.204) | OS disk |
-| **VM Total** | **~$24/month (~Rs.2,040)** | |
-| | | |
-| Express Backend | $0 | Already deployed (App Service/Container) |
-| Azure SQL | Existing | No additional cost |
-| Device Config Function | Free tier | < 1M executions/month |
-| **Grand Total** | **~$24/month** | **vs ~$17/month HTTP-only** |
-
-### Cost Comparison: MQTT vs HTTP
-
-**Current HTTP System:**
-```
-Azure Function (HTTP Ingest):
-  500 devices × 288 requests/day = 144K/day = 4.32M/month
-  Cost: ~$17/month (after free tier)
-
-Azure Function (Device Config):
-  500 devices × 48 requests/day = 24K/day = 720K/month
-  Cost: Free tier
-
-Total: ~$17/month
-```
-
-**MQTT System:**
-```
-Azure VM (MQTT Broker): ~$24/month
-Azure Function (Device Config): Free tier (startup + debug mode polling)
-
-Total: ~$24/month
-```
-
-**Net Difference:** +$7/month (~40% increase)
-
-**BUT - Key Benefits:**
-- Real-time config updates (< 1 second vs 5-30 minutes)
-- Lower bandwidth costs (persistent connections vs HTTP overhead)
-- Better scalability (EMQX can handle 10K+ connections)
-- Reduced database load (no SELECT debugmode on every telemetry send)
-- Future-ready for bidirectional communication (device commands, OTA updates)
-
-### Scalability Analysis
-
-**Current Setup (B2als_v2):**
-- Can handle: 500-600 concurrent MQTT connections
-- Message throughput: ~1,000 messages/second
-- CPU usage: ~30-40% at full load
-- Memory usage: ~2GB at full load
-
-**If Scaling to 2,000 Devices:**
-- Upgrade to: B4als_v2 (4 vCPU, 8 GB RAM) - ~$36/month
-- Or: Keep current VM + add horizontal scaling (EMQX cluster)
-
-**Cost Per Device:**
-- MQTT: $24/500 = **$0.048/device/month** (~Rs.4/device/month)
-- HTTP: $17/500 = **$0.034/device/month** (~Rs.2.88/device/month)
-
----
-
-## Migration Strategy
-
-### Phase 1: Pilot (2 weeks)
-- [ ] Complete VM setup (Steps 6-13)
-- [ ] Deploy Express Backend MQTT service
-- [ ] Select 10 test devices (mix of SICK/HKMI/Gas)
-- [ ] Update device configs to use MQTT
-- [ ] Monitor stability, latency, data accuracy
-
-### Phase 2: Gradual Rollout (1 month)
-- [ ] Migrate 50 devices per week
-- [ ] Keep HTTP endpoints active as fallback
-- [ ] Monitor EMQX performance metrics
-- [ ] Adjust VM resources if needed
-
-### Phase 3: Full Migration (Month 2-3)
-- [ ] All devices using MQTT for telemetry
-- [ ] HTTP Device Config still used for startup
-- [ ] HTTP Ingest kept for backward compatibility (legacy devices)
-- [ ] Monitor cost savings and performance improvements
-
-### Phase 4: Optimization (Month 3+)
-- [ ] Implement TLS on port 8883 (disable port 1883)
-- [ ] Fine-tune EMQX settings (QoS, retained messages, session expiry)
-- [ ] Add MQTT-based OTA firmware updates (future enhancement)
-- [ ] Consider EMQX clustering for high availability
+**Database Security:**
+- [ ] Use managed identity for SQL authentication instead of username/password
+- [ ] Restrict SQL firewall to VM IP and Express Backend IP only
+
+**Payment Security:**
+- [ ] Validate Razorpay webhook signature on every event (implemented in PaymentService.js)
+- [ ] Use UNIQUE constraint on `payment_transaction.gateway_payment_id` to prevent duplicate processing
+- [ ] Log all payment events to `payment_transaction` table for audit
+- [ ] Never log full card details — Razorpay handles PCI compliance, only store payment IDs
