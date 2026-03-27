@@ -3,7 +3,9 @@ import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, ArrowsRightLe
 import { useDevice } from '../../context/DeviceContext';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import { useAuth } from '../../context/AuthContext';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { clientService } from '../../services/clientService';
+import SubscribePlanModal from '../../components/modals/SubscribePlanModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AddDeviceModal from '../../components/modals/AddDeviceModal';
 import EditDeviceModal from '../../components/modals/EditDeviceModal';
@@ -36,6 +38,7 @@ const DeviceManagement = () => {
   } = useDevicePermissions();
 
   const { user: currentUser } = useAuth();
+  const { isActive, isGrace, subscription } = useSubscription();
 
   // Local state for filters and search
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +58,8 @@ const DeviceManagement = () => {
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [showSubscribeModal, setShowSubscribeModal] = useState(false);
+  const [subscriptionBlockReason, setSubscriptionBlockReason] = useState(null);
 
   // Ref to prevent multiple concurrent API calls
   const isLoadingDevices = useRef(false);
@@ -255,10 +260,28 @@ const DeviceManagement = () => {
   };
 
   const handleActivateDevice = (device) => {
-    if (canOnboardDevice) {
-      setSelectedDevice(device);
-      setShowActivateModal(true);
+    if (!canOnboardDevice) return;
+
+    // SYSTEM_ADMIN / SUPER_ADMIN bypass subscription checks
+    const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role_name);
+
+    if (!isAdmin) {
+      if (!isActive && !isGrace) {
+        // No subscription or expired — redirect to subscribe
+        setSubscriptionBlockReason(!subscription ? 'NO_SUBSCRIPTION' : 'SUBSCRIPTION_EXPIRED');
+        setShowSubscribeModal(true);
+        return;
+      }
+      if (isGrace) {
+        // During grace period block new activations with a warning
+        setSubscriptionBlockReason('GRACE_PERIOD');
+        setShowSubscribeModal(true);
+        return;
+      }
     }
+
+    setSelectedDevice(device);
+    setShowActivateModal(true);
   };
 
   const handleDeactivateDevice = (device) => {
@@ -808,6 +831,48 @@ const DeviceManagement = () => {
         device={selectedDevice}
         onSuccess={() => loadDevices()}
       />
+
+      {/* Subscription block — shown when activation is blocked due to subscription status */}
+      {showSubscribeModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          {subscriptionBlockReason === 'GRACE_PERIOD' ? (
+            // Grace period: show renew prompt (no full plan modal needed)
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <ExclamationTriangleIcon className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-lg font-semibold text-gray-900">Subscription in Grace Period</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-6">
+                Your subscription has expired and is in the grace period. New device activations
+                are blocked. Please renew your subscription to activate devices.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowSubscribeModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <a
+                  href="/billing"
+                  className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  Renew Subscription →
+                </a>
+              </div>
+            </div>
+          ) : (
+            // No subscription or expired: show full plan selection modal
+            <SubscribePlanModal
+              onClose={() => setShowSubscribeModal(false)}
+              onSuccess={() => {
+                setShowSubscribeModal(false);
+                setSubscriptionBlockReason(null);
+              }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

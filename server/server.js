@@ -32,6 +32,8 @@ import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
 import p3DataRoutes from './routes/p3DataRoutes.js';
 import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -112,6 +114,10 @@ app.use(compression());
 app.use(cookieParser());
 app.use(limiter);
 
+// Razorpay webhook — must use raw body BEFORE express.json() parses the body
+// This route captures the raw Buffer needed for HMAC signature verification.
+app.use('/api/razorpay', express.raw({ type: 'application/json' }), webhookRoutes);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -171,6 +177,9 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
 app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/p3-device-details', p3DeviceDetailRoutes);
+// Subscription & billing routes
+app.use('/api/subscriptions', subscriptionRoutes);
+
 // MQTT hooks — called by EMQX broker, no JWT auth
 app.use('/api', mqttAuthRoutes);
 
@@ -233,6 +242,10 @@ const startServer = async () => {
 
     // Connect to MQTT broker (non-blocking — server starts even if MQTT is unavailable)
     mqttService.connect();
+
+    // Start subscription expiry cron (runs every hour)
+    const { startSubscriptionCron } = await import('./services/subscriptionCron.js');
+    startSubscriptionCron();
 
     app.listen(PORT, () => {
       logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);

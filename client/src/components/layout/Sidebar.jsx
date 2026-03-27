@@ -9,7 +9,9 @@ import {
   ChevronRightIcon,
   ShieldCheckIcon,
   BuildingOfficeIcon,
-  ComputerDesktopIcon
+  ComputerDesktopIcon,
+  CreditCardIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
@@ -101,6 +103,21 @@ const Sidebar = () => {
             Reports
           </NavLink> */}
 
+          {/* Billing - visible to all authenticated users */}
+          <NavLink
+            to="/billing"
+            className={({ isActive }) =>
+              `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isActive
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`
+            }
+          >
+            <CreditCardIcon className="w-5 h-5 mr-3" />
+            Billing
+          </NavLink>
+
           {/* Admin - with submenu - Hidden for CLIENT_USER role */}
           {user?.role !== 'CLIENT_USER' && (
             <div>
@@ -183,6 +200,22 @@ const Sidebar = () => {
                     <ComputerDesktopIcon className="w-4 h-4 mr-2" />
                     Device Management
                   </NavLink>
+
+                  {hasAnyPermission(['Manage Subscriptions']) && (
+                    <NavLink
+                      to="/admin/subscriptions"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <ClipboardDocumentListIcon className="w-4 h-4 mr-2" />
+                      Subscriptions
+                    </NavLink>
+                  )}
                 </div>
               )}
             </div>

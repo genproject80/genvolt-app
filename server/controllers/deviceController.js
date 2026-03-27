@@ -9,6 +9,7 @@ import { getPool } from '../config/database.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import mqttService from '../services/mqttService.js';
+import { checkDeviceActivationEligibility } from '../services/subscriptionService.js';
 
 /**
  * Helper function to check if current user can access target device
@@ -653,6 +654,31 @@ export const activateDevice = asyncHandler(async (req, res) => {
   const parsedClientId = parseInt(client_id, 10);
   if (isNaN(parsedClientId) || parsedClientId < 1)
     throw new ValidationError('client_id must be a positive integer');
+
+  // ------------------------------------------------------------------
+  // Subscription eligibility check
+  // SYSTEM_ADMIN / SUPER_ADMIN bypass the check so they can always
+  // activate devices regardless of subscription state.
+  // ------------------------------------------------------------------
+  const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(req.user?.role_name);
+  if (!isAdmin) {
+    const eligibility = await checkDeviceActivationEligibility(parsedClientId);
+    if (!eligibility.eligible) {
+      return res.status(403).json({
+        success: false,
+        eligible: false,
+        reason: eligibility.reason,
+        subscription: eligibility.subscription,
+        plan: eligibility.plan,
+        message: {
+          NO_SUBSCRIPTION:     'This client has no active subscription. Please subscribe to a plan first.',
+          GRACE_PERIOD:        'This client\'s subscription has expired and is in the grace period. Please renew to activate new devices.',
+          SUBSCRIPTION_EXPIRED:'This client\'s subscription has expired. Please renew to activate devices.',
+          PLAN_LIMIT:          `Device limit reached for the current plan (${eligibility.plan?.max_devices} devices). Please upgrade.`,
+        }[eligibility.reason] || 'Activation not allowed.',
+      });
+    }
+  }
 
   const pool = await getPool();
 

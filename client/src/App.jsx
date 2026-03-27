@@ -9,6 +9,7 @@ import { DashboardProvider } from './context/DashboardContext';
 import { DeviceDetailProvider } from './context/DeviceDetailContext';
 import { P3DeviceDetailProvider } from './context/P3DeviceDetailContext';
 import { DeviceProvider } from './context/DeviceContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import Login from './pages/Login/Login';
 import Layout from './components/layout/Layout';
 import DashboardHome from './pages/Dashboard/DashboardHome';
@@ -20,6 +21,8 @@ import UserManagement from './pages/Admin/UserManagement';
 import ClientManagement from './pages/Admin/ClientManagement';
 import RoleManagement from './pages/Admin/RoleManagement';
 import DeviceManagement from './pages/Admin/DeviceManagement';
+import SubscriptionManagement from './pages/Admin/SubscriptionManagement';
+import BillingPage from './pages/Billing/BillingPage';
 import LoadingSpinner from './components/common/LoadingSpinner';
 
 // Protected Route Component
@@ -155,7 +158,29 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      
+
+      <Route
+        path="/admin/subscriptions"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SubscriptionManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/billing"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BillingPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       
@@ -172,19 +197,21 @@ const App = () => {
         <ClientProvider>
           <RoleProvider>
             <UserProvider>
-              <DeviceProvider>
-                <DashboardProvider>
-                  <DeviceDetailProvider>
-                    <P3DeviceDetailProvider>
-                      <Router>
-                        <div className="App">
-                          <AppRoutes />
-                        </div>
-                      </Router>
-                    </P3DeviceDetailProvider>
-                  </DeviceDetailProvider>
-                </DashboardProvider>
-              </DeviceProvider>
+              <SubscriptionProvider>
+                <DeviceProvider>
+                  <DashboardProvider>
+                    <DeviceDetailProvider>
+                      <P3DeviceDetailProvider>
+                        <Router>
+                          <div className="App">
+                            <AppRoutes />
+                          </div>
+                        </Router>
+                      </P3DeviceDetailProvider>
+                    </DeviceDetailProvider>
+                  </DashboardProvider>
+                </DeviceProvider>
+              </SubscriptionProvider>
             </UserProvider>
           </RoleProvider>
         </ClientProvider>
