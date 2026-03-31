@@ -94,20 +94,6 @@ const Login = () => {
     }
   };
 
-  const handleDemoLogin = (demoType) => {
-    if (demoType === 'admin') {
-      setFormData({
-        email: 'admin@genvolt.com',
-        password: 'demo123'
-      });
-    } else {
-      setFormData({
-        email: 'user@demo.com',
-        password: 'demo123'
-      });
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -223,28 +209,6 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Demo Accounts */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 text-center mb-3">
-              Demo accounts:
-            </p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin')}
-                className="w-full text-xs text-gray-600 hover:text-primary-600 transition-colors"
-              >
-                admin@genvolt.com / demo123 (password)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('user')}
-                className="w-full text-xs text-gray-600 hover:text-primary-600 transition-colors"
-              >
-                user@demo.com / demo123 (password)
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
