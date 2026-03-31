@@ -20,6 +20,8 @@ import UserManagement from './pages/Admin/UserManagement';
 import ClientManagement from './pages/Admin/ClientManagement';
 import RoleManagement from './pages/Admin/RoleManagement';
 import DeviceManagement from './pages/Admin/DeviceManagement';
+import TableConfigManagement from './pages/Admin/TableConfigManagement';
+import DeviceTesting from './pages/DeviceTesting/DeviceTesting';
 import LoadingSpinner from './components/common/LoadingSpinner';
 
 // Protected Route Component
@@ -155,7 +157,29 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      
+
+      <Route
+        path="/admin/table-config"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <TableConfigManagement />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/device-testing"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DeviceTesting />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       
