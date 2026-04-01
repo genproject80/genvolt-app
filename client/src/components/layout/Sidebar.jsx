@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate, useMatch } from 'react-router-dom';
 import {
   HomeIcon,
-  ChartBarIcon,
   CogIcon,
   UsersIcon,
   ChevronDownIcon,
@@ -11,10 +10,8 @@ import {
   BuildingOfficeIcon,
   ComputerDesktopIcon,
   BeakerIcon,
-  ChartBarSquareIcon,
   TableCellsIcon,
-  CircleStackIcon
-  ComputerDesktopIcon,
+  CircleStackIcon,
   CreditCardIcon,
   ClipboardDocumentListIcon,
   RectangleGroupIcon,
@@ -47,7 +44,7 @@ const Sidebar = () => {
 
   const handleDashboardClick = (dashboard) => {
     setActiveDashboard(dashboard);
-    // Always navigate to dashboard home when switching dashboards
+    // Always navigate to the dashboard home when switching dashboards
     if (location.pathname !== '/dashboard') {
       navigate('/dashboard');
     }
