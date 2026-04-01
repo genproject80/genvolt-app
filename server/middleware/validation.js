@@ -16,6 +16,7 @@ export const handleValidationErrors = (req, res, next) => {
       value: error.value
     }));
 
+    console.error('Validation errors:', JSON.stringify(formattedErrors, null, 2));
     throw new ValidationError('Validation failed', formattedErrors);
   }
   next();

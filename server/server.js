@@ -31,6 +31,9 @@ import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
 import p3DataRoutes from './routes/p3DataRoutes.js';
 import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
+import deviceTestingRoutes from './routes/deviceTestingRoutes.js';
+import tableConfigRoutes from './routes/tableConfigRoutes.js';
+import hyPureRoutes from './routes/hyPureRoutes.js';
 import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
@@ -183,6 +186,9 @@ app.use('/api/feature-flags', featureFlagRoutes);
 
 // MQTT hooks — called by EMQX broker, no JWT auth
 app.use('/api', mqttAuthRoutes);
+app.use('/api/device-testing', deviceTestingRoutes);
+app.use('/api/table-config', tableConfigRoutes);
+app.use('/api/hypure', hyPureRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -204,7 +210,9 @@ app.get('/api', (req, res) => {
       userPreferences: '/api/user-preferences',
       hkmiTable: '/api/hkmi-table',
       p3Data: '/api/iot-data/p3',
-      p3DeviceDetails: '/api/p3-device-details'
+      p3DeviceDetails: '/api/p3-device-details',
+      deviceTesting: '/api/device-testing',
+      tableConfig: '/api/table-config'
     }
   });
 });

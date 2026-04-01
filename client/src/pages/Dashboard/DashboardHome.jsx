@@ -1,10 +1,11 @@
-import React, { useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import HKMI from '../../components/dashboard/HKMI';
 import Railway from '../../components/dashboard/Railway';
 import HKMITable from '../../components/dashboard/HKMITable';
 import P3Dashboard from '../../components/dashboard/P3Dashboard';
 import P3SSDashboard from '../../components/dashboard/P3SSDashboard';
+import HyPureDashboard from '../../components/dashboard/HyPureDashboard';
 
 // Dashboard component mapping based on dashboard name
 const dashboardComponents = {
@@ -24,7 +25,10 @@ const dashboardComponents = {
   'P3 Logic': P3Dashboard,
   'P3_SS': P3SSDashboard,
   'P3 SS': P3SSDashboard,
-  'P3SS': P3SSDashboard
+  'P3SS': P3SSDashboard,
+  'HyPure': HyPureDashboard,
+  'HyPure_Dashboard': HyPureDashboard,
+  'HyPure Dashboard': HyPureDashboard
 };
 
 const DashboardHome = () => {
@@ -53,10 +57,10 @@ const DashboardHome = () => {
   }, [activeDashboard?.name]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Page Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-5 py-3">
+        <h1 className="text-base font-semibold text-gray-900">
           {activeDashboard?.display_name || 'Dashboard'}
         </h1>
       </div>

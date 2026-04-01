@@ -114,6 +114,10 @@ export const PermissionProvider = ({ children }) => {
   const canDeleteUser = hasPermission('Delete User');
   const canResetPassword = hasPermission('Reset Password');
 
+  // Convenience flags for Device Testing feature
+  const canViewDeviceTesting = hasPermission('View Device Testing');
+  const canManageDeviceTestingTables = hasPermission('Manage Device Testing Tables');
+
   const value = {
     // State
     userPermissions,
@@ -144,7 +148,11 @@ export const PermissionProvider = ({ children }) => {
     canCreateUser,
     canEditUser,
     canDeleteUser,
-    canResetPassword
+    canResetPassword,
+
+    // Device Testing flags
+    canViewDeviceTesting,
+    canManageDeviceTestingTables
   };
 
   return (

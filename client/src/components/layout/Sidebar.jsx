@@ -10,6 +10,11 @@ import {
   ShieldCheckIcon,
   BuildingOfficeIcon,
   ComputerDesktopIcon,
+  BeakerIcon,
+  ChartBarSquareIcon,
+  TableCellsIcon,
+  CircleStackIcon
+  ComputerDesktopIcon,
   CreditCardIcon,
   ClipboardDocumentListIcon,
   RectangleGroupIcon,
@@ -31,10 +36,11 @@ const Sidebar = () => {
   const isClientDeviceRoute = !!useMatch('/admin/clients/:clientId/devices');
   const [isDashboardMenuOpen, setIsDashboardMenuOpen] = useState(true);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(true);
+  const [isDeviceTestingMenuOpen, setIsDeviceTestingMenuOpen] = useState(true);
 
   const { dashboards, activeDashboard, setActiveDashboard } = useDashboard();
   const { user } = useAuth();
-  const { hasAnyPermission } = usePermissions();
+  const { hasAnyPermission, canViewDeviceTesting, canManageDeviceTestingTables } = usePermissions();
   const { isPaymentsEnabled } = useFeatureFlags();
 
   const isAdmin = ['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(user?.role_name || user?.role);
@@ -128,6 +134,49 @@ const Sidebar = () => {
               <CreditCardIcon className="w-5 h-5 mr-3" />
               Billing
             </NavLink>
+          )}
+
+          {/* Device Testing - with submenu */}
+          {canViewDeviceTesting && (
+            <div>
+              <button
+                onClick={() => setIsDeviceTestingMenuOpen(!isDeviceTestingMenuOpen)}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  location.pathname.startsWith('/device-testing')
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center">
+                  <BeakerIcon className="w-5 h-5 mr-3" />
+                  Device Testing
+                </div>
+                {isDeviceTestingMenuOpen ? (
+                  <ChevronDownIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronRightIcon className="w-4 h-4" />
+                )}
+              </button>
+
+              {isDeviceTestingMenuOpen && (
+                <div className="mt-1 ml-6 space-y-1">
+                  <NavLink
+                    to="/device-testing"
+                    end
+                    className={({ isActive }) =>
+                      `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <CircleStackIcon className="w-4 h-4 mr-2" />
+                    Data Tables
+                  </NavLink>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Admin - with submenu - Hidden for CLIENT_USER role */}
@@ -300,6 +349,22 @@ const Sidebar = () => {
                     >
                       <FlagIcon className="w-4 h-4 mr-2" />
                       Feature Flags
+                    </NavLink>
+                  )}
+
+                  {canManageDeviceTestingTables && (
+                    <NavLink
+                      to="/admin/table-config"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <TableCellsIcon className="w-4 h-4 mr-2" />
+                      Table Configuration
                     </NavLink>
                   )}
                 </div>
