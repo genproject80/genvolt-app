@@ -8,7 +8,7 @@
 - `Azure_Production_Setup.md` — production secrets rotation & step-by-step CLI commands
 - `VM_Setup_Guide.md` — EMQX VM first-time setup
 - `docs/MQTT_SECURITY_PRODUCTION_STEPS.md` — MQTT security hardening checklist
-- `scripts/migrate_consolidated.sql` — idempotent database migration
+- `scripts/april-fools-day.sql` — idempotent database migration
 
 ---
 
@@ -45,12 +45,8 @@
 │   │  :18083 — Dashboard (restricted)            │    │
 │   │  Auth/ACL → HTTP hooks → Express backend    │    │
 │   └─────────────────────────────────────────────┘    │
-│   ┌─────────────────────────────────────────────┐    │
-│   │  Python/Node Subscriber (systemd)            │    │
-│   │  Subscribes: cloudsynk/+/+/telemetry        │    │
-│   │  Subscribes: cloudsynk/pre-activation       │    │
-│   │  Decodes hex → inserts DeviceTelemetry      │    │
-│   └─────────────────────────────────────────────┘    │
+│   (Node subscriber is built into the backend —      │
+│    mqttListenerService.js runs inside App Service)  │
 └───────┬─────────────────────────────┬────────────────┘
         │ SQL INSERT                  │ MQTT publish (config)
 ┌───────▼──────────────┐  ┌──────────▼─────────────────┐
@@ -132,8 +128,7 @@
 |----------|----------|---------|-------------|
 | `MQTT_BROKER_HOST` | Yes | `localhost` | EMQX broker hostname or IP |
 | `MQTT_BROKER_PORT` | No | `1883` | Broker port (`8883` for TLS in prod) |
-| `MQTT_BROKER_TLS` | No | `false` | **Set `true` in production** |
-| `MQTT_REJECT_UNAUTHORIZED` | No | `false` | Set `true` in production (rejects invalid TLS certs) |
+| `MQTT_BROKER_TLS` | No | `false` | **Set `true` in production** — also controls `rejectUnauthorized` on the TLS socket |
 | `MQTT_BACKEND_USER` | Yes | — | Service account username (`backend_publisher`) |
 | `MQTT_BACKEND_PASSWORD` | Yes | — | Service account password — generate with `openssl rand -hex 32` |
 | `PRE_ACTIVATION_SECRET` | Yes | — | Shared firmware secret for PENDING device auth. Change if ever compromised. |
@@ -174,7 +169,6 @@ EMQX_VM_IP=20.198.101.175,::ffff:127.0.0.1,127.0.0.1,::1
 |----------|----------|---------|-------------|
 | `VITE_API_URL` | No | `""` (Vite proxy) | Backend API base URL. Leave empty for local dev (Vite proxies to `localhost:5001`). Set full URL in production. |
 | `VITE_APP_NAME` | No | `GenVolt Dashboard` | App display name |
-| `VITE_APP_VERSION` | No | `1.0.0` | App version shown in UI |
 | `VITE_RAZORPAY_KEY_ID` | No | — | Public Razorpay key (safe to expose). Use test key for dev, live key for prod. |
 
 **Dev (`client/.env`):**
@@ -193,23 +187,7 @@ VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxxxxx
 
 ---
 
-### 2.3 VM Subscriber (`/opt/cloudsynk-subscriber/.env`)
-
-```env
-MQTT_BROKER=localhost
-MQTT_PORT=1883
-MQTT_USER=local_subscriber
-MQTT_PASSWORD=<strong-password>
-
-DB_SERVER=<your-sql-server>.database.windows.net
-DB_NAME=cs_db_prod
-DB_USER=<db-user>
-DB_PASSWORD=<db-password>
-```
-
----
-
-### 2.4 Complete Dev `.env` Example
+### 2.3 Dev `.env` Example
 
 ```env
 # Database
@@ -236,10 +214,9 @@ LOG_LEVEL=debug
 MQTT_BROKER_HOST=localhost
 MQTT_BROKER_PORT=1883
 MQTT_BROKER_TLS=false
-MQTT_REJECT_UNAUTHORIZED=false
 MQTT_BACKEND_USER=backend_publisher
-MQTT_BACKEND_PASSWORD=mqtt@cloudsynk
-PRE_ACTIVATION_SECRET=change-me-strong-random-secret
+MQTT_BACKEND_PASSWORD=<generate: openssl rand -hex 32>
+PRE_ACTIVATION_SECRET=<generate: openssl rand -hex 32>
 
 # EMQX Management API
 EMQX_MGMT_API_URL=http://localhost:18083/api/v5
@@ -276,7 +253,6 @@ JWT_REFRESH_EXPIRES_IN=7d
 MQTT_BROKER_HOST=20.198.101.175
 MQTT_BROKER_PORT=8883
 MQTT_BROKER_TLS=true
-MQTT_REJECT_UNAUTHORIZED=true
 MQTT_BACKEND_USER=backend_publisher
 
 EMQX_MGMT_API_URL=http://20.198.101.175:18083/api/v5
@@ -390,7 +366,7 @@ sqlcmd -S sqlserver-cs-db-prod.database.windows.net \
        -d cs_db_prod \
        -U csadmin \
        -P "<password>" \
-       -i scripts/migrate_consolidated.sql
+       -i scripts/april-fools-day.sql
 ```
 
 The migration script is **idempotent** — safe to re-run. It creates all tables, sequences, indexes, seeds subscription plans, inventory models, and feature flags, and back-fills existing device records.
@@ -464,7 +440,7 @@ sudo snap install --classic certbot
 sudo certbot certonly --standalone \
   --non-interactive \
   --agree-tos \
-  --email admin@cloudsynk.net \
+  --email <your-email> \
   -d emqx-cloudsynk.centralindia.cloudapp.azure.com
 ```
 
@@ -580,14 +556,13 @@ Dashboard → **Access Control → Authorization → Create**
 
 Dashboard → **Access Control → Authentication → Built-in Database → Users → Add**
 
-Add these two accounts and set as a **second authenticator** (after the HTTP hook, so device auth hits HTTP first):
+Add this account and set as a **second authenticator** (after the HTTP hook, so device auth hits HTTP first):
 
 | Username | Password | Notes |
 |----------|----------|-------|
-| `backend_publisher` | `<MQTT_BACKEND_PASSWORD>` | Used by Express backend to publish config and activation payloads |
-| `local_subscriber` | `<strong unique password>` | Used by Python/Node subscriber on the VM |
+| `backend_publisher` | `<MQTT_BACKEND_PASSWORD>` | Used by Express backend (both publisher and subscriber run inside the backend service) |
 
-#### ACL Rules for Service Accounts
+#### ACL Rules for Service Account
 
 Dashboard → **Access Control → Authorization → Built-in Database → Rules → Add**
 
@@ -597,15 +572,8 @@ Dashboard → **Access Control → Authorization → Built-in Database → Rules
 |--------|---------------|
 | Allow PUBLISH | `cloudsynk/+/+/config` |
 | Allow PUBLISH | `cloudsynk/pre-activation/response/+` |
-| Deny SUBSCRIBE | `#` |
-
-**`local_subscriber`:**
-
-| Action | Topic Pattern |
-|--------|---------------|
 | Allow SUBSCRIBE | `cloudsynk/+/+/telemetry` |
 | Allow SUBSCRIBE | `cloudsynk/pre-activation` |
-| Deny PUBLISH | `#` |
 
 ---
 
@@ -635,7 +603,7 @@ az keyvault secret set \
 - [ ] Port 1883 bound to `127.0.0.1` only (blocked from internet via NSG)
 - [ ] Port 18083 restricted to admin IP in NSG
 - [ ] TLS certificate installed on port 8883
-- [ ] `MQTT_REJECT_UNAUTHORIZED=true` set on backend (validates broker TLS cert)
+- [ ] `MQTT_BROKER_TLS=true` set on backend (also enables `rejectUnauthorized` on the TLS socket)
 - [ ] Auth hook pointed to production backend URL (not localhost)
 - [ ] ACL hook pointed to production backend URL
 - [ ] `backend_publisher` and `local_subscriber` passwords rotated from defaults
@@ -697,7 +665,6 @@ az webapp config appsettings set \
     MQTT_BROKER_HOST=20.198.101.175 \
     MQTT_BROKER_PORT=8883 \
     MQTT_BROKER_TLS=true \
-    MQTT_REJECT_UNAUTHORIZED=true \
     MQTT_BACKEND_USER=backend_publisher \
     EMQX_MGMT_API_URL=http://20.198.101.175:18083/api/v5 \
     EMQX_VM_IP="20.198.101.175,::ffff:20.198.101.175" \
@@ -849,18 +816,24 @@ mosquitto_pub \
 mosquitto_pub \
   -h emqx-cloudsynk.centralindia.cloudapp.azure.com \
   -p 8883 --capath /etc/ssl/certs \
-  -u "356938035643809" \
+  -u "<DEVICE_IMEI>" \
   -P "<PRE_ACTIVATION_SECRET>" \
   -t "cloudsynk/pre-activation" \
-  -m '{"imei":"356938035643809","device_type":"GV-M1","firmware_version":"2.1.0","mac_address":"AA:BB:CC:DD:EE:FF"}'
+  -m '{"imei":"<DEVICE_IMEI>","device_type":"GV-M1","firmware_version":"2.1.0","mac_address":"AA:BB:CC:DD:EE:FF"}'
 # Expected: device appears in Admin UI → Pending Devices
 ```
 
 ### Subscriber Running
 
+The MQTT subscriber is built into the backend (`mqttListenerService.js`) and starts with the App Service. Check the backend logs:
+
 ```bash
-sudo systemctl status cloudsynk-subscriber
-sudo journalctl -u cloudsynk-subscriber -n 50 --no-pager
+# Azure Portal → App Service → Log stream
+# Or via CLI:
+az webapp log tail \
+  --name cloudsynk-backend-api-prod \
+  --resource-group CloudSynk_Prod
+# Expected: "MQTT listener connected" in startup logs
 ```
 
 ---

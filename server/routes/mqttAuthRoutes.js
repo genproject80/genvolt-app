@@ -24,7 +24,7 @@ const router = express.Router();
 // Set EMQX_VM_IP in env (comma-separated for multiple IPs).
 // Azure App Service puts the real client IP in x-forwarded-for.
 const EMQX_ALLOWED_IPS = new Set(
-  (process.env.EMQX_VM_IP || '20.198.101.175').split(',').map(s => s.trim())
+  (process.env.EMQX_VM_IP || '').split(',').map(s => s.trim()).filter(Boolean)
 );
 
 function requireEmqxIp(req, res, next) {
@@ -41,7 +41,7 @@ function requireEmqxIp(req, res, next) {
 // Service accounts are authenticated by EMQX built-in database — they should
 // never reach this HTTP hook. If they do, return ignore so EMQX falls back to
 // the built-in database check.
-const SERVICE_ACCOUNTS = new Set(['backend_publisher', 'local_subscriber']);
+const SERVICE_ACCOUNTS = new Set([process.env.MQTT_BACKEND_USER].filter(Boolean));
 
 // IMEI format: exactly 15 decimal digits
 const IMEI_RE = /^\d{15}$/;
@@ -133,8 +133,9 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
 // Returns:    { result: 'allow' } or { result: 'deny' }
 // ---------------------------------------------------------------------------
 
-// In-process device cache (30-second TTL) to avoid DB round-trip per message.
+// In-process device cache to avoid DB round-trip per message.
 // Keyed by mqtt_username (device_id). Stores { imei, activation_status, data_enabled }.
+const DEVICE_CACHE_TTL_MS = 30_000;
 const deviceCache = new Map();
 
 async function getCachedDevice(username) {
@@ -152,7 +153,7 @@ async function getCachedDevice(username) {
     `);
 
   const device = result.recordset.length > 0 ? result.recordset[0] : null;
-  deviceCache.set(username, { device, expiresAt: now + 30_000 });
+  deviceCache.set(username, { device, expiresAt: now + DEVICE_CACHE_TTL_MS });
   return device;
 }
 

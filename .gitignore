@@ -10,3 +10,6 @@ yarn-debug.log*
 #others
 /server/.env
 /server/logs/
+/.idea/modules.xml
+/.idea/vcs.xml
+/.idea/inspectionProfiles/Project_Default.xml

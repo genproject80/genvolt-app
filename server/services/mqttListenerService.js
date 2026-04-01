@@ -78,13 +78,7 @@ class MQTTListenerService {
   // Called when a device boots and publishes {"IMEI":"..."} to cloudsynk/pre-activation
   // -------------------------------------------------------------------------
   async handlePreActivation(payload) {
-    console.log('payload', payload);
     const imei = payload?.IMEI;
-    console.log("IMEI:", imei, typeof imei);
-    console.log("PARAM:", {
-      value: String(imei),
-      type: "NVarChar"
-    });
 
     if (!imei) {
       logger.warn('Pre-activation message missing IMEI field');
