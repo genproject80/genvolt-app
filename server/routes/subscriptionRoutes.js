@@ -10,6 +10,9 @@ import {
   cancelSubscription,
   getTransactions,
   getEligibility,
+  createManualSubscription,
+  changePlan,
+  extendEndDate,
 } from '../controllers/subscriptionController.js';
 
 const router = express.Router();
@@ -44,6 +47,27 @@ router.get(
   '/',
   requirePermission('Manage Subscriptions'),
   getAllSubscriptions
+);
+
+// Admin — manual subscription assignment
+router.post(
+  '/admin/manual',
+  requirePermission('Manage Subscriptions'),
+  createManualSubscription
+);
+
+// Admin — change plan on existing subscription
+router.patch(
+  '/:id/plan',
+  requirePermission('Manage Subscriptions'),
+  changePlan
+);
+
+// Admin — extend end date on existing subscription
+router.patch(
+  '/:id/extend',
+  requirePermission('Manage Subscriptions'),
+  extendEndDate
 );
 
 export default router;

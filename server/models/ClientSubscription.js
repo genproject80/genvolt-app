@@ -19,6 +19,10 @@ export class ClientSubscription {
     this.created_at               = data.created_at;
     this.updated_at               = data.updated_at;
     this.created_by_user_id       = data.created_by_user_id;
+    // admin assignment fields
+    this.assignment_type          = data.assignment_type;
+    this.assigned_by_admin_id     = data.assigned_by_admin_id;
+    this.admin_notes              = data.admin_notes;
 
     // Joined from SubscriptionPlans
     this.plan_name                = data.plan_name;
@@ -49,6 +53,10 @@ export class ClientSubscription {
       cancelled_at:             this.cancelled_at,
       cancellation_reason:      this.cancellation_reason,
       created_at:               this.created_at,
+      // admin assignment fields
+      assignment_type:          this.assignment_type,
+      assigned_by_admin_id:     this.assigned_by_admin_id,
+      admin_notes:              this.admin_notes,
       // plan details
       plan_name:                this.plan_name,
       max_devices:              this.max_devices,
@@ -385,6 +393,116 @@ export class ClientSubscription {
       return result.recordset;
     } catch (error) {
       logger.error('ClientSubscription.findExpiredGrace error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // createManual — admin creates ACTIVE subscription without Razorpay
+  // ------------------------------------------------------------------
+  static async createManual({ client_id, plan_id, billing_cycle, end_date, assigned_by_admin_id, assignment_type = 'MANUAL', admin_notes = '' }) {
+    try {
+      const plan = await import('./SubscriptionPlan.js').then(m => m.SubscriptionPlan.findById(plan_id));
+      const graceDays = plan?.grace_days ?? 7;
+      const endDateObj = new Date(end_date);
+      const graceEnd = new Date(endDateObj);
+      graceEnd.setDate(graceEnd.getDate() + graceDays);
+
+      const result = await executeQuery(
+        `INSERT INTO ClientSubscriptions
+           (client_id, plan_id, billing_cycle, status, start_date, end_date,
+            grace_end_date, assignment_type, assigned_by_admin_id, admin_notes, created_by_user_id)
+         OUTPUT INSERTED.subscription_id
+         VALUES (@clientId, @planId, @billingCycle, 'ACTIVE', GETUTCDATE(), @endDate,
+                 @graceEnd, @assignType, @adminId, @notes, @adminId)`,
+        {
+          clientId:    { value: client_id,           type: sql.Int },
+          planId:      { value: plan_id,              type: sql.Int },
+          billingCycle:{ value: billing_cycle,         type: sql.NVarChar },
+          endDate:     { value: endDateObj,            type: sql.DateTime2 },
+          graceEnd:    { value: graceEnd,              type: sql.DateTime2 },
+          assignType:  { value: assignment_type,       type: sql.NVarChar },
+          adminId:     { value: assigned_by_admin_id,  type: sql.Int },
+          notes:       { value: admin_notes || '',     type: sql.NVarChar },
+        }
+      );
+      const newId = result.recordset[0].subscription_id;
+      return await ClientSubscription.findById(newId);
+    } catch (error) {
+      logger.error('ClientSubscription.createManual error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // changePlan — update plan_id (price effective at next renewal)
+  // ------------------------------------------------------------------
+  static async changePlan(subscriptionId, newPlanId, adminUserId) {
+    try {
+      await executeQuery(
+        `UPDATE ClientSubscriptions
+         SET plan_id = @planId, assigned_by_admin_id = @adminId, updated_at = GETUTCDATE()
+         WHERE subscription_id = @subId`,
+        {
+          subId:   { value: subscriptionId, type: sql.Int },
+          planId:  { value: newPlanId,       type: sql.Int },
+          adminId: { value: adminUserId,     type: sql.Int },
+        }
+      );
+      return await ClientSubscription.findById(subscriptionId);
+    } catch (error) {
+      logger.error('ClientSubscription.changePlan error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // extendEndDate — update end_date + recalculate grace_end_date
+  // ------------------------------------------------------------------
+  static async extendEndDate(subscriptionId, newEndDate, adminUserId) {
+    try {
+      const sub = await ClientSubscription.findById(subscriptionId);
+      const graceDays = sub?.grace_days ?? 7;
+      const endDateObj = new Date(newEndDate);
+      const graceEnd = new Date(endDateObj);
+      graceEnd.setDate(graceEnd.getDate() + graceDays);
+
+      await executeQuery(
+        `UPDATE ClientSubscriptions
+         SET end_date = @endDate, grace_end_date = @graceEnd,
+             assigned_by_admin_id = @adminId, updated_at = GETUTCDATE()
+         WHERE subscription_id = @subId`,
+        {
+          subId:   { value: subscriptionId, type: sql.Int },
+          endDate: { value: endDateObj,      type: sql.DateTime2 },
+          graceEnd:{ value: graceEnd,        type: sql.DateTime2 },
+          adminId: { value: adminUserId,     type: sql.Int },
+        }
+      );
+      return await ClientSubscription.findById(subscriptionId);
+    } catch (error) {
+      logger.error('ClientSubscription.extendEndDate error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // cancelActiveForClient — cancel any ACTIVE/GRACE subscription before manual assign
+  // ------------------------------------------------------------------
+  static async cancelActiveForClient(clientId, reason = 'Superseded by admin assignment') {
+    try {
+      await executeQuery(
+        `UPDATE ClientSubscriptions
+         SET status = 'CANCELLED', cancelled_at = GETUTCDATE(),
+             cancellation_reason = @reason, updated_at = GETUTCDATE()
+         WHERE client_id = @clientId AND status IN ('ACTIVE', 'GRACE', 'PENDING')`,
+        {
+          clientId: { value: clientId, type: sql.Int },
+          reason:   { value: reason,   type: sql.NVarChar },
+        }
+      );
+    } catch (error) {
+      logger.error('ClientSubscription.cancelActiveForClient error:', error);
       throw error;
     }
   }

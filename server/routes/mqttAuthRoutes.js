@@ -6,6 +6,9 @@
  *
  * No JWT auth middleware here — these endpoints are internal, called by EMQX only.
  * In production, restrict via IP allowlist (NSG / firewall rule).
+ *
+ * Pre-activation devices connect with username=<IMEI> and password=PRE_ACTIVATION_SECRET.
+ * Active devices connect with username=<device_id> and password=<mqtt_password>.
  */
 
 import express from 'express';
@@ -35,16 +38,22 @@ function requireEmqxIp(req, res, next) {
 }
 
 // ---------------------------------------------------------------------------
+// Service accounts are authenticated by EMQX built-in database — they should
+// never reach this HTTP hook. If they do, return ignore so EMQX falls back to
+// the built-in database check.
+const SERVICE_ACCOUNTS = new Set(['backend_publisher', 'local_subscriber']);
+
+// IMEI format: exactly 15 decimal digits
+const IMEI_RE = /^\d{15}$/;
+
+// Shared firmware secret for pre-activation connections (username=IMEI).
+const PRE_ACTIVATION_SECRET = process.env.PRE_ACTIVATION_SECRET || '';
+
+// ---------------------------------------------------------------------------
 // POST /api/mqtt/auth
 // EMQX sends: { clientid, username, password }
 // Returns:    { result: 'allow' } or { result: 'deny' }
 // ---------------------------------------------------------------------------
-// Service accounts (backend_publisher, local_subscriber) are authenticated by
-// EMQX built-in database — they should never reach this HTTP hook.
-// If they do (misconfigured EMQX auth chain order), return deny so they fall
-// back to the built-in database check.
-const SERVICE_ACCOUNTS = new Set(['backend_publisher', 'local_subscriber']);
-
 router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
   const { username, password } = req.body;
 
@@ -52,20 +61,44 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
     return res.status(400).json({ result: 'deny', reason: 'Missing username' });
   }
 
-  // Service accounts are not in the device table.
-  // Returning "ignore" with 200 tells EMQX to pass to the next authenticator
-  // (built-in database), where backend_publisher / local_subscriber live.
+  // Service accounts use EMQX built-in auth — pass through
   if (SERVICE_ACCOUNTS.has(username)) {
     return res.json({ result: 'ignore' });
   }
 
   try {
     const pool = await getPool();
+
+    // Pre-activation: device connects with IMEI as username and shared firmware secret
+    if (IMEI_RE.test(username)) {
+      if (!PRE_ACTIVATION_SECRET || password !== PRE_ACTIVATION_SECRET) {
+        return res.status(401).json({ result: 'deny', reason: 'Invalid pre-activation secret' });
+      }
+
+      // Allow only if device is not yet active (new, PENDING, or INACTIVE after deactivation)
+      const imeiCheck = await pool.request()
+        .input('imei', sql.NVarChar, username)
+        .query(`SELECT activation_status FROM dbo.device WHERE imei = @imei`);
+
+      if (imeiCheck.recordset.length > 0) {
+        const status = imeiCheck.recordset[0].activation_status;
+        if (status === 'ACTIVE') {
+          return res.status(403).json({ result: 'deny', reason: 'Device already active — use device credentials' });
+        }
+        if (status === 'INACTIVE') {
+          return res.status(403).json({ result: 'deny', reason: 'Device deactivated — contact administrator' });
+        }
+      }
+      // Not found (brand new) or PENDING — allow pre-activation connection
+      return res.json({ result: 'allow', is_superuser: false });
+    }
+
+    // Post-activation: device connects with device_id as username and bcrypt-hashed password
     const result = await pool.request()
       .input('deviceId', sql.NVarChar, username)
       .query(`
-        SELECT activation_status, mqtt_password, client_id
-        FROM device
+        SELECT activation_status, mqtt_password
+        FROM dbo.device
         WHERE device_id = @deviceId
       `);
 
@@ -75,28 +108,18 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
 
     const device = result.recordset[0];
 
-    // INACTIVE — always deny
-    if (device.activation_status === 'INACTIVE') {
-      return res.status(403).json({ result: 'deny', reason: 'Device deactivated' });
+    if (device.activation_status !== 'ACTIVE') {
+      return res.status(403).json({ result: 'deny', reason: 'Device not active' });
     }
 
-    // PENDING — allow connect, ACL will restrict topics
-    if (device.activation_status === 'PENDING') {
-      return res.json({ result: 'allow', is_superuser: false });
+    if (!device.mqtt_password || !password) {
+      return res.status(401).json({ result: 'deny', reason: 'Missing credentials' });
     }
 
-    // ACTIVE — verify bcrypt password
-    if (device.activation_status === 'ACTIVE') {
-      if (!device.mqtt_password || !password) {
-        return res.status(401).json({ result: 'deny', reason: 'Missing credentials' });
-      }
-      const valid = await bcrypt.compare(password, device.mqtt_password);
-      return valid
-        ? res.json({ result: 'allow', is_superuser: false })
-        : res.status(401).json({ result: 'deny', reason: 'Invalid password' });
-    }
-
-    res.status(403).json({ result: 'deny', reason: 'Unknown device state' });
+    const valid = await bcrypt.compare(password, device.mqtt_password);
+    return valid
+      ? res.json({ result: 'allow', is_superuser: false })
+      : res.status(401).json({ result: 'deny', reason: 'Invalid password' });
 
   } catch (err) {
     logger.error('MQTT auth error:', err);
@@ -109,6 +132,30 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
 // EMQX sends: { clientid, username, topic, action }   action = publish|subscribe
 // Returns:    { result: 'allow' } or { result: 'deny' }
 // ---------------------------------------------------------------------------
+
+// In-process device cache (30-second TTL) to avoid DB round-trip per message.
+// Keyed by mqtt_username (device_id). Stores { imei, activation_status, data_enabled }.
+const deviceCache = new Map();
+
+async function getCachedDevice(username) {
+  const now = Date.now();
+  const cached = deviceCache.get(username);
+  if (cached && cached.expiresAt > now) return cached.device;
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('deviceId', sql.NVarChar, username)
+    .query(`
+      SELECT activation_status, imei, data_enabled
+      FROM dbo.device
+      WHERE device_id = @deviceId
+    `);
+
+  const device = result.recordset.length > 0 ? result.recordset[0] : null;
+  deviceCache.set(username, { device, expiresAt: now + 30_000 });
+  return device;
+}
+
 router.post('/mqtt/acl', requireEmqxIp, async (req, res) => {
   const { username, topic, action } = req.body;
 
@@ -125,51 +172,50 @@ router.post('/mqtt/acl', requireEmqxIp, async (req, res) => {
     return res.json({ result: 'deny', reason: 'Missing fields' });
   }
 
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .input('deviceId', sql.NVarChar, username)
-      .query(`
-        SELECT activation_status, client_id
-        FROM device
-        WHERE device_id = @deviceId
-      `);
+  // Pre-activation IMEI connection: restrict to own config subscribe + pre-activation publish
+  if (IMEI_RE.test(username)) {
+    if (action === 'subscribe' && topic === `cloudsynk/${username}/config`) {
+      return res.json({ result: 'allow' });
+    }
+    if (action === 'publish' && topic === 'cloudsynk/pre-activation') {
+      return res.json({ result: 'allow' });
+    }
+    return res.json({ result: 'deny', reason: 'Topic not allowed for pre-activation device' });
+  }
 
-    if (result.recordset.length === 0) {
+  try {
+    const device = await getCachedDevice(username);
+
+    if (!device) {
       return res.json({ result: 'deny', reason: 'Device not found' });
     }
 
-    const device = result.recordset[0];
-
-    // INACTIVE — deny everything
-    if (device.activation_status === 'INACTIVE') {
-      return res.json({ result: 'deny', reason: 'Device deactivated' });
+    // Only ACTIVE devices may publish/subscribe via device credentials
+    if (device.activation_status !== 'ACTIVE') {
+      return res.json({ result: 'deny', reason: 'Device not active' });
     }
 
-    // PENDING — only pre-activation topic allowed
-    if (device.activation_status === 'PENDING') {
-      if (action === 'publish' && topic === 'cloudsynk/pre-activation') {
-        return res.json({ result: 'allow' });
-      }
-      if (action === 'subscribe' && topic === `cloudsynk/pre-activation/response/${username}`) {
-        return res.json({ result: 'allow' });
-      }
-      return res.json({ result: 'deny', reason: 'Pending device: pre-activation topics only' });
+    if (!device.imei) {
+      return res.json({ result: 'deny', reason: 'Device has no IMEI' });
     }
 
-    // ACTIVE — own client/device topics only
-    if (device.activation_status === 'ACTIVE') {
-      const cid = device.client_id;
-      if (action === 'publish' && topic === `cloudsynk/${cid}/${username}/telemetry`) {
-        return res.json({ result: 'allow' });
-      }
-      if (action === 'subscribe' && topic === `cloudsynk/${cid}/${username}/config`) {
-        return res.json({ result: 'allow' });
-      }
-      return res.json({ result: 'deny', reason: 'Topic not allowed for this device' });
+    const telemetryTopic = `cloudsynk/${device.imei}/telemetry`;
+    const configTopic    = `cloudsynk/${device.imei}/config`;
+
+    // Config subscribe: always allowed so device can receive telemetryConfig and config_update
+    if (action === 'subscribe' && topic === configTopic) {
+      return res.json({ result: 'allow' });
     }
 
-    res.json({ result: 'deny', reason: 'Unknown device state' });
+    // Telemetry publish: blocked when data_enabled = 0 (device paused)
+    if (action === 'publish' && topic === telemetryTopic) {
+      const dataEnabled = device.data_enabled !== false && device.data_enabled !== 0;
+      return dataEnabled
+        ? res.json({ result: 'allow' })
+        : res.json({ result: 'deny', reason: 'Device data collection paused' });
+    }
+
+    return res.json({ result: 'deny', reason: 'Topic not allowed for this device' });
 
   } catch (err) {
     logger.error('MQTT ACL error:', err);

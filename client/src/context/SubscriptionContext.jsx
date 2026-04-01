@@ -36,7 +36,7 @@ export const SubscriptionProvider = ({ children }) => {
   const status       = subscription?.status ?? null;
   const isActive     = status === 'ACTIVE';
   const isGrace      = status === 'GRACE';
-  const isExpired    = status === 'EXPIRED' || (!subscription && !loading);
+  const isExpired    = status === 'EXPIRED';
   const hasNoSub     = !subscription && !loading;
 
   const daysUntilExpiry = (() => {

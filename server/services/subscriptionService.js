@@ -1,11 +1,33 @@
 import { ClientSubscription } from '../models/ClientSubscription.js';
 import { PaymentTransaction }  from '../models/PaymentTransaction.js';
 import { SubscriptionPlan }    from '../models/SubscriptionPlan.js';
+import { ClientDiscount }      from '../models/ClientDiscount.js';
 import { verifyPaymentSignature, fetchPayment } from './razorpayService.js';
 import { getPool } from '../config/database.js';
 import mqttService from './mqttService.js';
 import sql from 'mssql';
 import { logger } from '../utils/logger.js';
+
+// ---------------------------------------------------------------------------
+// computeOrderAmount — applies any active unused discount for the client
+// Returns { finalAmount, discount }
+// ---------------------------------------------------------------------------
+export const computeOrderAmount = async (clientId, basePriceInRupees) => {
+  const discount = await ClientDiscount.getUnused(clientId);
+  if (!discount) return { finalAmount: basePriceInRupees, discount: null };
+
+  let finalAmount;
+  if (discount.discount_type === 'PERCENTAGE') {
+    finalAmount = basePriceInRupees * (1 - discount.discount_value / 100);
+  } else { // FIXED
+    finalAmount = Math.max(0, basePriceInRupees - discount.discount_value);
+  }
+
+  return {
+    finalAmount: Math.round(finalAmount * 100) / 100,
+    discount,
+  };
+};
 
 // ---------------------------------------------------------------------------
 // checkDeviceActivationEligibility

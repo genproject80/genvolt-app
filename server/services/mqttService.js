@@ -27,7 +27,7 @@ class MQTTService {
       clean: true,
       reconnectPeriod: 5000,
       connectTimeout: 10000,
-      rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true', // enforced in prod, relaxed in dev
+      rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true',
     };
 
     this.client = mqtt.connect(options);
@@ -53,28 +53,110 @@ class MQTTService {
   }
 
   /**
-   * Push a real-time config update to an ACTIVE device.
+   * Generic publish to any topic.
    */
-  async pushConfigUpdate(clientId, deviceId, config, retain = false) {
+  async publish(topic, payload, options = {}) {
     if (!this.connected) {
-      logger.warn('MQTT not connected — config saved to DB but not pushed live');
+      logger.warn(`MQTT not connected — publish skipped for ${topic}`);
+      return false;
+    }
+    const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    return new Promise((resolve) => {
+      this.client.publish(topic, payloadStr, { qos: 1, retain: false, ...options }, (err) => {
+        if (err) logger.error(`MQTT publish failed on ${topic}:`, err.message);
+        else logger.info(`MQTT published → ${topic}`);
+        resolve(!err);
+      });
+    });
+  }
+
+  /**
+   * Send telemetryConfig to a device via its IMEI-based config topic.
+   * retain: true — device receives it even after reconnecting.
+   * Used for: initial activation, reactivation, reboot recovery, credential rotation.
+   */
+  async publishTelemetryConfig(imei, deviceId, plainPassword) {
+    if (!this.connected) {
+      logger.warn('MQTT not connected — telemetryConfig not sent');
       return false;
     }
 
-    const topic = `cloudsynk/${clientId}/${deviceId}/config`;
-    const payload = JSON.stringify({
+    const topic = `cloudsynk/${imei}/config`;
+    const payload = {
+      type: 'telemetryConfig',
+      isActive: 1,
+      mqtt_username: deviceId,
+      mqtt_password: plainPassword,
+    };
+
+    return new Promise((resolve, reject) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true }, (err) => {
+        if (err) {
+          logger.error(`telemetryConfig publish failed on ${topic}:`, err.message);
+          reject(err);
+        } else {
+          logger.info(`telemetryConfig published → ${topic}`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  /**
+   * Push an isActive flag update to a device as a telemetryConfig message.
+   * retain: true — device receives it even after reconnecting.
+   * Used for pause (isActive=false) and resume (isActive=true).
+   */
+  async pushActiveStatus(imei, isActive) {
+    if (!this.connected) {
+      logger.warn('MQTT not connected — active status update not sent');
+      return false;
+    }
+
+    const topic = `cloudsynk/${imei}/config`;
+    const payload = {
+      type: 'telemetryConfig',
+      isActive: isActive ? 1 : 0,
+      timestamp: new Date().toISOString(),
+    };
+
+    return new Promise((resolve, reject) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true }, (err) => {
+        if (err) {
+          logger.error(`Active status publish failed on ${topic}:`, err.message);
+          reject(err);
+        } else {
+          logger.info(`Active status (isActive=${payload.isActive}) published → ${topic}`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  /**
+   * Push a config_update to an ACTIVE device.
+   * Topic: cloudsynk/<IMEI>/config, retain: false.
+   */
+  async pushConfigUpdate(imei, config) {
+    if (!this.connected) {
+      logger.warn('MQTT not connected — config update not pushed');
+      return false;
+    }
+
+    const topic = `cloudsynk/${imei}/config`;
+    const payload = {
       type: 'config_update',
       timestamp: new Date().toISOString(),
       ...config,
-    });
+    };
 
     return new Promise((resolve, reject) => {
-      this.client.publish(topic, payload, { qos: 1, retain }, (err) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: false }, (err) => {
         if (err) {
-          logger.error(`MQTT publish failed on ${topic}:`, err.message);
+          logger.error(`config_update publish failed on ${topic}:`, err.message);
           reject(err);
         } else {
-          logger.info(`Config pushed → ${topic}`);
+          logger.info(`config_update pushed → ${topic}`);
           resolve(true);
         }
       });
@@ -82,55 +164,22 @@ class MQTTService {
   }
 
   /**
-   * Push activation payload to a PENDING device.
-   * Uses retain:true so the device gets it even if it reconnects after admin clicks Activate.
+   * Send a deactivation notice to a device before clearing its MQTT credentials.
+   * Topic: cloudsynk/<IMEI>/config, retain: false.
    */
-  async publishActivationPayload(deviceId, clientId, mqttPassword, initialConfig) {
-    if (!this.connected) {
-      logger.warn('MQTT not connected — activation payload not sent');
-      return false;
-    }
-
-    const topic = `cloudsynk/pre-activation/response/${deviceId}`;
-    const payload = JSON.stringify({
-      status: 'activated',
-      client_id: clientId,
-      telemetry_topic: `cloudsynk/${clientId}/${deviceId}/telemetry`,
-      config_topic: `cloudsynk/${clientId}/${deviceId}/config`,
-      mqtt_username: deviceId,
-      mqtt_password: mqttPassword,
-      config: initialConfig,
-    });
-
-    return new Promise((resolve, reject) => {
-      this.client.publish(topic, payload, { qos: 1, retain: true }, (err) => {
-        if (err) {
-          logger.error(`Activation publish failed on ${topic}:`, err.message);
-          reject(err);
-        } else {
-          logger.info(`Activation payload published → ${topic}`);
-          resolve(true);
-        }
-      });
-    });
-  }
-
-  /**
-   * Push a deactivation notice to an ACTIVE device before cutting access.
-   */
-  async publishDeactivationNotice(clientId, deviceId, reason = 'admin_action') {
+  async publishDeactivationNotice(imei, reason = 'admin_action') {
     if (!this.connected) return false;
 
-    const topic = `cloudsynk/${clientId}/${deviceId}/config`;
-    const payload = JSON.stringify({
+    const topic = `cloudsynk/${imei}/config`;
+    const payload = {
       type: 'deactivation_notice',
       status: 'deactivated',
       reason,
       timestamp: new Date().toISOString(),
-    });
+    };
 
     return new Promise((resolve) => {
-      this.client.publish(topic, payload, { qos: 1 }, (err) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: false }, (err) => {
         if (err) logger.error(`Deactivation notice failed on ${topic}:`, err.message);
         else logger.info(`Deactivation notice sent → ${topic}`);
         resolve(!err);

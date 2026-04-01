@@ -5,7 +5,18 @@ import { clientService } from '../../services/clientService';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../common/LoadingSpinner';
 
-const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
+/**
+ * ActivateDeviceModal
+ *
+ * Props:
+ *   isOpen        — boolean
+ *   onClose       — function
+ *   device        — device object ({ device_id, imei, device_type, firmware_version, ... })
+ *   onSuccess     — callback after successful activation
+ *   fixedClientId — (optional) when set, the client dropdown is hidden and this value is used
+ *                   (used from ClientDeviceDashboard where client is already known)
+ */
+const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess, fixedClientId }) => {
   const { activateDevice, loading } = useDevice();
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -14,6 +25,17 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
 
   useEffect(() => {
     if (!isOpen) return;
+
+    setError('');
+
+    // If fixedClientId provided, skip fetching clients
+    if (fixedClientId) {
+      setSelectedClientId(String(fixedClientId));
+      return;
+    }
+
+    setSelectedClientId(device?.client_id ? String(device.client_id) : '');
+
     const load = async () => {
       try {
         setLoadingClients(true);
@@ -29,9 +51,7 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
       }
     };
     load();
-    setSelectedClientId(device?.client_id ? String(device.client_id) : '');
-    setError('');
-  }, [isOpen, device]);
+  }, [isOpen, device, fixedClientId]);
 
   const handleActivate = async () => {
     if (!device) return;
@@ -41,7 +61,10 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
     }
     try {
       setError('');
-      await activateDevice(device.device_id, { client_id: selectedClientId });
+      const payload = { client_id: selectedClientId };
+      // activateDevice uses imei as identifier when device_id is absent
+      const identifier = device.device_id || device.imei;
+      await activateDevice(identifier, payload);
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -70,9 +93,16 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
         </div>
 
         <div className="space-y-1">
-          <p className="text-sm text-gray-700">
-            Device ID: <span className="font-semibold">{device.device_id}</span>
-          </p>
+          {device.device_id && (
+            <p className="text-sm text-gray-700">
+              Device ID: <span className="font-semibold">{device.device_id}</span>
+            </p>
+          )}
+          {device.imei && (
+            <p className="text-sm text-gray-700">
+              IMEI: <span className="font-semibold">{device.imei}</span>
+            </p>
+          )}
           {device.device_type && (
             <p className="text-sm text-gray-600">Type: {device.device_type}</p>
           )}
@@ -81,25 +111,49 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Assign to Client <span className="text-red-500">*</span>
-          </label>
-          {loadingClients ? (
-            <p className="text-sm text-gray-500">Loading clients...</p>
-          ) : (
-            <select
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-            >
-              <option value="">Select a client...</option>
-              {clients.map(c => (
-                <option key={c.client_id} value={c.client_id}>{c.name}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        {device.model_number && (
+          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-1">
+            <p className="text-xs font-medium text-indigo-700 uppercase tracking-wide">Model</p>
+            <p className="text-sm font-semibold text-indigo-900 font-mono">{device.model_number}</p>
+            {device.model_info?.display_name && (
+              <p className="text-sm text-indigo-700">{device.model_info.display_name}</p>
+            )}
+            {device.model_info?.device_id_prefix && (
+              <p className="text-xs text-indigo-600">
+                Device ID prefix:{' '}
+                <span className="font-mono font-semibold">{device.model_info.device_id_prefix}</span>
+              </p>
+            )}
+            {device.model_info?.decoder_logic_ids?.length > 0 && (
+              <p className="text-xs text-indigo-600">
+                Decoder logic IDs:{' '}
+                <span className="font-mono">[{device.model_info.decoder_logic_ids.join(', ')}]</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {!fixedClientId && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Assign to Client <span className="text-red-500">*</span>
+            </label>
+            {loadingClients ? (
+              <p className="text-sm text-gray-500">Loading clients...</p>
+            ) : (
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              >
+                <option value="">Select a client...</option>
+                {clients.map(c => (
+                  <option key={c.client_id} value={c.client_id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">

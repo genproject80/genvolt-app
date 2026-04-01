@@ -214,7 +214,87 @@ export const deviceService = {
       console.error(`DeviceService: Failed to reactivate device ${deviceId}:`, error);
       throw error;
     }
-  }
+  },
+
+  async pauseDevice(deviceId, reason = '') {
+    try {
+      const response = await api.post(`/devices/${deviceId}/pause`, { reason });
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to pause device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async resumeDevice(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/resume`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to resume device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async pauseAllDevices(clientId, reason = '') {
+    try {
+      const response = await api.post('/devices/pause-all', { client_id: clientId, reason });
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to pause all devices:', error);
+      throw error;
+    }
+  },
+
+  async resumeAllDevices(clientId) {
+    try {
+      const response = await api.post('/devices/resume-all', { client_id: clientId });
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to resume all devices:', error);
+      throw error;
+    }
+  },
+
+  async pushDeviceConfig(deviceId, config) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/config-push`, config);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to push config for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async rotateDeviceCredentials(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/rotate-credentials`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to rotate credentials for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async getDeviceTelemetry(deviceId, params = {}) {
+    try {
+      const response = await api.get(`/devices/${deviceId}/telemetry`, { params });
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to fetch telemetry for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async getLatestTelemetry(deviceId) {
+    try {
+      const response = await api.get(`/devices/${deviceId}/telemetry/latest`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to fetch latest telemetry for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
 };
 
 export default deviceService;

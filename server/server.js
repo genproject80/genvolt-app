@@ -1,12 +1,11 @@
-// Load environment variables first
-import dotenv from 'dotenv';
-dotenv.config();
+// Load environment variables first — must use side-effect import so dotenv
+// runs during the ES module import phase, before any other module reads process.env
+import 'dotenv/config';
 
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 
@@ -15,6 +14,7 @@ import { connectDB } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import mqttService from './services/mqttService.js';
+import mqttListenerService from './services/mqttListenerService.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -34,21 +34,14 @@ import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
+import planRoutes from './routes/planRoutes.js';
+import discountRoutes from './routes/discountRoutes.js';
+import topicConfigRoutes from './routes/topicConfigRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
+import featureFlagRoutes from './routes/featureFlagRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000) / 1000)
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 // Security middleware
 app.use(helmet({
@@ -112,7 +105,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(compression());
 app.use(cookieParser());
-app.use(limiter);
 
 // Razorpay webhook — must use raw body BEFORE express.json() parses the body
 // This route captures the raw Buffer needed for HMAC signature verification.
@@ -179,6 +171,15 @@ app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/p3-device-details', p3DeviceDetailRoutes);
 // Subscription & billing routes
 app.use('/api/subscriptions', subscriptionRoutes);
+// Plan management (admin)
+app.use('/api/subscription-plans', planRoutes);
+// Discount management (admin)
+app.use('/api/discounts', discountRoutes);
+// Topic pattern configuration (SYSTEM_ADMIN)
+app.use('/api/topic-config', topicConfigRoutes);
+app.use('/api/inventory', inventoryRoutes);
+// Feature flags (admin toggle + client read)
+app.use('/api/feature-flags', featureFlagRoutes);
 
 // MQTT hooks — called by EMQX broker, no JWT auth
 app.use('/api', mqttAuthRoutes);
@@ -218,12 +219,14 @@ app.use(errorHandler);
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
   mqttService.disconnect();
+  mqttListenerService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received. Shutting down gracefully...');
   mqttService.disconnect();
+  mqttListenerService.disconnect();
   process.exit(0);
 });
 
@@ -242,6 +245,9 @@ const startServer = async () => {
 
     // Connect to MQTT broker (non-blocking — server starts even if MQTT is unavailable)
     mqttService.connect();
+
+    // Start MQTT listener (pre-activation + telemetry ingestion)
+    mqttListenerService.connect();
 
     // Start subscription expiry cron (runs every hour)
     const { startSubscriptionCron } = await import('./services/subscriptionCron.js');

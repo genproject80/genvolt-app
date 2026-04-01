@@ -1,9 +1,10 @@
 import { SubscriptionPlan }    from '../models/SubscriptionPlan.js';
 import { ClientSubscription }  from '../models/ClientSubscription.js';
 import { PaymentTransaction }  from '../models/PaymentTransaction.js';
+import { ClientDiscount }      from '../models/ClientDiscount.js';
 import { asyncHandler, ValidationError, NotFoundError, AuthorizationError } from '../middleware/errorHandler.js';
 import { createOrder, createCustomer, cancelSubscription as rzpCancelSub } from '../services/razorpayService.js';
-import { activateSubscription, checkDeviceActivationEligibility } from '../services/subscriptionService.js';
+import { activateSubscription, checkDeviceActivationEligibility, computeOrderAmount } from '../services/subscriptionService.js';
 import { logger } from '../utils/logger.js';
 
 // ---------------------------------------------------------------------------
@@ -83,7 +84,10 @@ export const createOrderForSubscription = asyncHandler(async (req, res) => {
   const plan = await SubscriptionPlan.findById(parseInt(plan_id));
   if (!plan || !plan.is_active) throw new NotFoundError('Subscription plan not found or inactive');
 
-  const amount = billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly;
+  const baseAmount = billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly;
+
+  // Apply any active discount for this client
+  const { finalAmount, discount } = await computeOrderAmount(clientId, parseFloat(baseAmount));
 
   // Create or retrieve Razorpay customer
   let rzpCustomer;
@@ -97,10 +101,10 @@ export const createOrderForSubscription = asyncHandler(async (req, res) => {
     logger.warn('Razorpay customer creation failed — proceeding without customer ID:', err.message);
   }
 
-  // Create Razorpay order
+  // Create Razorpay order with (possibly discounted) amount
   const receipt = `sub_${clientId}_${Date.now()}`;
   const order = await createOrder({
-    amountInRupees: parseFloat(amount),
+    amountInRupees: finalAmount,
     currency:       'INR',
     receipt,
     notes: {
@@ -120,21 +124,26 @@ export const createOrderForSubscription = asyncHandler(async (req, res) => {
     created_by_user_id:   currentUser.user_id,
   });
 
-  // Create PENDING transaction row
+  // Create PENDING transaction row with actual charged amount
   await PaymentTransaction.create({
     subscription_id:   subscription.subscription_id,
     client_id:         clientId,
     razorpay_order_id: order.id,
-    amount:            parseFloat(amount),
+    amount:            finalAmount,
     currency:          'INR',
   });
+
+  // Store discount reference on subscription row for later consumption
+  if (discount) {
+    subscription._pendingDiscountId = discount.discount_id;
+  }
 
   res.json({
     success: true,
     data: {
       subscription_id:   subscription.subscription_id,
       razorpay_order_id: order.id,
-      amount:            parseFloat(amount),
+      amount:            finalAmount,
       currency:          'INR',
       plan:              plan.toJSON(),
       billing_cycle,
@@ -164,6 +173,16 @@ export const verifyPaymentAndActivate = asyncHandler(async (req, res) => {
     razorpay_payment_id,
     razorpay_signature,
   });
+
+  // Consume any pending discount for this client
+  try {
+    const unusedDiscount = await ClientDiscount.getUnused(clientId);
+    if (unusedDiscount) {
+      await ClientDiscount.markUsed(unusedDiscount.discount_id, razorpay_order_id);
+    }
+  } catch (err) {
+    logger.warn('Failed to mark discount as used:', err.message);
+  }
 
   res.json({
     success: true,
@@ -249,4 +268,74 @@ export const getEligibility = asyncHandler(async (req, res) => {
 
   const result = await checkDeviceActivationEligibility(targetClientId);
   res.json({ success: true, data: result });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/subscriptions/admin/manual
+// Admin creates ACTIVE subscription without Razorpay
+// Body: { client_id, plan_id, billing_cycle, end_date, assignment_type, admin_notes }
+// ---------------------------------------------------------------------------
+export const createManualSubscription = asyncHandler(async (req, res) => {
+  const { client_id, plan_id, billing_cycle = 'monthly', end_date, assignment_type = 'MANUAL', admin_notes = '' } = req.body;
+
+  if (!client_id) throw new ValidationError('client_id is required');
+  if (!plan_id)   throw new ValidationError('plan_id is required');
+  if (!end_date)  throw new ValidationError('end_date is required');
+
+  const plan = await SubscriptionPlan.findById(parseInt(plan_id));
+  if (!plan) throw new NotFoundError('Plan not found');
+
+  // Cancel any existing active subscription first
+  await ClientSubscription.cancelActiveForClient(parseInt(client_id));
+
+  const sub = await ClientSubscription.createManual({
+    client_id:            parseInt(client_id),
+    plan_id:              parseInt(plan_id),
+    billing_cycle,
+    end_date,
+    assigned_by_admin_id: req.user.user_id,
+    assignment_type,
+    admin_notes,
+  });
+
+  logger.info(`Manual subscription created for client ${client_id} by admin ${req.user.user_id}`);
+  res.status(201).json({ success: true, data: sub.toJSON() });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/subscriptions/:id/plan
+// Admin changes plan on existing subscription (price at next renewal)
+// ---------------------------------------------------------------------------
+export const changePlan = asyncHandler(async (req, res) => {
+  const subscriptionId = parseInt(req.params.id);
+  const { plan_id } = req.body;
+
+  if (!plan_id) throw new ValidationError('plan_id is required');
+
+  const sub = await ClientSubscription.findById(subscriptionId);
+  if (!sub) throw new NotFoundError('Subscription not found');
+
+  const plan = await SubscriptionPlan.findById(parseInt(plan_id));
+  if (!plan) throw new NotFoundError('Plan not found');
+
+  const updated = await ClientSubscription.changePlan(subscriptionId, parseInt(plan_id), req.user.user_id);
+  res.json({ success: true, data: updated.toJSON(), message: 'Plan updated. New pricing takes effect at next renewal.' });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/subscriptions/:id/extend
+// Admin extends subscription end date
+// Body: { end_date }
+// ---------------------------------------------------------------------------
+export const extendEndDate = asyncHandler(async (req, res) => {
+  const subscriptionId = parseInt(req.params.id);
+  const { end_date } = req.body;
+
+  if (!end_date) throw new ValidationError('end_date is required');
+
+  const sub = await ClientSubscription.findById(subscriptionId);
+  if (!sub) throw new NotFoundError('Subscription not found');
+
+  const updated = await ClientSubscription.extendEndDate(subscriptionId, end_date, req.user.user_id);
+  res.json({ success: true, data: updated.toJSON() });
 });

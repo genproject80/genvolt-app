@@ -23,12 +23,38 @@ import {
   activateDevice,
   deactivateDevice,
   reactivateDevice,
+  pauseDeviceHandler,
+  resumeDeviceHandler,
+  pauseAllDevicesHandler,
+  resumeAllDevicesHandler,
+  pushDeviceConfig,
+  rotateDeviceCredentials,
+  getDeviceTelemetry,
+  getLatestTelemetry,
 } from '../controllers/deviceController.js';
 
 const router = express.Router();
 
 // Apply authentication to all device routes
 router.use(authenticate);
+
+/**
+ * POST /api/devices/pause-all
+ * Pause all active devices for a client
+ */
+router.post('/pause-all',
+  requirePermission('Pause Resume Devices'),
+  pauseAllDevicesHandler
+);
+
+/**
+ * POST /api/devices/resume-all
+ * Resume all paused devices for a client
+ */
+router.post('/resume-all',
+  requirePermission('Pause Resume Devices'),
+  resumeAllDevicesHandler
+);
 
 /**
  * GET /api/devices/stats
@@ -78,6 +104,26 @@ router.post('/:deviceId/reactivate',
   requirePermission('Onboard Device'),
   validateDeviceStringId,
   reactivateDevice
+);
+
+/**
+ * POST /api/devices/:deviceId/pause
+ * Pause a single device (client-initiated)
+ */
+router.post('/:deviceId/pause',
+  requirePermission('Pause Resume Devices'),
+  validateDeviceStringId,
+  pauseDeviceHandler
+);
+
+/**
+ * POST /api/devices/:deviceId/resume
+ * Resume a paused device
+ */
+router.post('/:deviceId/resume',
+  requirePermission('Pause Resume Devices'),
+  validateDeviceStringId,
+  resumeDeviceHandler
 );
 
 /**
@@ -132,6 +178,46 @@ router.post('/:deviceId/transfer',
   transferDeviceValidation,
   sanitizeInput,
   transferDevice
+);
+
+/**
+ * GET /api/devices/:deviceId/telemetry/latest
+ * Most recent decoded record per logicId
+ */
+router.get('/:deviceId/telemetry/latest',
+  requirePermission('View Device'),
+  validateDeviceStringId,
+  getLatestTelemetry
+);
+
+/**
+ * GET /api/devices/:deviceId/telemetry
+ * Paginated telemetry records. Query: { page?, limit?, logicId? }
+ */
+router.get('/:deviceId/telemetry',
+  requirePermission('View Device'),
+  validateDeviceStringId,
+  getDeviceTelemetry
+);
+
+/**
+ * POST /api/devices/:deviceId/config-push
+ * Push config_update to an ACTIVE device via MQTT
+ */
+router.post('/:deviceId/config-push',
+  requirePermission('Edit Device'),
+  validateDeviceStringId,
+  pushDeviceConfig
+);
+
+/**
+ * POST /api/devices/:deviceId/rotate-credentials
+ * Rotate MQTT credentials and push new telemetryConfig to device
+ */
+router.post('/:deviceId/rotate-credentials',
+  requirePermission('Edit Device'),
+  validateDeviceStringId,
+  rotateDeviceCredentials
 );
 
 /**

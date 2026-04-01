@@ -56,7 +56,7 @@ const client = mqtt.connect({
   password: process.env.MQTT_BACKEND_PASSWORD,
   clientId: 'test-checker-' + Math.random().toString(16).substr(2, 6),
   clean: true,
-  rejectUnauthorized: false,
+  rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false',
 });
 
 const timer = setTimeout(() => {

@@ -3,12 +3,15 @@ import { useSubscription } from '../../context/SubscriptionContext';
 import { useAuth } from '../../context/AuthContext';
 import { getPlans, getTransactions } from '../../services/subscriptionService';
 import SubscribePlanModal from '../../components/modals/SubscribePlanModal';
+import deviceService from '../../services/deviceService';
 import {
   CreditCardIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
   ArrowPathIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
 } from '@heroicons/react/24/outline';
 
 const STATUS_STYLES = {
@@ -44,6 +47,12 @@ export default function BillingPage() {
   const [showModal, setShowModal]       = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
+  // Pause / Resume all devices
+  const [pauseAllConfirm, setPauseAllConfirm] = useState(false);
+  const [pausingAll, setPausingAll]           = useState(false);
+  const [resumingAll, setResumingAll]         = useState(false);
+  const [pauseMsg, setPauseMsg]               = useState('');
+
   useEffect(() => {
     getPlans()
       .then(setPlans)
@@ -64,6 +73,35 @@ export default function BillingPage() {
   const handleSelectPlan = (plan) => {
     setSelectedPlan(plan);
     setShowModal(true);
+  };
+
+  const handlePauseAll = async () => {
+    if (!user?.client_id) return;
+    setPausingAll(true);
+    setPauseMsg('');
+    try {
+      const res = await deviceService.pauseAllDevices(user.client_id, 'Client initiated pause');
+      setPauseMsg(`${res.count || 0} device(s) paused.`);
+      setPauseAllConfirm(false);
+    } catch (err) {
+      setPauseMsg(err?.response?.data?.message || 'Failed to pause devices');
+    } finally {
+      setPausingAll(false);
+    }
+  };
+
+  const handleResumeAll = async () => {
+    if (!user?.client_id) return;
+    setResumingAll(true);
+    setPauseMsg('');
+    try {
+      const res = await deviceService.resumeAllDevices(user.client_id);
+      setPauseMsg(`${res.count || 0} device(s) resumed.`);
+    } catch (err) {
+      setPauseMsg(err?.response?.data?.message || 'Failed to resume devices');
+    } finally {
+      setResumingAll(false);
+    }
   };
 
   const handlePaymentSuccess = () => {
@@ -155,6 +193,37 @@ export default function BillingPage() {
               <p className="text-gray-400 text-xs mt-1">Choose a plan below to get started</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Service Controls — pause / resume all devices */}
+      {!loading && subscription?.status === 'ACTIVE' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Service Controls</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Pausing stops data collection from all your devices. Your subscription billing continues normally.
+          </p>
+          {pauseMsg && (
+            <div className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-3">{pauseMsg}</div>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPauseAllConfirm(true)}
+              disabled={pausingAll}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-60"
+            >
+              <PauseCircleIcon className="w-4 h-4" />
+              {pausingAll ? 'Pausing…' : 'Pause All Devices'}
+            </button>
+            <button
+              onClick={handleResumeAll}
+              disabled={resumingAll}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-60"
+            >
+              <PlayCircleIcon className="w-4 h-4" />
+              {resumingAll ? 'Resuming…' : 'Resume All Devices'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -313,6 +382,29 @@ export default function BillingPage() {
           onClose={() => setShowModal(false)}
           onSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {/* Pause all confirm */}
+      {pauseAllConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Pause All Devices</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This will stop data collection from all your active devices. You can resume at any time.
+              <strong className="block mt-1">Billing continues normally.</strong>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setPauseAllConfirm(false)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handlePauseAll} disabled={pausingAll}
+                className="px-4 py-2 text-sm text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-60">
+                {pausingAll ? 'Pausing…' : 'Pause All Devices'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

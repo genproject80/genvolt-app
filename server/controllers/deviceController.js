@@ -1,4 +1,5 @@
 import { Device } from '../models/Device.js';
+import { Inventory } from '../models/Inventory.js';
 import { Client } from '../models/Client.js';
 import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError, NotFoundError, AuthorizationError, ConflictError } from '../middleware/errorHandler.js';
@@ -9,7 +10,9 @@ import { getPool } from '../config/database.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import mqttService from '../services/mqttService.js';
+import { kickMqttClientsByUsername } from '../services/emqxMgmtService.js';
 import { checkDeviceActivationEligibility } from '../services/subscriptionService.js';
+import { pauseDevice, resumeDevice, pauseAllDevicesForClient, resumeAllDevicesForClient } from '../services/devicePauseService.js';
 
 /**
  * Helper function to check if current user can access target device
@@ -45,6 +48,7 @@ export const getDevices = asyncHandler(async (req, res) => {
     sortBy = 'onboarding_date',
     sortOrder = 'desc',
     Model,
+    activation_status,
     startDate,
     endDate,
     client_id  // New parameter: filter by specific client_id
@@ -104,6 +108,10 @@ export const getDevices = asyncHandler(async (req, res) => {
 
   if (Model) {
     filters.Model = Model;
+  }
+
+  if (activation_status) {
+    filters.activation_status = activation_status;
   }
 
   if (startDate && endDate) {
@@ -623,14 +631,16 @@ export const getPendingDevices = asyncHandler(async (req, res) => {
     SELECT
       id,
       device_id,
+      imei,
       device_type,
       firmware_version,
       mac_address,
+      onboarding_date,
       first_seen,
       last_seen
-    FROM device
+    FROM dbo.device
     WHERE activation_status = 'PENDING'
-    ORDER BY last_seen DESC
+    ORDER BY onboarding_date DESC, last_seen DESC
   `);
 
   res.json({
@@ -643,23 +653,18 @@ export const getPendingDevices = asyncHandler(async (req, res) => {
 /**
  * POST /api/devices/:deviceId/activate
  * Assign a PENDING device to a client and activate it.
- * Generates MQTT credentials and pushes an activation payload to the device.
- * Body: { client_id, initial_config? }
+ * For devices auto-registered via pre-activation (no device_id yet), body must include device_id.
+ * Body: { client_id, device_id? }
  */
 export const activateDevice = asyncHandler(async (req, res) => {
-  const { deviceId } = req.params;
-  const { client_id, initial_config } = req.body;
+  const { deviceId } = req.params; // may be a temp IMEI-based lookup key
+  const { client_id, device_id: assignedDeviceId } = req.body;
 
   if (!client_id) throw new ValidationError('client_id is required');
   const parsedClientId = parseInt(client_id, 10);
   if (isNaN(parsedClientId) || parsedClientId < 1)
     throw new ValidationError('client_id must be a positive integer');
 
-  // ------------------------------------------------------------------
-  // Subscription eligibility check
-  // SYSTEM_ADMIN / SUPER_ADMIN bypass the check so they can always
-  // activate devices regardless of subscription state.
-  // ------------------------------------------------------------------
   const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(req.user?.role_name);
   if (!isAdmin) {
     const eligibility = await checkDeviceActivationEligibility(parsedClientId);
@@ -671,10 +676,10 @@ export const activateDevice = asyncHandler(async (req, res) => {
         subscription: eligibility.subscription,
         plan: eligibility.plan,
         message: {
-          NO_SUBSCRIPTION:     'This client has no active subscription. Please subscribe to a plan first.',
-          GRACE_PERIOD:        'This client\'s subscription has expired and is in the grace period. Please renew to activate new devices.',
-          SUBSCRIPTION_EXPIRED:'This client\'s subscription has expired. Please renew to activate devices.',
-          PLAN_LIMIT:          `Device limit reached for the current plan (${eligibility.plan?.max_devices} devices). Please upgrade.`,
+          NO_SUBSCRIPTION:      'This client has no active subscription. Please subscribe to a plan first.',
+          GRACE_PERIOD:         'This client\'s subscription has expired and is in the grace period. Please renew to activate new devices.',
+          SUBSCRIPTION_EXPIRED: 'This client\'s subscription has expired. Please renew to activate devices.',
+          PLAN_LIMIT:           `Device limit reached for the current plan (${eligibility.plan?.max_devices} devices). Please upgrade.`,
         }[eligibility.reason] || 'Activation not allowed.',
       });
     }
@@ -682,63 +687,86 @@ export const activateDevice = asyncHandler(async (req, res) => {
 
   const pool = await getPool();
 
-  // Check device exists and is PENDING
+  // Check device exists and is PENDING — look up by device_id OR imei
   const check = await pool.request()
     .input('deviceId', sql.NVarChar, deviceId)
-    .query(`SELECT id, activation_status FROM device WHERE device_id = @deviceId`);
-
-  if (check.recordset.length === 0) throw new NotFoundError('Device not found');
-  if (check.recordset[0].activation_status !== 'PENDING') {
-    throw new ValidationError(`Device is already ${check.recordset[0].activation_status}`);
-  }
-
-  // Generate MQTT credentials
-  const mqttPassword = crypto.randomBytes(16).toString('hex'); // plain — sent once to device
-  const mqttPasswordHash = await bcrypt.hash(mqttPassword, 10);
-
-  const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
-
-  await pool.request()
-    .input('deviceId', sql.NVarChar, deviceId)
-    .input('clientId', sql.Int, parsedClientId)
-    .input('mqttPassword', sql.NVarChar, mqttPasswordHash)
-    .input('activatedBy', sql.Int, req.user.user_id)
     .query(`
-      UPDATE device
-      SET activation_status = 'ACTIVE',
-          client_id         = @clientId,
-          mqtt_password     = @mqttPassword,
-          mqtt_username     = device_id,
-          activated_at      = GETUTCDATE(),
-          activated_by      = @activatedBy,
-          last_seen         = GETUTCDATE()
-      WHERE device_id = @deviceId AND activation_status = 'PENDING'
+      SELECT id, device_id, activation_status, imei
+      FROM dbo.device
+      WHERE device_id = @deviceId OR imei = @deviceId
     `);
 
-  // Push activation payload to device (retained — device gets it on next connect)
+  if (check.recordset.length === 0) throw new NotFoundError('Device not found');
+  const device = check.recordset[0];
+  if (device.activation_status !== 'PENDING')
+    throw new ValidationError(`Device is already ${device.activation_status}`);
+
+  // Resolve device_id prefix from inventory model, fall back to 'GV'
+  let deviceIdPrefix = 'GV';
+  if (device.model_number) {
+    try {
+      const inventoryEntry = await Inventory.findByModelNumber(device.model_number);
+      if (inventoryEntry?.device_id_prefix) deviceIdPrefix = inventoryEntry.device_id_prefix;
+    } catch { /* keep default prefix on error */ }
+  }
+
+  // For pre-activation devices (no device_id yet), auto-generate one using model prefix
+  const finalDeviceId = device.device_id || assignedDeviceId ||
+    (deviceIdPrefix + crypto.randomBytes(4).toString('hex').toUpperCase());
+
+  const imei = device.imei;
+  if (!imei) throw new ValidationError('Device has no IMEI — cannot send activation payload');
+
+  // Generate MQTT credentials
+  const mqttPassword     = crypto.randomBytes(16).toString('hex');
+  const mqttPasswordHash = await bcrypt.hash(mqttPassword, 10);
+
+  await pool.request()
+    .input('finalDeviceId',  sql.NVarChar, finalDeviceId)
+    .input('lookupId',       sql.NVarChar, deviceId)
+    .input('clientId',       sql.Int,      parsedClientId)
+    .input('mqttPassword',   sql.NVarChar, mqttPasswordHash)
+    .input('mqttPlain',      sql.NVarChar, mqttPassword)
+    .input('activatedBy',    sql.Int,      req.user.user_id)
+    .query(`
+      UPDATE dbo.device
+      SET activation_status     = 'ACTIVE',
+          device_id             = @finalDeviceId,
+          client_id             = @clientId,
+          mqtt_password         = @mqttPassword,
+          mqtt_password_plain   = @mqttPlain,
+          mqtt_username         = @finalDeviceId,
+          activated_at          = GETUTCDATE(),
+          activated_by          = @activatedBy,
+          last_seen             = GETUTCDATE()
+      WHERE device_id = @lookupId OR imei = @lookupId
+    `);
+
+  // Kick any pre-activation session connected as this IMEI before publishing credentials.
+  // This prevents an attacker who connected with IMEI/PRE_ACTIVATION_SECRET from receiving
+  // the activation payload while the device is in PENDING state.
+  await kickMqttClientsByUsername(imei);
+
   try {
-    await mqttService.publishActivationPayload(deviceId, parsedClientId, mqttPassword, config);
-    // Seed the device's config topic with a retained initial config so the device
-    // receives it immediately when it subscribes after reconnecting as ACTIVE.
-    await mqttService.pushConfigUpdate(parsedClientId, deviceId, config, true);
+    await mqttService.publishTelemetryConfig(imei, finalDeviceId, mqttPassword);
   } catch (mqttErr) {
-    logger.error('Activation MQTT publish failed (device will re-register on next boot):', mqttErr.message);
+    logger.error('Activation MQTT publish failed (retained msg will deliver on next connect):', mqttErr.message);
   }
 
   await createAuditLog({
-    user_id: req.user.user_id,
+    user_id:       req.user.user_id,
     activity_type: 'DEVICE_MANAGEMENT',
-    action: 'DEVICE_ACTIVATE',
-    message: `Device ${deviceId} activated and assigned to client ${parsedClientId}`,
-    target_type: 'DEVICE',
-    target_id: deviceId,
-    details: JSON.stringify({ client_id: parsedClientId, config }),
+    action:        'DEVICE_ACTIVATE',
+    message:       `Device ${finalDeviceId} (IMEI: ${imei}) activated for client ${parsedClientId}`,
+    target_type:   'DEVICE',
+    target_id:     finalDeviceId,
+    details:       JSON.stringify({ client_id: parsedClientId, imei }),
   });
 
   res.json({
     success: true,
     message: 'Device activated successfully',
-    data: { device_id: deviceId, client_id: parsedClientId, activation_status: 'ACTIVE' },
+    data: { device_id: finalDeviceId, imei, client_id: parsedClientId, activation_status: 'ACTIVE' },
   });
 });
 
@@ -762,24 +790,27 @@ export const deactivateDevice = asyncHandler(async (req, res) => {
     throw new ValidationError(`Device is not ACTIVE (current: ${check.recordset[0].activation_status})`);
   }
 
-  const { client_id } = check.recordset[0];
+  const { client_id, imei } = check.recordset[0];
 
   // Notify device before cutting access
-  try {
-    await mqttService.publishDeactivationNotice(client_id, deviceId, reason);
-  } catch (mqttErr) {
-    logger.error('Deactivation notice MQTT publish failed:', mqttErr.message);
+  if (imei) {
+    try {
+      await mqttService.publishDeactivationNotice(imei, reason);
+    } catch (mqttErr) {
+      logger.error('Deactivation notice MQTT publish failed:', mqttErr.message);
+    }
   }
 
   await pool.request()
     .input('deviceId', sql.NVarChar, deviceId)
     .input('deactivatedBy', sql.Int, req.user.user_id)
     .query(`
-      UPDATE device
-      SET activation_status = 'INACTIVE',
-          deactivated_at    = GETUTCDATE(),
-          deactivated_by    = @deactivatedBy,
-          mqtt_password     = NULL
+      UPDATE dbo.device
+      SET activation_status   = 'INACTIVE',
+          deactivated_at      = GETUTCDATE(),
+          deactivated_by      = @deactivatedBy,
+          mqtt_password       = NULL,
+          mqtt_password_plain = NULL
       WHERE device_id = @deviceId
     `);
 
@@ -809,38 +840,39 @@ export const reactivateDevice = asyncHandler(async (req, res) => {
 
   const check = await pool.request()
     .input('deviceId', sql.NVarChar, deviceId)
-    .query(`SELECT id, client_id, activation_status FROM device WHERE device_id = @deviceId`);
+    .query(`SELECT id, client_id, activation_status, imei FROM dbo.device WHERE device_id = @deviceId`);
 
   if (check.recordset.length === 0) throw new NotFoundError('Device not found');
   if (check.recordset[0].activation_status !== 'INACTIVE') {
     throw new ValidationError(`Device is not INACTIVE (current: ${check.recordset[0].activation_status})`);
   }
 
-  const { client_id } = check.recordset[0];
-  const mqttPassword = crypto.randomBytes(16).toString('hex');
+  const { client_id, imei } = check.recordset[0];
+  if (!imei) throw new ValidationError('Device has no IMEI — cannot send activation payload');
+
+  const mqttPassword     = crypto.randomBytes(16).toString('hex');
   const mqttPasswordHash = await bcrypt.hash(mqttPassword, 10);
-  const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
 
   await pool.request()
-    .input('deviceId', sql.NVarChar, deviceId)
+    .input('deviceId',    sql.NVarChar, deviceId)
     .input('mqttPassword', sql.NVarChar, mqttPasswordHash)
-    .input('activatedBy', sql.Int, req.user.user_id)
+    .input('mqttPlain',   sql.NVarChar, mqttPassword)
+    .input('activatedBy', sql.Int,      req.user.user_id)
     .query(`
-      UPDATE device
-      SET activation_status = 'ACTIVE',
-          mqtt_password     = @mqttPassword,
-          mqtt_username     = device_id,
-          activated_at      = GETUTCDATE(),
-          activated_by      = @activatedBy,
-          deactivated_at    = NULL,
-          deactivated_by    = NULL
+      UPDATE dbo.device
+      SET activation_status   = 'ACTIVE',
+          mqtt_password       = @mqttPassword,
+          mqtt_password_plain = @mqttPlain,
+          mqtt_username       = device_id,
+          activated_at        = GETUTCDATE(),
+          activated_by        = @activatedBy,
+          deactivated_at      = NULL,
+          deactivated_by      = NULL
       WHERE device_id = @deviceId
     `);
 
   try {
-    await mqttService.publishActivationPayload(deviceId, client_id, mqttPassword, config);
-    // Seed the device's config topic with a retained initial config.
-    await mqttService.pushConfigUpdate(client_id, deviceId, config, true);
+    await mqttService.publishTelemetryConfig(imei, deviceId, mqttPassword);
   } catch (mqttErr) {
     logger.error('Reactivation MQTT publish failed:', mqttErr.message);
   }
@@ -856,4 +888,286 @@ export const reactivateDevice = asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, message: 'Device reactivated successfully' });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/:deviceId/pause
+// Pause a single device (CLIENT or admin initiated)
+// Body: { reason? }
+// ---------------------------------------------------------------------------
+export const pauseDeviceHandler = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const { reason = '' } = req.body;
+  const currentUser = req.user;
+
+  const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name);
+  const pausedBy = isAdmin ? 'ADMIN' : 'CLIENT';
+
+  await pauseDevice(deviceId, pausedBy, reason);
+
+  await createAuditLog({
+    user_id:       currentUser.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action:        'DEVICE_PAUSE',
+    message:       `Device ${deviceId} paused by ${pausedBy}`,
+    target_type:   'DEVICE',
+    target_id:     deviceId,
+    details:       JSON.stringify({ reason, pausedBy }),
+  });
+
+  res.json({ success: true, message: `Device ${deviceId} paused` });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/:deviceId/resume
+// Resume a paused device
+// ---------------------------------------------------------------------------
+export const resumeDeviceHandler = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const currentUser = req.user;
+
+  const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name);
+  const actorRole = isAdmin ? 'ADMIN' : 'CLIENT';
+
+  await resumeDevice(deviceId, actorRole);
+
+  await createAuditLog({
+    user_id:       currentUser.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action:        'DEVICE_RESUME',
+    message:       `Device ${deviceId} resumed`,
+    target_type:   'DEVICE',
+    target_id:     deviceId,
+  });
+
+  res.json({ success: true, message: `Device ${deviceId} resumed` });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/pause-all
+// Pause all ACTIVE devices for a client
+// Body: { client_id, reason? }
+// ---------------------------------------------------------------------------
+export const pauseAllDevicesHandler = asyncHandler(async (req, res) => {
+  const { client_id, reason = '' } = req.body;
+  const currentUser = req.user;
+
+  if (!client_id) throw new ValidationError('client_id is required');
+
+  const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name);
+  const pausedBy = isAdmin ? 'ADMIN' : 'CLIENT';
+
+  // Non-admin can only pause their own client
+  if (!isAdmin && currentUser.client_id !== parseInt(client_id)) {
+    throw new AuthorizationError('Access denied');
+  }
+
+  const count = await pauseAllDevicesForClient(parseInt(client_id), pausedBy, reason);
+
+  res.json({ success: true, message: `${count} device(s) paused for client ${client_id}`, count });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/resume-all
+// Resume all (CLIENT-paused) devices for a client
+// Body: { client_id }
+// ---------------------------------------------------------------------------
+export const resumeAllDevicesHandler = asyncHandler(async (req, res) => {
+  const { client_id } = req.body;
+  const currentUser = req.user;
+
+  if (!client_id) throw new ValidationError('client_id is required');
+
+  const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role_name);
+  const actorRole = isAdmin ? 'ADMIN' : 'CLIENT';
+
+  if (!isAdmin && currentUser.client_id !== parseInt(client_id)) {
+    throw new AuthorizationError('Access denied');
+  }
+
+  const count = await resumeAllDevicesForClient(parseInt(client_id), actorRole);
+
+  res.json({ success: true, message: `${count} device(s) resumed for client ${client_id}`, count });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/:deviceId/config-push
+// Push a config_update payload to an ACTIVE device via MQTT.
+// Body: { Motor_ON_Time_sec?, Motor_OFF_Time_min?, Wheel_Threshold?, ...any config fields }
+// ---------------------------------------------------------------------------
+export const pushDeviceConfig = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const config = req.body;
+
+  if (!config || Object.keys(config).length === 0)
+    throw new ValidationError('Request body must contain at least one config field');
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT device_id, client_id, activation_status, imei FROM dbo.device WHERE device_id = @deviceId`);
+
+  if (result.recordset.length === 0) throw new NotFoundError('Device not found');
+  const device = result.recordset[0];
+
+  if (device.activation_status !== 'ACTIVE')
+    throw new ValidationError(`Device is not ACTIVE (current: ${device.activation_status})`);
+  if (!device.imei)
+    throw new ValidationError('Device has no IMEI registered');
+  if (!await canAccessDevice(req.user, device))
+    throw new AuthorizationError('Access denied');
+
+  await mqttService.pushConfigUpdate(device.imei, config);
+
+  await createAuditLog({
+    user_id:       req.user.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action:        'DEVICE_CONFIG_PUSH',
+    message:       `Config pushed to device ${deviceId}`,
+    target_type:   'DEVICE',
+    target_id:     deviceId,
+    details:       JSON.stringify(config),
+  });
+
+  res.json({ success: true, message: 'Config pushed to device', device_id: deviceId, config });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/devices/:deviceId/rotate-credentials
+// Generate new MQTT credentials and send telemetryConfig to the device.
+// Invalidates old credentials immediately (DB update).
+// ---------------------------------------------------------------------------
+export const rotateDeviceCredentials = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT device_id, client_id, activation_status, imei FROM dbo.device WHERE device_id = @deviceId`);
+
+  if (result.recordset.length === 0) throw new NotFoundError('Device not found');
+  const device = result.recordset[0];
+
+  if (device.activation_status !== 'ACTIVE')
+    throw new ValidationError('Device must be ACTIVE to rotate credentials');
+  if (!device.imei)
+    throw new ValidationError('Device has no IMEI registered');
+  if (!await canAccessDevice(req.user, device))
+    throw new AuthorizationError('Access denied');
+
+  const newPassword     = crypto.randomBytes(16).toString('hex');
+  const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+  await pool.request()
+    .input('deviceId',  sql.NVarChar, deviceId)
+    .input('hash',      sql.NVarChar, newPasswordHash)
+    .input('plain',     sql.NVarChar, newPassword)
+    .query(`
+      UPDATE dbo.device
+      SET mqtt_password       = @hash,
+          mqtt_password_plain = @plain
+      WHERE device_id = @deviceId
+    `);
+
+  // Publish new telemetryConfig (retain: true) — device receives on reconnect
+  await mqttService.publishTelemetryConfig(device.imei, deviceId, newPassword);
+
+  await createAuditLog({
+    user_id:       req.user.user_id,
+    activity_type: 'DEVICE_MANAGEMENT',
+    action:        'DEVICE_CREDENTIALS_ROTATE',
+    message:       `MQTT credentials rotated for device ${deviceId}`,
+    target_type:   'DEVICE',
+    target_id:     deviceId,
+  });
+
+  res.json({ success: true, message: 'Credentials rotated — new telemetryConfig sent to device', device_id: deviceId });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/devices/:deviceId/telemetry
+// Paginated telemetry records for a device.
+// Query: { page?, limit?, logicId? }
+// ---------------------------------------------------------------------------
+export const getDeviceTelemetry = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+  const page    = Math.max(1, parseInt(req.query.page  || '1'));
+  const limit   = Math.min(100, Math.max(1, parseInt(req.query.limit || '20')));
+  const logicId = req.query.logicId ? parseInt(req.query.logicId) : null;
+  const offset  = (page - 1) * limit;
+
+  const pool = await getPool();
+
+  // Verify access
+  const devResult = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT device_id, client_id FROM dbo.device WHERE device_id = @deviceId`);
+  if (devResult.recordset.length === 0) throw new NotFoundError('Device not found');
+  if (!await canAccessDevice(req.user, devResult.recordset[0]))
+    throw new AuthorizationError('Access denied');
+
+  const logicFilter = logicId ? 'AND logic_id = @logicId' : '';
+  const req2 = pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .input('limit',    sql.Int,      limit)
+    .input('offset',   sql.Int,      offset);
+  if (logicId) req2.input('logicId', sql.Int, logicId);
+
+  const [dataResult, countResult] = await Promise.all([
+    req2.query(`
+      SELECT telemetry_id, device_id, imei, logic_id, decoded_data, received_at
+      FROM dbo.DeviceTelemetry
+      WHERE device_id = @deviceId ${logicFilter}
+      ORDER BY received_at DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `),
+    pool.request()
+      .input('deviceId', sql.NVarChar, deviceId)
+      .query(`SELECT COUNT(*) AS total FROM dbo.DeviceTelemetry WHERE device_id = @deviceId ${logicId ? `AND logic_id = ${logicId}` : ''}`),
+  ]);
+
+  const total = countResult.recordset[0].total;
+  res.json({
+    success: true,
+    data: dataResult.recordset,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/devices/:deviceId/telemetry/latest
+// Most recent decoded record per logicId for a device.
+// ---------------------------------------------------------------------------
+export const getLatestTelemetry = asyncHandler(async (req, res) => {
+  const { deviceId } = req.params;
+
+  const pool = await getPool();
+  const devResult = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`SELECT device_id, client_id FROM dbo.device WHERE device_id = @deviceId`);
+  if (devResult.recordset.length === 0) throw new NotFoundError('Device not found');
+  if (!await canAccessDevice(req.user, devResult.recordset[0]))
+    throw new AuthorizationError('Access denied');
+
+  const result = await pool.request()
+    .input('deviceId', sql.NVarChar, deviceId)
+    .query(`
+      SELECT t.telemetry_id, t.logic_id, t.decoded_data, t.received_at
+      FROM dbo.DeviceTelemetry t
+      INNER JOIN (
+        SELECT logic_id, MAX(received_at) AS max_at
+        FROM dbo.DeviceTelemetry
+        WHERE device_id = @deviceId
+        GROUP BY logic_id
+      ) latest ON t.logic_id = latest.logic_id AND t.received_at = latest.max_at
+      WHERE t.device_id = @deviceId
+    `);
+
+  // Parse decoded_data JSON strings
+  const data = result.recordset.map(row => ({
+    ...row,
+    decoded_data: row.decoded_data ? JSON.parse(row.decoded_data) : null,
+  }));
+
+  res.json({ success: true, data });
 });

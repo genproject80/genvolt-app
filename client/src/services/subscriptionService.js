@@ -94,9 +94,39 @@ export const getTransactions = async (clientId, { page = 1, limit = 20 } = {}) =
 // ---------------------------------------------------------------------------
 // All subscriptions (admin)
 // ---------------------------------------------------------------------------
-export const getAllSubscriptions = async ({ page = 1, limit = 20, status, plan_id } = {}) => {
+export const getAllSubscriptions = async ({ page = 1, limit = 1000, status, plan_id } = {}) => {
   try {
     const res = await api.get('/', { params: { page, limit, status, plan_id } });
+    return res.data;
+  } catch (err) { handleError(err); }
+};
+
+// ---------------------------------------------------------------------------
+// Admin — create manual subscription
+// ---------------------------------------------------------------------------
+export const createManualSubscription = async (data) => {
+  try {
+    const res = await api.post('/admin/manual', data);
+    return res.data;
+  } catch (err) { handleError(err); }
+};
+
+// ---------------------------------------------------------------------------
+// Admin — change plan on existing subscription
+// ---------------------------------------------------------------------------
+export const changePlan = async (subscriptionId, planId) => {
+  try {
+    const res = await api.patch(`/${subscriptionId}/plan`, { plan_id: planId });
+    return res.data;
+  } catch (err) { handleError(err); }
+};
+
+// ---------------------------------------------------------------------------
+// Admin — extend subscription end date
+// ---------------------------------------------------------------------------
+export const extendEndDate = async (subscriptionId, endDate) => {
+  try {
+    const res = await api.patch(`/${subscriptionId}/extend`, { end_date: endDate });
     return res.data;
   } catch (err) { handleError(err); }
 };

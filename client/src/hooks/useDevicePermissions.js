@@ -14,6 +14,7 @@ export const useDevicePermissions = () => {
     canEditDevice: hasPermission('Edit Device'),
     canRemoveDevice: hasPermission('Remove Device'),
     canTransferDevice: hasPermission('Transfer Device'),
+    canPauseResume: hasPermission('Pause Resume Devices'),
 
     // Composite permission checks
     canManageDevices: hasPermission('Onboard Device') || hasPermission('Edit Device') || hasPermission('Remove Device'),
