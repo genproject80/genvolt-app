@@ -111,7 +111,7 @@ const HourlyDashboard = ({ tableKey }) => {
               {data.map((row, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-white z-10 min-w-[140px] border-r border-gray-100">
-                    {row.Device_ID}
+                    {row.device_id}
                   </td>
                   {HOURS.map((h) => {
                     const count = row[`H${h}`] || 0;

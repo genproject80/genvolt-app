@@ -756,7 +756,7 @@ export const activateDevice = asyncHandler(async (req, res) => {
   await createAuditLog({
     user_id:       req.user.user_id,
     activity_type: 'DEVICE_MANAGEMENT',
-    action:        'DEVICE_ACTIVATE',
+    action:        'DEVICE_ACTIVATED',
     message:       `Device ${finalDeviceId} (IMEI: ${imei}) activated for client ${parsedClientId}`,
     target_type:   'DEVICE',
     target_id:     finalDeviceId,

@@ -44,7 +44,7 @@ export const getHourlyDashboard = asyncHandler(async (req, res) => {
     throw new NotFoundError(`Table configuration not found for key: ${tableKey}`);
   }
 
-  const rows = await DeviceTesting.getHourlyDashboard(config.table_name, date || null);
+  const rows = await DeviceTesting.getHourlyDashboard(config.table_name, date || null, config.column_config);
 
   res.json({
     success: true,
@@ -65,7 +65,7 @@ export const getTableStats = asyncHandler(async (req, res) => {
     throw new NotFoundError(`Table configuration not found for key: ${tableKey}`);
   }
 
-  const stats = await DeviceTesting.getTableStats(config.table_name);
+  const stats = await DeviceTesting.getTableStats(config.table_name, config.column_config);
 
   res.json({
     success: true,

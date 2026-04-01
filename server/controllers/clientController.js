@@ -127,14 +127,6 @@ export const getDescendantClients = asyncHandler(async (req, res) => {
       ...descendants
     ];
 
-    logger.info('Retrieved hierarchical clients for user', {
-      userId: currentUser.user_id,
-      clientId: currentUser.client_id,
-      clientName: userClient.name,
-      descendantCount: descendants.length,
-      totalCount: clients.length
-    });
-
     res.json({
       success: true,
       message: 'Hierarchical clients retrieved successfully',
