@@ -111,8 +111,8 @@ class MQTTListenerService {
       }
       const newDeviceId = prefix + crypto.randomBytes(4).toString('hex').toUpperCase();
       await executeQuery(
-        `INSERT INTO dbo.device (id, device_id, imei, activation_status, onboarding_date, model_number)
-         VALUES (NEXT VALUE FOR dbo.device_id_seq, @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
+        `INSERT INTO dbo.device (device_id, imei, activation_status, onboarding_date, model_number)
+         VALUES ( @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
         {
           deviceId:    { value: newDeviceId,      type: sql.NVarChar },
           imei:        { value: String(imei),      type: sql.NVarChar },
