@@ -5,6 +5,7 @@ import { decode, resolveLogicIds } from '../decoders/decoder.js';
 import { executeQuery, sql } from '../config/database.js';
 import mqttService from './mqttService.js';
 import { Inventory } from '../models/Inventory.js';
+import { FeatureFlag } from '../models/FeatureFlag.js';
 
 class MQTTListenerService {
   constructor() {
@@ -12,6 +13,8 @@ class MQTTListenerService {
     // IMEIs whose retained config topic has already been cleared after first telemetry.
     // Prevents repeated empty publishes on every telemetry message.
     this._clearedConfigTopics = new Set();
+    // Cached at connect time from the feature flag — avoids a DB hit on every message.
+    this._telemetryEnabled = false;
   }
 
   connect() {
@@ -33,16 +36,31 @@ class MQTTListenerService {
       connectTimeout:  10000,
     });
 
-    this.client.on('connect', () => {
+    this.client.on('connect', async () => {
       logger.info('MQTT Listener connected');
       this.client.subscribe('cloudsynk/pre-activation', { qos: 1 }, (err) => {
         if (err) logger.error('Failed to subscribe to pre-activation:', err.message);
         else logger.info('Subscribed: cloudsynk/pre-activation');
       });
-      this.client.subscribe('cloudsynk/+/telemetry', { qos: 1 }, (err) => {
-        if (err) logger.error('Failed to subscribe to telemetry:', err.message);
-        else logger.info('Subscribed: cloudsynk/+/telemetry');
-      });
+
+      // Telemetry subscription is gated by the 'mqtt_telemetry_subscription' feature flag.
+      // The flag is cached for the lifetime of this connection; it is re-evaluated on reconnect.
+      try {
+        const flag = await FeatureFlag.findByName('mqtt_telemetry_subscription');
+        this._telemetryEnabled = !!flag?.is_enabled;
+      } catch (err) {
+        this._telemetryEnabled = false;
+        logger.warn('Could not read mqtt_telemetry_subscription flag — telemetry subscription skipped:', err.message);
+      }
+
+      if (this._telemetryEnabled) {
+        this.client.subscribe('cloudsynk/+/telemetry', { qos: 1 }, (err) => {
+          if (err) logger.error('Failed to subscribe to telemetry:', err.message);
+          else logger.info('Subscribed: cloudsynk/+/telemetry');
+        });
+      } else {
+        logger.info('Feature flag mqtt_telemetry_subscription disabled — skipping cloudsynk/+/telemetry subscription');
+      }
     });
 
     this.client.on('message', (topic, message) => {
@@ -60,6 +78,10 @@ class MQTTListenerService {
         );
       } else if (topic.endsWith('/telemetry')) {
         // topic format: cloudsynk/<IMEI>/telemetry
+        if (!this._telemetryEnabled) {
+          logger.debug(`Telemetry message on ${topic} dropped — mqtt_telemetry_subscription flag disabled`);
+          return;
+        }
         const parts = topic.split('/');
         const imei = parts[1];
         this.handleTelemetry(imei, payload).catch(err =>
@@ -229,6 +251,40 @@ class MQTTListenerService {
       } catch (err) {
         logger.warn(`Failed to clear retained config topic for IMEI=${imei}: ${err.message}`);
       }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // setTelemetrySubscription
+  // Called by the feature flag controller when mqtt_telemetry_subscription is toggled.
+  // Subscribes or unsubscribes live without requiring a reconnect.
+  // -------------------------------------------------------------------------
+  setTelemetrySubscription(isEnabled) {
+    if (!this.client?.connected) {
+      // Not connected yet — flag will be picked up on the next connect event.
+      this._telemetryEnabled = isEnabled;
+      logger.info(`MQTT not connected — mqtt_telemetry_subscription cached as ${isEnabled}`);
+      return;
+    }
+
+    if (isEnabled && !this._telemetryEnabled) {
+      this.client.subscribe('cloudsynk/+/telemetry', { qos: 1 }, (err) => {
+        if (err) {
+          logger.error('Failed to subscribe to telemetry (flag toggle):', err.message);
+        } else {
+          this._telemetryEnabled = true;
+          logger.info('Subscribed: cloudsynk/+/telemetry (flag enabled)');
+        }
+      });
+    } else if (!isEnabled && this._telemetryEnabled) {
+      this.client.unsubscribe('cloudsynk/+/telemetry', (err) => {
+        if (err) {
+          logger.error('Failed to unsubscribe from telemetry (flag toggle):', err.message);
+        } else {
+          this._telemetryEnabled = false;
+          logger.info('Unsubscribed: cloudsynk/+/telemetry (flag disabled)');
+        }
+      });
     }
   }
 

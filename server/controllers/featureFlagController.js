@@ -1,5 +1,6 @@
 import { FeatureFlag } from '../models/FeatureFlag.js';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import mqttListenerService from '../services/mqttListenerService.js';
 
 // ---------------------------------------------------------------------------
 // GET /api/feature-flags
@@ -25,5 +26,10 @@ export const updateFlag = asyncHandler(async (req, res) => {
   if (is_enabled === undefined) throw new ValidationError('is_enabled is required');
 
   const updated = await FeatureFlag.update(flagId, is_enabled, req.user.user_id);
+
+  if (flag.flag_name === 'mqtt_telemetry_subscription') {
+    mqttListenerService.setTelemetrySubscription(!!is_enabled);
+  }
+
   res.json({ success: true, data: updated.toJSON() });
 });

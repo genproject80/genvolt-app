@@ -10,7 +10,7 @@
 --   migrate_v4.sql              — IMEI protocol, DeviceTelemetry
 --   migrate_v5.sql              — inventory table, model_number FK
 --   migrate_v5_inventory_seed.sql — device model catalogue
---   migrate_feature_flags.sql   — FeatureFlags table
+--   migrate_feature_flags.sql   — FeatureFlags table + mqtt_telemetry_subscription seed
 --
 -- Layout:
 --   Block 1  — DDL   (CREATE TABLE, ALTER TABLE column additions)
@@ -869,6 +869,24 @@ BEGIN
 END
 ELSE
   PRINT 'FeatureFlags: payments_enabled already exists — skipped';
+
+IF NOT EXISTS (SELECT 1
+FROM dbo.FeatureFlags
+WHERE flag_name = 'mqtt_telemetry_subscription')
+BEGIN
+  INSERT INTO dbo.FeatureFlags
+    (flag_name, display_name, description, is_enabled)
+  VALUES
+    (
+      'mqtt_telemetry_subscription',
+      'MQTT Telemetry Subscription',
+      'Enables the backend MQTT listener to subscribe to cloudsynk/+/telemetry and ingest device telemetry.',
+      0
+  );
+  PRINT 'Seeded FeatureFlags: mqtt_telemetry_subscription';
+END
+ELSE
+  PRINT 'FeatureFlags: mqtt_telemetry_subscription already exists — skipped';
 
 -- 4.5  Back-fill existing devices with default model (v5.0)
 --      Uses dynamic SQL so the column reference resolves at runtime.
