@@ -29,7 +29,8 @@ const EMQX_ALLOWED_IPS = new Set(
 
 function requireEmqxIp(req, res, next) {
   const forwarded = req.headers['x-forwarded-for'];
-  const clientIp = forwarded ? forwarded.split(',')[0].trim() : req.ip;
+  const rawIp = forwarded ? forwarded.split(',')[0].trim() : req.ip;
+  const clientIp = rawIp.replace(/:\d+$/, '');
   if (!EMQX_ALLOWED_IPS.has(clientIp)) {
     logger.warn(`MQTT auth endpoint blocked: unexpected source IP ${clientIp}`);
     return res.status(403).json({ result: 'deny', reason: 'Forbidden' });
