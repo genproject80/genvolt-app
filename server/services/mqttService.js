@@ -1,5 +1,6 @@
 import mqtt from 'mqtt';
 import { logger } from '../utils/logger.js';
+import fs from 'fs';
 
 class MQTTService {
   constructor() {
@@ -28,6 +29,13 @@ class MQTTService {
       reconnectPeriod: 5000,
       connectTimeout: 10000,
       rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true',
+      ca: process.env.MQTT_BROKER_TLS === 'true'
+        ? fs.readFileSync('./certs/ca.crt')
+        : undefined,
+      key: process.env.MQTT_USE_CLIENT_CERT === 'true'
+        ? fs.readFileSync('./certs/client.key')
+        : undefined,
+      rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true'
     };
 
     this.client = mqtt.connect(options);

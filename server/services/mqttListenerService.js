@@ -6,6 +6,8 @@ import { executeQuery, sql } from '../config/database.js';
 import mqttService from './mqttService.js';
 import { Inventory } from '../models/Inventory.js';
 import { FeatureFlag } from '../models/FeatureFlag.js';
+import fs from 'fs';
+
 
 class MQTTListenerService {
   constructor() {
@@ -19,6 +21,7 @@ class MQTTListenerService {
 
   connect() {
     const host = process.env.MQTT_BROKER_HOST;
+
     if (!host) {
       logger.warn('MQTT_BROKER_HOST not set — MQTT listener disabled');
       return;
@@ -26,14 +29,21 @@ class MQTTListenerService {
 
     this.client = mqtt.connect({
       host,
-      port:            parseInt(process.env.MQTT_BROKER_PORT || '1883'),
-      protocol:        process.env.MQTT_BROKER_TLS === 'true' ? 'mqtts' : 'mqtt',
-      username:        process.env.MQTT_BACKEND_USER,
-      password:        process.env.MQTT_BACKEND_PASSWORD,
-      clientId:        'genvolt-listener-' + Math.random().toString(16).substr(2, 8),
-      clean:           true,
+      port: parseInt(process.env.MQTT_BROKER_PORT || '1883'),
+      protocol: process.env.MQTT_BROKER_TLS === 'true' ? 'mqtts' : 'mqtt',
+      username: process.env.MQTT_BACKEND_USER,
+      password: process.env.MQTT_BACKEND_PASSWORD,
+      clientId: 'genvolt-listener-' + Math.random().toString(16).substr(2, 8),
+      clean: true,
       reconnectPeriod: 5000,
-      connectTimeout:  10000,
+      connectTimeout: 10000,
+      ca: process.env.MQTT_BROKER_TLS === 'true'
+        ? fs.readFileSync('./certs/ca.crt')
+        : undefined,
+      key: process.env.MQTT_USE_CLIENT_CERT === 'true'
+        ? fs.readFileSync('./certs/client.key')
+        : undefined,
+      rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true'
     });
 
     this.client.on('connect', async () => {
@@ -90,9 +100,9 @@ class MQTTListenerService {
       }
     });
 
-    this.client.on('error',   (err) => logger.error('MQTT Listener error:', err.message));
-    this.client.on('offline', ()    => logger.warn('MQTT Listener offline'));
-    this.client.on('reconnect', ()  => logger.info('MQTT Listener reconnecting...'));
+    this.client.on('error', (err) => logger.error('MQTT Listener error:', err.message));
+    this.client.on('offline', () => logger.warn('MQTT Listener offline'));
+    this.client.on('reconnect', () => logger.info('MQTT Listener reconnecting...'));
   }
 
   // -------------------------------------------------------------------------
@@ -111,7 +121,7 @@ class MQTTListenerService {
     const result = await executeQuery(
       `SELECT device_id, activation_status, mqtt_password_plain
        FROM dbo.device WHERE imei = @imei`,
-      { imei: { value:  String(imei) , type: sql.NVarChar } }
+      { imei: { value: String(imei), type: sql.NVarChar } }
     );
 
     if (result.recordset.length === 0) {
@@ -130,9 +140,9 @@ class MQTTListenerService {
         `INSERT INTO dbo.device (device_id, imei, activation_status, onboarding_date, model_number)
          VALUES ( @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
         {
-          deviceId:    { value: newDeviceId,      type: sql.NVarChar },
-          imei:        { value: String(imei),      type: sql.NVarChar },
-          modelNumber: { value: modelNumber,       type: sql.NVarChar },
+          deviceId: { value: newDeviceId, type: sql.NVarChar },
+          imei: { value: String(imei), type: sql.NVarChar },
+          modelNumber: { value: modelNumber, type: sql.NVarChar },
         }
       );
       logger.info(`Auto-registered new device IMEI=${imei} deviceId=${newDeviceId} model=${modelNumber || 'none'} — awaiting admin activation`);
@@ -229,11 +239,11 @@ class MQTTListenerService {
          VALUES
            (@deviceId, @imei, @logicId, @raw, @decoded, GETUTCDATE())`,
         {
-          deviceId: { value: deviceId,                                    type: sql.NVarChar },
-          imei:     { value: imei,                                        type: sql.NVarChar },
-          logicId:  { value: logicId,                                     type: sql.Int      },
-          raw:      { value: rawJson,                                     type: sql.NVarChar },
-          decoded:  { value: decoded ? JSON.stringify(decoded) : null,    type: sql.NVarChar },
+          deviceId: { value: deviceId, type: sql.NVarChar },
+          imei: { value: imei, type: sql.NVarChar },
+          logicId: { value: logicId, type: sql.Int },
+          raw: { value: rawJson, type: sql.NVarChar },
+          decoded: { value: decoded ? JSON.stringify(decoded) : null, type: sql.NVarChar },
         }
       );
 
