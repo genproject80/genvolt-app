@@ -28,13 +28,13 @@ class MQTTService {
       clean: true,
       reconnectPeriod: 5000,
       connectTimeout: 10000,
-      ca: process.env.MQTT_BROKER_TLS === 'true'
-        ? fs.readFileSync('./certs/ca.crt')
+      ca: process.env.MQTT_CA_CERT_PATH
+        ? fs.readFileSync(process.env.MQTT_CA_CERT_PATH)
         : undefined,
       key: process.env.MQTT_USE_CLIENT_CERT === 'true'
         ? fs.readFileSync('./certs/ca.key')
         : undefined,
-      rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true'
+      rejectUnauthorized: useTls
     };
 
     this.client = mqtt.connect(options);
