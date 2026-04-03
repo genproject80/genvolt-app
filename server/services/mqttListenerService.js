@@ -41,7 +41,7 @@ class MQTTListenerService {
         ? fs.readFileSync('./certs/ca.crt')
         : undefined,
       key: process.env.MQTT_USE_CLIENT_CERT === 'true'
-        ? fs.readFileSync('./certs/client.key')
+        ? fs.readFileSync('./certs/ca.key')
         : undefined,
       rejectUnauthorized: process.env.MQTT_BROKER_TLS === 'true'
     });
