@@ -42,6 +42,39 @@ The HTTP hook must be evaluated before EMQX's built-in database for device conne
 
 ---
 
+## 2b. EMQX Broker — Configure HTTP ACL Authorization Hook (CRITICAL)
+
+> **Security incident (2026-04-02):** Without this step, ALL authenticated devices can publish/subscribe to ANY topic, bypassing all ACL logic. See `docs/MQTT_ACL_BYPASS_VULNERABILITY.md` for the full report.
+
+The HTTP authorization hook must be added **and** the default ACL rules must be hardened.
+
+**Steps:**
+
+1. In EMQX Dashboard, go to **Access Control → Authorization → Settings**
+   - Set **No Match** to **Deny** (default is `allow` — this is insecure)
+
+2. Go to **Access Control → Authorization**
+   - Click **Create** → select **HTTP Server**
+   - Method: `POST`
+   - URL: `https://backend.cloudsynk.net/api/mqtt/acl`
+   - Headers: `Content-Type: application/json`
+   - Body: `{"username":"${username}","topic":"${topic}","action":"${action}","clientid":"${clientid}"}`
+   - Request Timeout: `5s`
+
+3. Go to **Access Control → Authorization → File**
+   - Change the last rule from `{allow, all}.` to `{deny, all}.`
+
+4. **Reorder** authorization sources: HTTP → Built-in Database → File
+
+5. Verify with the attack test script:
+   ```bash
+   node server/simulator/attack-test.js \
+     --attacker-imei 999999999999998 --victim-imei <REAL_IMEI> \
+     --host <BROKER> --port <PORT> --pre-pass <SECRET>
+   ```
+
+---
+
 ## 3. EMQX Broker — Confirm TLS on Port 8883
 
 All external device connections must use TLS. Port 1883 must remain restricted to localhost only.

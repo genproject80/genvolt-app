@@ -49,7 +49,7 @@ Grant the App Service access to Key Vault:
 ```bash
 # Enable managed identity on App Service
 az webapp identity assign \
-  --name <app-service-name> \
+  --name cloudsynk-backend-api-prod \
   --resource-group CloudSynk_Prod
 
 # Grant Key Vault read access to the App Service identity
@@ -63,17 +63,16 @@ az keyvault set-policy \
 
 ## Step 2 — App Service: Set Environment Variables
 
-Replace `<app-service-name>` with your actual App Service name.
-
 ```bash
 az webapp config appsettings set \
-  --name <app-service-name> \
+  --name cloudsynk-backend-api-prod \
   --resource-group CloudSynk_Prod \
   --settings \
     NODE_ENV=production \
-    MQTT_BROKER_HOST=20.198.101.175 \
+    MQTT_BROKER_HOST=mqtt.cloudsynk.net \
     MQTT_BROKER_PORT=8883 \
     MQTT_BROKER_TLS=true \
+    MQTT_REJECT_UNAUTHORIZED=true \
     MQTT_BACKEND_USER=backend_publisher \
     DB_ENCRYPT=true \
     DB_TRUST_SERVER_CERTIFICATE=false \
@@ -98,7 +97,7 @@ For secrets, reference Key Vault instead of hardcoding values. In **Azure Portal
 
 ```bash
 az webapp update \
-  --name <app-service-name> \
+  --name cloudsynk-backend-api-prod \
   --resource-group CloudSynk_Prod \
   --https-only true
 ```
@@ -115,27 +114,14 @@ SSH into the VM:
 ssh -i ~/Downloads/vm-cloudsynk-emqx_key.pem mqttvm@20.198.101.175
 ```
 
-### Step 4a — Assign a DNS name to the VM's public IP
+### Step 4a — DNS Setup
 
-In **Azure Portal**:
-> Virtual Machines → vm-cloudsynk-emqx → Public IP address → Configuration
-> DNS name label: `emqx-cloudsynk`
-> Result: `emqx-cloudsynk.centralindia.cloudapp.azure.com`
+A subdomain `mqtt.cloudsynk.net` is configured with an A record pointing to the VM's public IP `20.198.101.175`.
 
-Or via CLI:
-
+Verify:
 ```bash
-# Get the public IP resource name
-az vm show \
-  --name vm-cloudsynk-emqx \
-  --resource-group CloudSynk_Prod \
-  --query publicIps -o tsv
-
-# Set DNS label on the public IP
-az network public-ip update \
-  --name <public-ip-name> \
-  --resource-group CloudSynk_Prod \
-  --dns-name emqx-cloudsynk
+nslookup mqtt.cloudsynk.net
+# Should resolve to 20.198.101.175
 ```
 
 ### Step 4b — Get a Let's Encrypt TLS certificate
@@ -151,12 +137,12 @@ sudo certbot certonly --standalone \
   --non-interactive \
   --agree-tos \
   --email admin@cloudsynk.net \
-  -d emqx-cloudsynk.centralindia.cloudapp.azure.com
+  -d mqtt.cloudsynk.net
 ```
 
 Certs are placed at:
-- `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/fullchain.pem`
-- `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/privkey.pem`
+- `/etc/letsencrypt/live/mqtt.cloudsynk.net/fullchain.pem`
+- `/etc/letsencrypt/live/mqtt.cloudsynk.net/privkey.pem`
 
 ### Step 4c — Relaunch EMQX Docker with TLS cert mounted
 
@@ -180,8 +166,8 @@ Open `http://20.198.101.175:18083` → **Management → Listeners → ssl:8883 �
 
 | Field | Value |
 |-------|-------|
-| SSL Cert | `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/fullchain.pem` |
-| SSL Key | `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/privkey.pem` |
+| SSL Cert | `/etc/letsencrypt/live/mqtt.cloudsynk.net/fullchain.pem` |
+| SSL Key | `/etc/letsencrypt/live/mqtt.cloudsynk.net/privkey.pem` |
 | Verify Peer | Disabled |
 
 Save and restart the listener.
@@ -239,7 +225,7 @@ Open `http://20.198.101.175:18083`
 | Mechanism | Password-Based |
 | Backend | HTTP |
 | Method | POST |
-| URL | `https://<app-service-name>.azurewebsites.net/api/mqtt/auth` |
+| URL | `https://backend.cloudsynk.net/api/mqtt/auth` |
 | Body | `{ "username": "${username}", "password": "${password}", "clientid": "${clientid}" }` |
 | Request Timeout | 5s |
 | Pool Size | 8 |
@@ -254,7 +240,7 @@ Success condition: HTTP 200 with `"result": "allow"`
 |-------|-------|
 | Type | HTTP |
 | Method | POST |
-| URL | `https://<app-service-name>.azurewebsites.net/api/mqtt/acl` |
+| URL | `https://backend.cloudsynk.net/api/mqtt/acl` |
 | Body | `{ "username": "${username}", "topic": "${topic}", "action": "${action}", "clientid": "${clientid}" }` |
 | No Match | Deny |
 | Request Timeout | 5s |
@@ -280,15 +266,15 @@ For `backend_publisher`:
 
 | Action | Topic |
 |--------|-------|
-| Allow publish | `cloudsynk/+/+/config` |
-| Allow publish | `cloudsynk/pre-activation/response/+` |
-| Deny subscribe | `#` |
+| Allow publish | `cloudsynk/+/config` |
+| Allow subscribe | `cloudsynk/+/telemetry` |
+| Allow subscribe | `cloudsynk/pre-activation` |
 
 For `local_subscriber`:
 
 | Action | Topic |
 |--------|-------|
-| Allow subscribe | `cloudsynk/+/+/telemetry` |
+| Allow subscribe | `cloudsynk/+/telemetry` |
 | Allow subscribe | `cloudsynk/pre-activation` |
 | Deny publish | `#` |
 
@@ -388,7 +374,7 @@ sudo journalctl -u cloudsynk-subscriber -f
 From your local machine (should be blocked):
 
 ```bash
-curl -X POST https://<app-service-name>.azurewebsites.net/api/mqtt/auth \
+curl -X POST https://backend.cloudsynk.net/api/mqtt/auth \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test"}'
 # Expected: 403 Forbidden
@@ -400,7 +386,7 @@ From VM or local (requires mosquitto-clients):
 
 ```bash
 mosquitto_pub \
-  -h emqx-cloudsynk.centralindia.cloudapp.azure.com \
+  -h mqtt.cloudsynk.net \
   -p 8883 \
   --capath /etc/ssl/certs \
   -u backend_publisher \
@@ -416,7 +402,7 @@ mosquitto_pub \
 ```bash
 # Simulate new device first boot
 mosquitto_pub \
-  -h emqx-cloudsynk.centralindia.cloudapp.azure.com \
+  -h mqtt.cloudsynk.net \
   -p 8883 --capath /etc/ssl/certs \
   -u "TEST001" \
   -t "cloudsynk/pre-activation" \
@@ -463,8 +449,8 @@ EMQX VM TLS (same deployment window as setting MQTT_BROKER_TLS=true):
 5. NSG: change port 1883 to bind 127.0.0.1 only (block plain MQTT from internet)
 
 EMQX Dashboard (one-time):
-6. Authentication → HTTP plugin → point to https://<app>.azurewebsites.net/api/mqtt/auth
-7. Authorization → HTTP source → point to https://<app>.azurewebsites.net/api/mqtt/acl
+6. Authentication → HTTP plugin → point to https://backend.cloudsynk.net/api/mqtt/auth
+7. Authorization → HTTP source → point to https://backend.cloudsynk.net/api/mqtt/acl
 8. Built-in Database → add backend_publisher + local_subscriber accounts + their ACL rules
 
 VM subscriber (remaining from VM_Setup_Guide steps 6, 7, 10):

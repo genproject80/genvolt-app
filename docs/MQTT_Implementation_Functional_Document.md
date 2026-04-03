@@ -63,8 +63,8 @@ This document describes the complete MQTT-based device communication system for 
 │  ACTIVE State (Post Activation):                                       │
 │    → HTTP GET /api/v1/device-config (Device Config Function App)      │
 │      ← Initial config: mqtt_broker, topics, device_settings           │
-│    → MQTT PUBLISH: cloudsynk/{client_id}/{device_id}/telemetry        │
-│    ← MQTT SUBSCRIBE: cloudsynk/{client_id}/{device_id}/config         │
+│    → MQTT PUBLISH: cloudsynk/{IMEI}/telemetry                         │
+│    ← MQTT SUBSCRIBE: cloudsynk/{IMEI}/config                          │
 │      (receives instant config updates from dashboard)                 │
 │                                                                        │
 │  INACTIVE State:                                                       │
@@ -86,7 +86,7 @@ This document describes the complete MQTT-based device communication system for 
 │                                                                        │
 │  Python Subscriber (systemd service):                                  │
 │    ├─ Connects to: localhost:1883                                     │
-│    ├─ Subscribes to: cloudsynk/+/+/telemetry (all active devices)     │
+│    ├─ Subscribes to: cloudsynk/+/telemetry (all active devices)       │
 │    ├─ Decodes hex payload using existing decoders                     │
 │    └─ Inserts to Azure SQL: IoT_Raw_Messages + IoT_Data_*             │
 └────────────────────────────────────────────────────────────────────────┘
@@ -120,7 +120,7 @@ This document describes the complete MQTT-based device communication system for 
 │  MQTT Publisher (mqttService.js):                                     │
 │    ├─ Connects to: vm-cloudsynk-emqx:8883 (TLS)                       │
 │    ├─ Publishes activation payload on device activation               │
-│    └─ On config update → PUBLISH to cloudsynk/{client_id}/{device_id}/config│
+│    └─ On config update → PUBLISH to cloudsynk/{IMEI}/config                │
 └────────────────────────────────────────────────────────────────────────┘
                               ↓ React App
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -139,9 +139,8 @@ This document describes the complete MQTT-based device communication system for 
 
 **Topic Structure:**
 - Pre-activation (any device): `cloudsynk/pre-activation`
-- Telemetry (active device publishes): `cloudsynk/{client_id}/{device_id}/telemetry`
-- Config (active device subscribes): `cloudsynk/{client_id}/{device_id}/config`
-- Activation response: `cloudsynk/pre-activation/response/{device_id}`
+- Telemetry (active device publishes): `cloudsynk/{IMEI}/telemetry`
+- Config (active device subscribes): `cloudsynk/{IMEI}/config`
 
 **Multi-Tenant Support:**
 - Each active device belongs to a `client_id` (stored in database)
@@ -217,20 +216,20 @@ cloudsynk/pre-activation
 ### Active Device Topics (Post Activation)
 
 ```
-cloudsynk/{client_id}/{device_id}/telemetry   ← Device publishes sensor data
-cloudsynk/{client_id}/{device_id}/config      ← Device subscribes for config updates
+cloudsynk/{IMEI}/telemetry   ← Device publishes sensor data
+cloudsynk/{IMEI}/config      ← Device subscribes for config updates
 ```
 
 **Examples:**
-- `cloudsynk/3/HK00001/telemetry`
-- `cloudsynk/3/HK00001/config`
+- `cloudsynk/HK00001/telemetry`
+- `cloudsynk/HK00001/config`
 
-### Activation Handshake Topic
+### Activation Handshake via Config Topic
 
-When a device is activated, the backend pushes a one-time activation payload telling the device its new topics and credentials:
+When a device is activated, the backend publishes a retained telemetryConfig message to the device's config topic. The device subscribes to `cloudsynk/{IMEI}/config` during Phase 1 (pre-activation) to receive its credentials:
 
 ```
-cloudsynk/pre-activation/response/{device_id}   ← Backend publishes activation payload
+cloudsynk/{IMEI}/config   ← Backend publishes retained activation payload
 ```
 
 **Activation payload:**
@@ -238,8 +237,8 @@ cloudsynk/pre-activation/response/{device_id}   ← Backend publishes activation
 {
   "status": "activated",
   "client_id": 3,
-  "telemetry_topic": "cloudsynk/3/HK00001/telemetry",
-  "config_topic": "cloudsynk/3/HK00001/config",
+  "telemetry_topic": "cloudsynk/HK00001/telemetry",
+  "config_topic": "cloudsynk/HK00001/config",
   "mqtt_username": "HK00001",
   "mqtt_password": "generated_secret",
   "config": {
@@ -283,7 +282,7 @@ Express queries: SELECT activation_status, mqtt_password FROM device WHERE devic
 EMQX calls `POST /api/mqtt/acl` before allowing publish/subscribe to any topic.
 
 ```
-Request: { username: "HK00001", topic: "cloudsynk/3/HK00001/telemetry", action: "publish" }
+Request: { username: "HK00001", topic: "cloudsynk/HK00001/telemetry", action: "publish" }
          ↓
 Express queries device activation_status and client_id
          ↓
@@ -291,10 +290,10 @@ Express queries device activation_status and client_id
 │ Device Status │ Topic                                    │ Action    │ Result  │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │ PENDING       │ cloudsynk/pre-activation                 │ publish   │ ALLOW   │
-│ PENDING       │ cloudsynk/pre-activation/response/{id}  │ subscribe │ ALLOW   │
+│ PENDING       │ cloudsynk/{IMEI}/config                 │ subscribe │ ALLOW   │
 │ PENDING       │ anything else                            │ any       │ DENY    │
-│ ACTIVE        │ cloudsynk/{own_client}/{own_dev}/telemetry│ publish  │ ALLOW   │
-│ ACTIVE        │ cloudsynk/{own_client}/{own_dev}/config  │ subscribe │ ALLOW   │
+│ ACTIVE        │ cloudsynk/{IMEI}/telemetry               │ publish  │ ALLOW   │
+│ ACTIVE        │ cloudsynk/{IMEI}/config                  │ subscribe │ ALLOW   │
 │ ACTIVE        │ other client's topics                    │ any       │ DENY    │
 │ INACTIVE      │ any topic                                │ any       │ DENY    │
 └────────────────────────────────────────────────────────────────────────────────┘
@@ -305,10 +304,10 @@ Express queries device activation_status and client_id
 These service accounts are created directly in EMQX built-in database (not via HTTP auth):
 
 - **backend_publisher** — Express Backend MQTT publisher
-  - ACL: `ALLOW publish cloudsynk/+/+/config` and `ALLOW publish cloudsynk/pre-activation/response/+`
+  - ACL: `ALLOW publish cloudsynk/+/config`
   - ACL: `DENY subscribe #`
 - **local_subscriber** — Python subscriber on VM
-  - ACL: `ALLOW subscribe cloudsynk/+/+/telemetry` and `ALLOW subscribe cloudsynk/pre-activation`
+  - ACL: `ALLOW subscribe cloudsynk/+/telemetry` and `ALLOW subscribe cloudsynk/pre-activation`
   - ACL: `DENY publish #`
 
 ---
@@ -338,15 +337,15 @@ Step 5: Admin confirms → POST /api/devices/:id/activate { client_id: 3 }
         ├─ Sets device.client_id = 3
         ├─ Generates MQTT credentials (username = device_id, password = random secret)
         ├─ Stores bcrypt-hashed password in device.mqtt_password
-        ├─ Publishes activation payload to cloudsynk/pre-activation/response/{device_id}
+        ├─ Publishes retained activation payload to cloudsynk/{IMEI}/config
         └─ Creates audit log entry
 
 Step 6: Device receives activation payload
         └─> Saves new credentials + assigned topics locally
         └─> Reconnects to EMQX with new credentials
         └─> Calls Device Config Function App to get initial config
-        └─> Starts publishing to cloudsynk/3/HK00001/telemetry
-        └─> Subscribes to cloudsynk/3/HK00001/config
+        └─> Starts publishing to cloudsynk/HK00001/telemetry
+        └─> Subscribes to cloudsynk/HK00001/config
 
 Step 7: Data flows normally
         └─> Python subscriber ingests telemetry → SQL
@@ -364,7 +363,7 @@ POST /api/devices/:id/deactivate
         ├─ Sets device.activation_status = INACTIVE
         ├─ Stores deactivated_at, deactivated_by
         ├─ Invalidates MQTT credentials
-        ├─ Publishes deactivation notice to cloudsynk/{client_id}/{device_id}/config:
+        ├─ Publishes deactivation notice to cloudsynk/{IMEI}/config:
         │    { "status": "deactivated", "reason": "subscription_expired" }
         └─ Creates audit log entry
 
@@ -475,7 +474,7 @@ sudo docker run -d --name cloudsynk-emqxmqtt-broker \
 Create the MQTT subscriber script at `/opt/cloudsynk-subscriber/local_subscriber.py`:
 
 **Responsibilities:**
-- ✅ Subscribe to `cloudsynk/+/+/telemetry` — receive telemetry from ACTIVE devices
+- ✅ Subscribe to `cloudsynk/+/telemetry` — receive telemetry from ACTIVE devices
 - ✅ Subscribe to `cloudsynk/pre-activation` — register PENDING devices
 - ✅ Decode payloads using existing decoders (P1/P2/P3/H1/Gas)
 - ✅ Insert to SQL database (IoT_Raw_Messages + IoT_Data_*)
@@ -483,11 +482,10 @@ Create the MQTT subscriber script at `/opt/cloudsynk-subscriber/local_subscriber
 
 **Topic Parsing Example:**
 ```python
-# Topic: cloudsynk/123/SICK_001/telemetry
-# Extract: client_id=123, device_id=SICK_001
+# Topic: cloudsynk/SICK_001/telemetry
+# Extract: device_id=SICK_001
 parts = topic.split('/')
-client_id = parts[1]
-device_id = parts[2]
+device_id = parts[1]
 ```
 
 **Pre-activation Handler:**
@@ -639,7 +637,7 @@ class MQTTService {
       return false;
     }
 
-    const topic = `cloudsynk/${clientId}/${deviceId}/config`;
+    const topic = `cloudsynk/${deviceId}/config`;
     const payload = {
       type: 'config_update',
       timestamp: new Date().toISOString(),
@@ -665,12 +663,12 @@ class MQTTService {
       return false;
     }
 
-    const topic = `cloudsynk/pre-activation/response/${deviceId}`;
+    const topic = `cloudsynk/${deviceId}/config`;
     const payload = {
       status: 'activated',
       client_id: clientId,
-      telemetry_topic: `cloudsynk/${clientId}/${deviceId}/telemetry`,
-      config_topic: `cloudsynk/${clientId}/${deviceId}/config`,
+      telemetry_topic: `cloudsynk/${deviceId}/telemetry`,
+      config_topic: `cloudsynk/${deviceId}/config`,
       mqtt_username: deviceId,
       mqtt_password: mqttPassword,
       config: initialConfig
@@ -848,7 +846,7 @@ router.post('/mqtt/acl', async (req, res) => {
       if (action === 'publish' && topic === 'cloudsynk/pre-activation') {
         return res.json({ result: 'allow' });
       }
-      if (action === 'subscribe' && topic === `cloudsynk/pre-activation/response/${username}`) {
+      if (action === 'subscribe' && topic === `cloudsynk/${username}/config`) {
         return res.json({ result: 'allow' });
       }
       return res.json({ result: 'deny', reason: 'Pending device restricted to pre-activation topic' });
@@ -859,14 +857,14 @@ router.post('/mqtt/acl', async (req, res) => {
       const clientId = device.client_id;
 
       if (action === 'publish') {
-        const expectedTopic = `cloudsynk/${clientId}/${username}/telemetry`;
+        const expectedTopic = `cloudsynk/${username}/telemetry`;
         if (topic === expectedTopic) {
           return res.json({ result: 'allow' });
         }
       }
 
       if (action === 'subscribe') {
-        const expectedTopic = `cloudsynk/${clientId}/${username}/config`;
+        const expectedTopic = `cloudsynk/${username}/config`;
         if (topic === expectedTopic) {
           return res.json({ result: 'allow' });
         }
@@ -942,14 +940,13 @@ Create service account users in EMQX built-in database:
 
 **Rules for backend_publisher:**
 ```
-ALLOW publish cloudsynk/+/+/config
-ALLOW publish cloudsynk/pre-activation/response/+
+ALLOW publish cloudsynk/+/config
 DENY subscribe #
 ```
 
 **Rules for local_subscriber:**
 ```
-ALLOW subscribe cloudsynk/+/+/telemetry
+ALLOW subscribe cloudsynk/+/telemetry
 ALLOW subscribe cloudsynk/pre-activation
 DENY publish #
 ```
@@ -1001,7 +998,7 @@ export const activateDevice = async (req, res) => {
     const config = initial_config || { telemetry_interval: 300, motor_on_time: 30 };
 
     // Publish activation payload to device via MQTT
-    // Device is listening on cloudsynk/pre-activation/response/{device_id}
+    // Device is listening on cloudsynk/{IMEI}/config
     try {
       await mqttService.publishActivationPayload(
         device.device_id,
@@ -1065,7 +1062,7 @@ mosquitto_pub -h 20.198.101.175 -p 1883 \
 - [ ] Use MQTT test client to publish telemetry with activated credentials:
 ```bash
 mosquitto_pub -h 20.198.101.175 -p 1883 \
-  -t "cloudsynk/3/HK00001/telemetry" \
+  -t "cloudsynk/HK00001/telemetry" \
   -u "HK00001" -P "device_mqtt_password" \
   -m '{"device_id":"HK00001","data":"0x1A2B3C4D..."}'
 ```
@@ -1077,11 +1074,11 @@ mosquitto_pub -h 20.198.101.175 -p 1883 \
 - [ ] Open Device Config page in dashboard
 - [ ] Select device HK00001
 - [ ] Toggle Debug Mode ON or change Motor_On_Time
-- [ ] Check Express Backend logs for: "Config pushed to cloudsynk/3/HK00001/config"
+- [ ] Check Express Backend logs for: "Config pushed to cloudsynk/HK00001/config"
 - [ ] Use MQTT test client to subscribe to config topic:
 ```bash
 mosquitto_sub -h 20.198.101.175 -p 1883 \
-  -t "cloudsynk/3/HK00001/config" \
+  -t "cloudsynk/HK00001/config" \
   -u "HK00001" -P "device_mqtt_password" \
   -v
 ```
@@ -1244,12 +1241,12 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
    POST /api/devices/42/activate { client_id: 3 }
    ↓
 9. Backend generates MQTT credentials, updates device status to ACTIVE
-   Publishes activation payload to cloudsynk/pre-activation/response/HK00001
+   Publishes retained activation payload to cloudsynk/HK00001/config
    ↓
 10. Device receives activation payload, saves credentials and topics
     ↓
 11. Device reconnects with new credentials, calls Device Config Function App
-    Starts publishing telemetry to cloudsynk/3/HK00001/telemetry
+    Starts publishing telemetry to cloudsynk/HK00001/telemetry
 ```
 
 ### Scenario 2: Active Device Startup
@@ -1262,8 +1259,8 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
    ← Response:
    {
      "mqtt_broker": "20.198.101.175:8883",
-     "mqtt_topic_pub": "cloudsynk/3/HK00001/telemetry",
-     "mqtt_topic_sub": "cloudsynk/3/HK00001/config",
+     "mqtt_topic_pub": "cloudsynk/HK00001/telemetry",
+     "mqtt_topic_sub": "cloudsynk/HK00001/config",
      "telemetry_interval": 300,
      "device_settings": {
        "Motor_On_Time": 500,
@@ -1274,7 +1271,7 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
    ↓
 3. Device connects to EMQX broker (TLS, with saved MQTT credentials)
    ↓
-4. Device subscribes to: cloudsynk/3/HK00001/config
+4. Device subscribes to: cloudsynk/HK00001/config
    ↓
 5. Device starts telemetry loop (every 300 seconds)
 ```
@@ -1295,7 +1292,7 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
    - Calls mqttService.pushConfigUpdate(3, "HK00001", {...})
    ↓
 5. Express Backend → MQTT PUBLISH:
-   Topic: cloudsynk/3/HK00001/config
+   Topic: cloudsynk/HK00001/config
    Payload: {
      "type": "config_update",
      "telemetry_interval": 30,
@@ -1326,7 +1323,7 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
 2. Device encodes data as hex payload
    ↓
 3. MQTT PUBLISH:
-   Topic: cloudsynk/3/HK00001/telemetry
+   Topic: cloudsynk/HK00001/telemetry
    Payload: {
      "device_id": "HK00001",
      "data": "0x1A2B3C4D5E6F..."
@@ -1334,8 +1331,8 @@ mosquitto_sub -h 20.198.101.175 -p 1883 \
    ↓
 4. EMQX receives message
    ↓
-5. Python Subscriber (subscribed to cloudsynk/+/+/telemetry):
-   - Parses topic → client_id=3, device_id=HK00001
+5. Python Subscriber (subscribed to cloudsynk/+/telemetry):
+   - Parses topic → device_id=HK00001
    - Decodes hex using DecoderFactory (P1/P2/P3/H1)
    - Extracts fields: Motor_RPM, Runtime_Min, GPS, etc.
    ↓
@@ -1643,7 +1640,7 @@ sudo docker logs cloudsynk-emqxmqtt-broker --tail 100 | grep -i auth
 sudo journalctl -u cloudsynk-subscriber -n 50 | grep -i subscribe
 
 # Test with mosquitto client
-mosquitto_sub -h localhost -p 1883 -t "cloudsynk/+/+/telemetry" -v
+mosquitto_sub -h localhost -p 1883 -t "cloudsynk/+/telemetry" -v
 
 # Check EMQX topic subscriptions
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions list
@@ -1655,7 +1652,7 @@ sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl subscriptions list
 curl http://localhost:3000/api/health/mqtt
 
 # Monitor EMQX for config messages
-mosquitto_sub -h 20.198.101.175 -p 1883 -t "cloudsynk/+/+/config" -v
+mosquitto_sub -h 20.198.101.175 -p 1883 -t "cloudsynk/+/config" -v
 
 # Check EMQX ACL allows backend to publish
 sudo docker exec cloudsynk-emqxmqtt-broker emqx ctl acl reload
@@ -2485,7 +2482,7 @@ EMQX will buffer up to N messages per subscriber while it's offline and replay o
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    DEVICE LAYER (500-600 devices)                    │
 │  PENDING → pre-activation topic                                      │
-│  ACTIVE  → cloudsynk/{client_id}/{device_id}/telemetry              │
+│  ACTIVE  → cloudsynk/{IMEI}/telemetry                               │
 │  INACTIVE→ blocked by EMQX auth                                      │
 └──────────────────────────────────────────────────────────────────────┘
                          ↓↑ MQTT TLS 8883
@@ -2576,8 +2573,8 @@ The "Device Config Function App" is referenced in the data flow (Scenario 2: Act
 
 **Recommended action:** Add the Device Config Function App's API contract to this document (request/response schema, which database tables it reads). At minimum, the response must include:
 - `mqtt_broker`: `20.198.101.175:8883`
-- `mqtt_topic_pub`: `cloudsynk/{client_id}/{device_id}/telemetry`
-- `mqtt_topic_sub`: `cloudsynk/{client_id}/{device_id}/config`
+- `mqtt_topic_pub`: `cloudsynk/{IMEI}/telemetry`
+- `mqtt_topic_sub`: `cloudsynk/{IMEI}/config`
 - `mqtt_username`: `{device_id}`
 - `mqtt_password`: (device retrieves its own password — or activation payload already provided it)
 
@@ -2585,7 +2582,7 @@ The "Device Config Function App" is referenced in the data flow (Scenario 2: Act
 
 ### 23.6 Activation Payload Delivery is Best-Effort
 
-When a device is activated, the backend publishes the activation payload to `cloudsynk/pre-activation/response/{device_id}`. This is best-effort: if the device has disconnected between publishing its pre-activation message and the admin clicking "Activate", the payload is never received.
+When a device is activated, the backend publishes a retained telemetryConfig message to `cloudsynk/{IMEI}/config`. The device subscribes to `cloudsynk/{IMEI}/config` during Phase 1 to receive its credentials. This is best-effort without retained messages: if the device has disconnected between publishing its pre-activation message and the admin clicking "Activate", the payload is never received.
 
 **Solution:** Use QoS 1 with a retained message:
 

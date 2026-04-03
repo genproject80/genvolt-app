@@ -67,18 +67,19 @@
 
 | State | MQTT Access | Credentials |
 |-------|-------------|-------------|
-| `PENDING` | `cloudsynk/pre-activation` only | username=IMEI, password=`PRE_ACTIVATION_SECRET` |
-| `ACTIVE` | `cloudsynk/{client_id}/{device_id}/telemetry` + config | username=device_id, password=bcrypt hash stored in DB |
+| `PENDING` | `cloudsynk/pre-activation` + `cloudsynk/{IMEI}/config` (subscribe) | username=IMEI, password=`PRE_ACTIVATION_SECRET` |
+| `ACTIVE` | `cloudsynk/{IMEI}/telemetry` + `cloudsynk/{IMEI}/config` | username=device_id, password=bcrypt hash stored in DB |
 | `INACTIVE` | Rejected at auth hook | — |
 
 ### MQTT Topic Structure
 
 | Topic | Direction | Who |
 |-------|-----------|-----|
-| `cloudsynk/pre-activation` | PUBLISH | PENDING device (first boot) |
-| `cloudsynk/pre-activation/response/{device_id}` | PUBLISH | `backend_publisher` (activation payload) |
-| `cloudsynk/{client_id}/{device_id}/telemetry` | PUBLISH | ACTIVE device |
-| `cloudsynk/{client_id}/{device_id}/config` | PUBLISH | `backend_publisher` (retained config) |
+| `cloudsynk/pre-activation` | PUBLISH | PENDING device (first boot announcement) |
+| `cloudsynk/{IMEI}/config` | PUBLISH (retained) | `backend_publisher` (telemetryConfig, pause/resume, config updates, deactivation) |
+| `cloudsynk/{IMEI}/config` | SUBSCRIBE | Device (receives credentials on activation, config updates) |
+| `cloudsynk/{IMEI}/telemetry` | PUBLISH | ACTIVE device (sensor data) |
+| `cloudsynk/{IMEI}/telemetry` | SUBSCRIBE | `backend_publisher` / `local_subscriber` (process incoming telemetry) |
 
 ---
 
@@ -180,7 +181,7 @@ VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxxxxx
 
 **Prod (`client/.env.production`):**
 ```env
-VITE_API_URL=https://cloudsynk-backend-api-prod.azurewebsites.net
+VITE_API_URL=https://backend.cloudsynk.net
 VITE_APP_NAME=CloudSynk
 VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxxxxx
 ```
@@ -419,13 +420,9 @@ Default credentials: `admin` / `public` — **change immediately**.
 
 ### 5.2 TLS Setup (Production)
 
-#### Step 1 — Assign DNS to VM Public IP
+#### Step 1 — DNS Setup
 
-In Azure Portal:
-**Virtual Machines → vm-cloudsynk-emqx → Public IP → Configuration → DNS name label**
-
-Set: `emqx-cloudsynk`
-Result: `emqx-cloudsynk.centralindia.cloudapp.azure.com`
+A subdomain `mqtt.cloudsynk.net` is configured with an A record pointing to the VM's public IP `20.198.101.175`.
 
 #### Step 2 — Get Let's Encrypt Certificate
 
@@ -440,13 +437,13 @@ sudo snap install --classic certbot
 sudo certbot certonly --standalone \
   --non-interactive \
   --agree-tos \
-  --email <your-email> \
-  -d emqx-cloudsynk.centralindia.cloudapp.azure.com
+  --email admin@cloudsynk.net \
+  -d mqtt.cloudsynk.net
 ```
 
 Certificates are placed at:
-- `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/fullchain.pem`
-- `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/privkey.pem`
+- `/etc/letsencrypt/live/mqtt.cloudsynk.net/fullchain.pem`
+- `/etc/letsencrypt/live/mqtt.cloudsynk.net/privkey.pem`
 
 #### Step 3 — Relaunch EMQX with TLS and Localhost-Only Port 1883
 
@@ -470,8 +467,8 @@ Dashboard → **Management → Listeners → ssl:8883 → Edit**
 
 | Field | Value |
 |-------|-------|
-| SSL Cert | `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/fullchain.pem` |
-| SSL Key | `/etc/letsencrypt/live/emqx-cloudsynk.centralindia.cloudapp.azure.com/privkey.pem` |
+| SSL Cert | `/etc/letsencrypt/live/mqtt.cloudsynk.net/fullchain.pem` |
+| SSL Key | `/etc/letsencrypt/live/mqtt.cloudsynk.net/privkey.pem` |
 | Verify Peer | Disabled |
 
 Save and restart the listener.
@@ -501,7 +498,7 @@ Dashboard → **Access Control → Authentication → Create**
 | Mechanism | Password-Based |
 | Backend | HTTP |
 | Method | POST |
-| URL | `https://cloudsynk-backend-api-prod.azurewebsites.net/api/mqtt/auth` |
+| URL | `https://backend.cloudsynk.net/api/mqtt/auth` |
 | Body | `{ "username": "${username}", "password": "${password}", "clientid": "${clientid}" }` |
 | Request Timeout | 5s |
 | Pool Size | 8 |
@@ -537,7 +534,7 @@ Dashboard → **Access Control → Authorization → Create**
 |-------|-------|
 | Type | HTTP |
 | Method | POST |
-| URL | `https://cloudsynk-backend-api-prod.azurewebsites.net/api/mqtt/acl` |
+| URL | `https://backend.cloudsynk.net/api/mqtt/acl` |
 | Body | `{ "username": "${username}", "topic": "${topic}", "action": "${action}", "clientid": "${clientid}" }` |
 | No Match | Deny |
 | Request Timeout | 5s |
@@ -546,8 +543,8 @@ Dashboard → **Access Control → Authorization → Create**
 
 | State | Allowed PUBLISH | Allowed SUBSCRIBE |
 |-------|-----------------|-------------------|
-| PENDING | `cloudsynk/pre-activation` | `cloudsynk/pre-activation/response/<IMEI>` |
-| ACTIVE | `cloudsynk/<client_id>/<device_id>/telemetry` | `cloudsynk/<client_id>/<device_id>/config` |
+| PENDING | `cloudsynk/pre-activation` | `cloudsynk/{IMEI}/config` |
+| ACTIVE | `cloudsynk/{IMEI}/telemetry` (if data_enabled=1) | `cloudsynk/{IMEI}/config` |
 | INACTIVE | None | None |
 
 ---
@@ -570,9 +567,8 @@ Dashboard → **Access Control → Authorization → Built-in Database → Rules
 
 | Action | Topic Pattern |
 |--------|---------------|
-| Allow PUBLISH | `cloudsynk/+/+/config` |
-| Allow PUBLISH | `cloudsynk/pre-activation/response/+` |
-| Allow SUBSCRIBE | `cloudsynk/+/+/telemetry` |
+| Allow PUBLISH | `cloudsynk/+/config` |
+| Allow SUBSCRIBE | `cloudsynk/+/telemetry` |
 | Allow SUBSCRIBE | `cloudsynk/pre-activation` |
 
 ---
@@ -756,7 +752,7 @@ Set in **GitHub → Repository → Settings → Secrets and variables → Action
 |--------|-------------|
 | `AZURE_WEBAPP_PUBLISH_PROFILE` | Download from Azure Portal → App Service → Get publish profile |
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | From Azure Portal → Static Web App → Manage deployment token |
-| `VITE_API_URL` | Production backend URL (`https://cloudsynk-backend-api-prod.azurewebsites.net`) |
+| `VITE_API_URL` | Production backend URL (`https://backend.cloudsynk.net`) |
 | `VITE_RAZORPAY_KEY_ID` | Public Razorpay key (safe to store as secret for cleanliness) |
 
 ---
@@ -782,7 +778,7 @@ sqlcmd -S ... -Q "SELECT flag_name, is_enabled FROM dbo.FeatureFlags"
 ### Backend Health
 
 ```bash
-curl https://cloudsynk-backend-api-prod.azurewebsites.net/health
+curl https://backend.cloudsynk.net/health
 # Expected: 200 OK with {"status":"healthy",...}
 ```
 
@@ -790,7 +786,7 @@ curl https://cloudsynk-backend-api-prod.azurewebsites.net/health
 
 ```bash
 # From your local machine (not EMQX VM) — should return 403
-curl -X POST https://cloudsynk-backend-api-prod.azurewebsites.net/api/mqtt/auth \
+curl -X POST https://backend.cloudsynk.net/api/mqtt/auth \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test"}'
 # Expected: 403 Forbidden
@@ -800,7 +796,7 @@ curl -X POST https://cloudsynk-backend-api-prod.azurewebsites.net/api/mqtt/auth 
 
 ```bash
 mosquitto_pub \
-  -h emqx-cloudsynk.centralindia.cloudapp.azure.com \
+  -h mqtt.cloudsynk.net \
   -p 8883 \
   --capath /etc/ssl/certs \
   -u backend_publisher \
@@ -814,7 +810,7 @@ mosquitto_pub \
 ```bash
 # Simulate a PENDING device first boot
 mosquitto_pub \
-  -h emqx-cloudsynk.centralindia.cloudapp.azure.com \
+  -h mqtt.cloudsynk.net \
   -p 8883 --capath /etc/ssl/certs \
   -u "<DEVICE_IMEI>" \
   -P "<PRE_ACTIVATION_SECRET>" \

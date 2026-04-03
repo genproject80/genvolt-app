@@ -274,8 +274,8 @@ function startTelemetry() {
             telemetryTimer = null;
             console.log('[Phase 2] Device paused (isActive=0) — telemetry stopped. Listening for resume...');
           }
-        } else if (payload.mqtt_password) {
-          // Credential rotation — reconnect with new password
+        } else if (payload.mqtt_password && payload.mqtt_password !== mqttPassword) {
+          // Credential rotation — reconnect only if password actually changed
           console.log('[Phase 2] Credential rotation received. Reconnecting...');
           isPaused = false;
           mqttPassword = payload.mqtt_password;
