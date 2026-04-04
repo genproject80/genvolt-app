@@ -29,6 +29,7 @@ import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
+import hkmiConfigRoutes from './routes/hkmiConfigRoutes.js';
 import p3DataRoutes from './routes/p3DataRoutes.js';
 import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 import deviceTestingRoutes from './routes/deviceTestingRoutes.js';
@@ -170,6 +171,7 @@ app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
+app.use('/api/hkmi-config', hkmiConfigRoutes);
 app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/p3-device-details', p3DeviceDetailRoutes);
 // Subscription & billing routes
