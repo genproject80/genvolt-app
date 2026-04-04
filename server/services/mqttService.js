@@ -80,6 +80,8 @@ class MQTTService {
   /**
    * Send telemetryConfig to a device via its IMEI-based config topic.
    * retain: true — device receives it even after reconnecting.
+   * After a 30-second delay the retained message is automatically cleared so
+   * the device does not receive stale credentials on subsequent re-subscriptions.
    * Used for: initial activation, reactivation, reboot recovery, credential rotation.
    */
   async publishTelemetryConfig(imei, deviceId, plainPassword) {
@@ -103,10 +105,31 @@ class MQTTService {
           reject(err);
         } else {
           logger.info(`telemetryConfig published → ${topic}`);
+          // Auto-clear the retained message after 30 seconds so the device
+          // does not receive stale credentials on subsequent re-subscriptions.
+          this._scheduleClearRetained(topic, imei);
           resolve(true);
         }
       });
     });
+  }
+
+  /**
+   * Clear a retained message from a topic after a delay.
+   * Publishing an empty string with retain: true tells the broker to delete
+   * the stored message for that topic.
+   */
+  _scheduleClearRetained(topic, imei, delayMs = 30000) {
+    setTimeout(() => {
+      if (!this.connected) return;
+      this.client.publish(topic, '', { qos: 1, retain: true }, (err) => {
+        if (err) {
+          logger.warn(`Failed to clear retained message on ${topic}: ${err.message}`);
+        } else {
+          logger.info(`Cleared retained config for IMEI=${imei}`);
+        }
+      });
+    }, delayMs);
   }
 
   /**
@@ -134,6 +157,7 @@ class MQTTService {
           reject(err);
         } else {
           logger.info(`Active status (isActive=${payload.isActive}) published → ${topic}`);
+          this._scheduleClearRetained(topic, imei);
           resolve(true);
         }
       });
