@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import { PlusIcon, PencilIcon, TrashIcon, ServerStackIcon } from '@heroicons/react/24/outline';
 import { useClient } from '../../context/ClientContext';
 import { useClientPermissions } from '../../hooks/useClientPermissions';
+import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import AddClientModal from '../../components/modals/AddClientModal';
 import DeleteClientModal from '../../components/modals/DeleteClientModal';
+import { getAllSubscriptions } from '../../services/subscriptionService';
+
+const SUB_STATUS_STYLES = {
+  ACTIVE:    'bg-green-100 text-green-800',
+  GRACE:     'bg-yellow-100 text-yellow-800',
+  EXPIRED:   'bg-red-100 text-red-800',
+  CANCELLED: 'bg-gray-100 text-gray-600',
+  PENDING:   'bg-blue-100 text-blue-800',
+};
 
 const ClientManagement = () => {
+  const navigate = useNavigate();
   const {
     clients,
     loading,
@@ -26,6 +38,8 @@ const ClientManagement = () => {
     loading: permissionLoading
   } = useClientPermissions();
 
+  const { canViewDevice } = useDevicePermissions();
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -38,6 +52,7 @@ const ClientManagement = () => {
     totalDevices: 0,
     avgDevicesPerClient: 0
   });
+  const [subscriptionsMap, setSubscriptionsMap] = useState({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -49,6 +64,21 @@ const ClientManagement = () => {
     };
     loadData();
   }, [getAllClients, getClientStats]);
+
+  useEffect(() => {
+    getAllSubscriptions()
+      .then((res) => {
+        const map = {};
+        (res?.data || []).forEach((sub) => {
+          // Keep the most recent non-cancelled subscription per client
+          if (!map[sub.client_id] || sub.status !== 'CANCELLED') {
+            map[sub.client_id] = sub;
+          }
+        });
+        setSubscriptionsMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredClients = clients.filter(client => {
     const matchesSearch = searchTerm === '' || 
@@ -260,6 +290,9 @@ const ClientManagement = () => {
                 Devices
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Subscription
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -270,13 +303,13 @@ const ClientManagement = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                   Loading clients...
                 </td>
               </tr>
             ) : filteredClients.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                   No clients found
                 </td>
               </tr>
@@ -305,9 +338,23 @@ const ClientManagement = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    {subscriptionsMap[client.client_id] ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-gray-800">
+                          {subscriptionsMap[client.client_id].plan_name}
+                        </span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full w-fit ${SUB_STATUS_STYLES[subscriptionsMap[client.client_id].status] || 'bg-gray-100 text-gray-600'}`}>
+                          {subscriptionsMap[client.client_id].status}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">No plan</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      client.is_active 
-                        ? 'bg-green-100 text-green-800' 
+                      client.is_active
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
                       {client.is_active ? 'Active' : 'Inactive'}
@@ -315,6 +362,15 @@ const ClientManagement = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
+                      {canViewDevice && (
+                        <button
+                          onClick={() => navigate(`/admin/clients/${client.client_id}/devices`)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Manage Devices"
+                        >
+                          <ServerStackIcon className="w-4 h-4" />
+                        </button>
+                      )}
                       {canEditClient && (
                         <button
                           onClick={() => handleEditClient(client)}

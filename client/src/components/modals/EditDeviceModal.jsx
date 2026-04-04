@@ -46,8 +46,6 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
   const loadClients = async () => {
     try {
       setLoadingData(true);
-      console.log('🔄 EditDeviceModal: Loading descendant clients...');
-
       const clientsResponse = await clientService.getDescendantClients();
 
       if (clientsResponse && clientsResponse.success) {
@@ -65,13 +63,10 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
         }
 
         setClients(clientsData);
-        console.log('✅ EditDeviceModal: Loaded descendant clients:', clientsData);
       } else {
-        console.warn('⚠️ EditDeviceModal: Failed to load descendant clients:', clientsResponse);
         setErrors({ submit: 'Failed to load clients data' });
       }
     } catch (error) {
-      console.error('❌ EditDeviceModal: Failed to load descendant clients:', error);
       setErrors({ submit: 'Failed to load form data. Please try again.' });
     } finally {
       setLoadingData(false);

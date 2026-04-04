@@ -7,12 +7,22 @@ import { Client } from '../models/Client.js';
  * Validation middleware for device operations
  */
 
-// Device ID (path parameter) validation
+// Device ID (path parameter) validation — numeric DB id
 export const validateDeviceId = [
   param('deviceId')
     .isInt({ min: 1 })
     .withMessage('Device ID must be a positive integer'),
   handleValidationErrors
+];
+
+// Device string ID (path parameter) — e.g., "HK00001" used in activate/deactivate/reactivate
+export const validateDeviceStringId = [
+  param('deviceId')
+    .trim()
+    .notEmpty().withMessage('Device ID is required')
+    .isLength({ min: 3, max: 100 }).withMessage('Device ID must be 3–100 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/).withMessage('Device ID can only contain letters, numbers, underscores, and hyphens'),
+  handleValidationErrors,
 ];
 
 // Create device validation
@@ -285,6 +295,7 @@ export const validateDeviceFilters = [
 
 export default {
   validateDeviceId,
+  validateDeviceStringId,
   createDeviceValidation,
   updateDeviceValidation,
   transferDeviceValidation,

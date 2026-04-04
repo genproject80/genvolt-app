@@ -22,6 +22,12 @@ export const DeviceDetailProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [historyError, setHistoryError] = useState(null);
 
+  // CloudSynk telemetry state (from DeviceTelemetry table)
+  const [latestTelemetry, setLatestTelemetry] = useState(null);
+  const [telemetryHistory, setTelemetryHistory] = useState([]);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
+  const [telemetryError, setTelemetryError] = useState(null);
+
   // History filters state
   const [historyFilters, setHistoryFilters] = useState({
     timeRange: 'all',
@@ -120,17 +126,6 @@ export const DeviceDetailProvider = ({ children }) => {
     setHistoryError(null);
 
     try {
-      console.log('Fetching device history with params:', {
-        timeRange,
-        status,
-        search,
-        date,
-        page,
-        limit,
-        sortField,
-        sortOrder
-      });
-
       const params = new URLSearchParams({
         timeRange,
         status,
@@ -141,8 +136,6 @@ export const DeviceDetailProvider = ({ children }) => {
         sortField,
         sortOrder
       });
-
-      console.log('API URL:', `/device-details/${deviceId}/history?${params}`);
 
       const response = await makeAuthenticatedRequest(`/device-details/${deviceId}/history?${params}`);
 
@@ -172,6 +165,41 @@ export const DeviceDetailProvider = ({ children }) => {
       page: 1
     }));
   }, []);
+
+  // Fetch latest telemetry per logicId from DeviceTelemetry table
+  const fetchLatestTelemetry = useCallback(async (deviceId) => {
+    if (!isAuthenticated || !deviceId) return;
+    setTelemetryLoading(true);
+    setTelemetryError(null);
+    try {
+      const response = await makeAuthenticatedRequest(`/devices/${deviceId}/telemetry/latest`);
+      setLatestTelemetry(response.data || null);
+      return response.data;
+    } catch (err) {
+      setTelemetryError(err.message);
+      setLatestTelemetry(null);
+    } finally {
+      setTelemetryLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  // Fetch paginated telemetry history
+  const fetchTelemetryHistory = useCallback(async (deviceId, params = {}) => {
+    if (!isAuthenticated || !deviceId) return;
+    setTelemetryLoading(true);
+    setTelemetryError(null);
+    try {
+      const query = new URLSearchParams(params).toString();
+      const response = await makeAuthenticatedRequest(`/devices/${deviceId}/telemetry${query ? `?${query}` : ''}`);
+      setTelemetryHistory(response.data || []);
+      return response;
+    } catch (err) {
+      setTelemetryError(err.message);
+      setTelemetryHistory([]);
+    } finally {
+      setTelemetryLoading(false);
+    }
+  }, [isAuthenticated]);
 
   // Clear all data
   const clearDeviceDetail = useCallback(() => {
@@ -278,9 +306,17 @@ export const DeviceDetailProvider = ({ children }) => {
     historyFilters,
     historyPagination,
 
+    // CloudSynk telemetry state
+    latestTelemetry,
+    telemetryHistory,
+    telemetryLoading,
+    telemetryError,
+
     // Actions
     fetchDeviceDetail,
     fetchDeviceHistory,
+    fetchLatestTelemetry,
+    fetchTelemetryHistory,
     updateHistoryFilters,
     clearDeviceDetail,
     resetHistoryPagination,

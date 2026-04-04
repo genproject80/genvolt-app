@@ -475,11 +475,19 @@ export const uploadHKMIData = asyncHandler(async (req, res) => {
     }
 
     // Create audit log
-    await createAuditLog(user.id, 'HKMI_DATA_UPLOAD', 'Uploaded HKMI configuration data', 'hkmi_upload', null, {
-      filename: file.originalname,
-      total_rows: data.length,
-      successful_rows: successfulRows.length,
-      rejected_rows: rejectedRows.length
+    await createAuditLog({
+      user_id: user.user_id,
+      activity_type: 'DEVICE_MANAGEMENT',
+      action: 'HKMI_DATA_UPLOAD',
+      message: 'Uploaded HKMI configuration data',
+      target_type: 'HKMI_UPLOAD',
+      target_id: null,
+      details: JSON.stringify({
+        filename: file.originalname,
+        total_rows: data.length,
+        successful_rows: successfulRows.length,
+        rejected_rows: rejectedRows.length
+      })
     });
 
     res.json({

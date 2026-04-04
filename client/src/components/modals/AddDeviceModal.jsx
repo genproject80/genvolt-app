@@ -33,11 +33,8 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
   const loadClients = async () => {
     try {
       setLoadingData(true);
-      console.log('🔄 AddDeviceModal: Loading descendant clients...');
 
       const clientsResponse = await clientService.getDescendantClients();
-
-      console.log('📊 AddDeviceModal: Descendant clients response:', clientsResponse);
 
       if (clientsResponse && clientsResponse.success) {
         // Extract the actual clients array from the response
@@ -54,7 +51,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
         }
 
         setClients(clientsData);
-        console.log('✅ AddDeviceModal: Loaded descendant clients:', clientsData);
 
         // Set default client_id to user's client AFTER clients are loaded
         // The API returns user's own client as first item (level 0)
@@ -63,17 +59,14 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             ...prev,
             client_id: user.client_id.toString()
           }));
-          console.log('✅ AddDeviceModal: Set default client_id to user client:', user.client_id);
         }
       } else {
         console.warn('⚠️ AddDeviceModal: Failed to load descendant clients:', clientsResponse);
         setErrors({ submit: 'Failed to load clients data' });
       }
     } catch (error) {
-      console.error('❌ AddDeviceModal: Failed to load descendant clients:', error);
       setErrors({ submit: 'Failed to load form data. Please try again.' });
     } finally {
-      console.log('🏁 AddDeviceModal: Loading complete, setting loadingData to false');
       setLoadingData(false);
     }
   };

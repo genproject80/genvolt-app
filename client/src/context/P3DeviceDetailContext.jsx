@@ -120,17 +120,6 @@ export const P3DeviceDetailProvider = ({ children }) => {
     setHistoryError(null);
 
     try {
-      console.log('Fetching P3 device history with params:', {
-        timeRange,
-        status,
-        search,
-        date,
-        page,
-        limit,
-        sortField,
-        sortOrder
-      });
-
       const params = new URLSearchParams({
         timeRange,
         status,
@@ -141,8 +130,6 @@ export const P3DeviceDetailProvider = ({ children }) => {
         sortField,
         sortOrder
       });
-
-      console.log('P3 API URL:', `/p3-device-details/${entryId}/history?${params}`);
 
       const response = await makeAuthenticatedRequest(`/p3-device-details/${entryId}/history?${params}`);
 

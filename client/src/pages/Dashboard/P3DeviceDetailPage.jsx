@@ -77,7 +77,6 @@ const P3DeviceDetailPage = () => {
   };
 
   const handleHistoryFiltersChange = (newFilters) => {
-    console.log('P3DeviceDetailPage: handleHistoryFiltersChange called with:', newFilters);
     updateHistoryFilters(newFilters);
   };
 

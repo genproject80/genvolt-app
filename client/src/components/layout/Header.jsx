@@ -8,24 +8,17 @@ const Header = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    console.log('🚪 Header: Logout button clicked');
     setIsLoggingOut(true);
     try {
-      console.log('🚪 Header: Calling logout function...');
       await logout();
-      console.log('🚪 Header: Logout completed successfully');
     } catch (error) {
-      console.error('🚪 Header: Logout error:', error);
     } finally {
-      console.log('🚪 Header: Setting isLoggingOut to false');
       setIsLoggingOut(false);
     }
   };
 
   const toggleDropdown = () => {
-    console.log('🔽 Header: Dropdown toggle clicked. Current state:', isDropdownOpen);
     setIsDropdownOpen(!isDropdownOpen);
-    console.log('🔽 Header: Dropdown state will be:', !isDropdownOpen);
   };
 
   return (
@@ -84,7 +77,6 @@ const Header = () => {
 
                 <button
                   onClick={(e) => {
-                    console.log('🚪 Header: Sign out button clicked!', e);
                     e.preventDefault();
                     e.stopPropagation();
                     setIsDropdownOpen(false); // Close dropdown first
@@ -106,7 +98,6 @@ const Header = () => {
         <div
           className="fixed inset-0 z-40"
           onClick={() => {
-            console.log('🔽 Header: Clicking outside to close dropdown');
             setIsDropdownOpen(false);
           }}
         />

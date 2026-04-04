@@ -21,9 +21,26 @@ export class Device {
     this.client_id = deviceData.client_id;
     this.onboarding_date = deviceData.onboarding_date;
 
+    // v4.0 IMEI-based protocol fields
+    this.imei = deviceData.imei;
+    this.activation_status = deviceData.activation_status;
+    this.data_enabled = deviceData.data_enabled;
+    this.paused_by = deviceData.paused_by;
+    this.device_type = deviceData.device_type;
+    this.firmware_version = deviceData.firmware_version;
+    this.last_seen = deviceData.last_seen;
+
+    // v5.0 inventory / model number
+    this.model_number = deviceData.model_number;
+
     // Include joined data from client table
     this.client_name = deviceData.client_name;
     this.client_email = deviceData.client_email;
+
+    // Include joined data from inventory table
+    this.inv_display_name      = deviceData.inv_display_name;
+    this.inv_device_id_prefix  = deviceData.inv_device_id_prefix;
+    this.inv_decoder_logic_ids = deviceData.inv_decoder_logic_ids;
   }
 
   /**
@@ -38,10 +55,17 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
+          d.model_number,
           c.name as client_name,
-          c.email as client_email
+          c.email as client_email,
+          inv.display_name      as inv_display_name,
+          inv.device_id_prefix  as inv_device_id_prefix,
+          inv.decoder_logic_ids as inv_decoder_logic_ids
         FROM device d
-        LEFT JOIN client c ON d.client_id = c.client_id
+        LEFT JOIN client c    ON d.client_id    = c.client_id
+        LEFT JOIN dbo.inventory inv ON d.model_number = inv.model_number
         WHERE d.id = @id
       `;
 
@@ -70,10 +94,17 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
+          d.model_number,
           c.name as client_name,
-          c.email as client_email
+          c.email as client_email,
+          inv.display_name      as inv_display_name,
+          inv.device_id_prefix  as inv_device_id_prefix,
+          inv.decoder_logic_ids as inv_decoder_logic_ids
         FROM device d
-        LEFT JOIN client c ON d.client_id = c.client_id
+        LEFT JOIN client c    ON d.client_id    = c.client_id
+        LEFT JOIN dbo.inventory inv ON d.model_number = inv.model_number
         WHERE d.device_id = @deviceId
       `;
 
@@ -135,10 +166,17 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
+          d.model_number,
           c.name as client_name,
-          c.email as client_email
+          c.email as client_email,
+          inv.display_name      as inv_display_name,
+          inv.device_id_prefix  as inv_device_id_prefix,
+          inv.decoder_logic_ids as inv_decoder_logic_ids
         FROM device d
-        LEFT JOIN client c ON d.client_id = c.client_id
+        LEFT JOIN client c    ON d.client_id    = c.client_id
+        LEFT JOIN dbo.inventory inv ON d.model_number = inv.model_number
         WHERE d.client_id = @clientId
         ORDER BY d.${validSortBy} ${validSortOrder}
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -183,14 +221,25 @@ export class Device {
         params.Model = filters.Model;
       }
 
+      if (filters.model_number) {
+        conditions.push('d.model_number = @model_number');
+        params.model_number = filters.model_number;
+      }
+
       if (filters.search) {
         conditions.push(`(
           d.device_id LIKE @search OR
+          d.imei LIKE @search OR
           d.Model LIKE @search OR
           d.machin_id LIKE @search OR
           c.name LIKE @search
         )`);
         params.search = `%${filters.search}%`;
+      }
+
+      if (filters.activation_status) {
+        conditions.push('d.activation_status = @activation_status');
+        params.activation_status = filters.activation_status;
       }
 
       if (filters.startDate && filters.endDate) {
@@ -210,7 +259,8 @@ export class Device {
       const countQuery = `
         SELECT COUNT(*) as total
         FROM device d
-        LEFT JOIN client c ON d.client_id = c.client_id
+        LEFT JOIN client c    ON d.client_id    = c.client_id
+        LEFT JOIN dbo.inventory inv ON d.model_number = inv.model_number
         ${whereClause}
       `;
 
@@ -225,10 +275,17 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
+          d.model_number,
           c.name as client_name,
-          c.email as client_email
+          c.email as client_email,
+          inv.display_name      as inv_display_name,
+          inv.device_id_prefix  as inv_device_id_prefix,
+          inv.decoder_logic_ids as inv_decoder_logic_ids
         FROM device d
-        LEFT JOIN client c ON d.client_id = c.client_id
+        LEFT JOIN client c    ON d.client_id    = c.client_id
+        LEFT JOIN dbo.inventory inv ON d.model_number = inv.model_number
         ${whereClause}
         ORDER BY ${sortField} ${validSortOrder}
         OFFSET @offset ROWS
@@ -272,13 +329,13 @@ export class Device {
         INSERT INTO device (
           device_id, channel_id, api_key, conversionLogic_ld,
           TransactionTableID, TransactionTableName, field_id,
-          Model, machin_id, client_id, onboarding_date
+          Model, machin_id, client_id, onboarding_date, model_number
         )
         OUTPUT INSERTED.*
         VALUES (
           @device_id, @channel_id, @api_key, @conversionLogic_ld,
           @TransactionTableID, @TransactionTableName, @field_id,
-          @Model, @machin_id, @client_id, @onboarding_date
+          @Model, @machin_id, @client_id, @onboarding_date, @model_number
         )
       `;
 
@@ -293,7 +350,8 @@ export class Device {
         Model: deviceData.Model || null,
         machin_id: deviceData.machin_id || null,
         client_id: deviceData.client_id || null,
-        onboarding_date: deviceData.onboarding_date || new Date()
+        onboarding_date: deviceData.onboarding_date || new Date(),
+        model_number: deviceData.model_number || null,
       };
 
       const result = await executeQuery(query, params);
@@ -325,7 +383,7 @@ export class Device {
       const allowedFields = [
         'device_id', 'channel_id', 'api_key', 'conversionLogic_ld',
         'TransactionTableID', 'TransactionTableName', 'field_id',
-        'Model', 'machin_id', 'client_id', 'onboarding_date'
+        'Model', 'machin_id', 'client_id', 'onboarding_date', 'model_number'
       ];
 
       allowedFields.forEach(field => {
@@ -499,6 +557,8 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
           c.name as client_name,
           c.email as client_email
         FROM device d
@@ -536,6 +596,8 @@ export class Device {
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
           d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.imei, d.activation_status, d.data_enabled, d.paused_by,
+          d.device_type, d.firmware_version, d.last_seen,
           c.name as client_name,
           c.email as client_email
         FROM device d
@@ -1012,6 +1074,12 @@ export class Device {
    * @returns {Object} Device object
    */
   toJSON() {
+    // Parse decoder_logic_ids from the joined inventory row
+    let decoderLogicIds = [];
+    if (this.inv_decoder_logic_ids) {
+      try { decoderLogicIds = JSON.parse(this.inv_decoder_logic_ids); } catch { /* keep [] */ }
+    }
+
     return {
       id: this.id,
       device_id: this.device_id,
@@ -1025,8 +1093,21 @@ export class Device {
       machin_id: this.machin_id,
       client_id: this.client_id,
       onboarding_date: this.onboarding_date,
+      imei: this.imei,
+      activation_status: this.activation_status,
+      data_enabled: this.data_enabled == null ? null : Boolean(this.data_enabled),
+      paused_by: this.paused_by,
+      device_type: this.device_type,
+      firmware_version: this.firmware_version,
+      last_seen: this.last_seen,
+      model_number: this.model_number,
+      model_info: this.inv_display_name ? {
+        display_name:      this.inv_display_name,
+        device_id_prefix:  this.inv_device_id_prefix,
+        decoder_logic_ids: decoderLogicIds,
+      } : null,
       client_name: this.client_name,
-      client_email: this.client_email
+      client_email: this.client_email,
     };
   }
 }

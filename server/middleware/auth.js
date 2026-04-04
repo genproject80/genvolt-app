@@ -172,7 +172,7 @@ export const optionalAuth = async (req, res, next) => {
  * @param {string|Array} requiredPermission - Permission(s) required
  * @returns {Function} Middleware function
  */
-export const authorize = (requiredPermission) => {
+export const authorize = (_requiredPermission) => {
   return (req, res, next) => {
     // Permission checks disabled - allow all authenticated users
     next();
@@ -184,7 +184,7 @@ export const authorize = (requiredPermission) => {
  * @param {string|Array} requiredRoles - Role(s) required
  * @returns {Function} Middleware function
  */
-export const requireRole = (requiredRoles) => {
+export const requireRole = (_requiredRoles) => {
   return (req, res, next) => {
     // Role checks disabled - allow all authenticated users
     next();
@@ -196,7 +196,7 @@ export const requireRole = (requiredRoles) => {
  * @param {string} clientIdParam - Request parameter name containing client ID
  * @returns {Function} Middleware function
  */
-export const requireSameClient = (clientIdParam = 'clientId') => {
+export const requireSameClient = (_clientIdParam = 'clientId') => {
   return (req, res, next) => {
     // Client access checks disabled - allow all authenticated users
     next();

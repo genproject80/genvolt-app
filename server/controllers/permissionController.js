@@ -2,7 +2,6 @@ import { Permission } from '../models/Permission.js';
 import { RolePermission } from '../models/RolePermission.js';
 import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
 
 /**
@@ -12,9 +11,6 @@ import { validationResult } from 'express-validator';
 export const getAllPermissions = asyncHandler(async (req, res) => {
   try {
     const permissions = await Permission.findAll();
-
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_VIEW', 'Viewed all permissions', 'permission', null);
 
     res.json({
       success: true,
@@ -36,9 +32,6 @@ export const getAllPermissions = asyncHandler(async (req, res) => {
 export const getPermissionsByCategory = asyncHandler(async (req, res) => {
   try {
     const categorizedPermissions = await Permission.getPermissionsByCategory();
-
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_CATEGORY_VIEW', 'Viewed permissions by category', 'permission', null);
 
     res.json({
       success: true,
@@ -95,9 +88,6 @@ export const getPermissionById = asyncHandler(async (req, res) => {
     // Get roles that have this permission
     const rolesWithPermission = await RolePermission.getRolesWithPermission(permissionId);
 
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_VIEW', `Viewed permission: ${permission.permission_name}`, 'permission', permissionId);
-
     res.json({
       success: true,
       message: 'Permission retrieved successfully',
@@ -132,9 +122,6 @@ export const getPermissionRoles = asyncHandler(async (req, res) => {
 
     const roles = await RolePermission.getRolesWithPermission(permissionId);
 
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_ROLES_VIEW', `Viewed roles for permission: ${permission.permission_name}`, 'permission', permissionId);
-
     res.json({
       success: true,
       message: 'Permission roles retrieved successfully',
@@ -157,9 +144,6 @@ export const getPermissionStats = asyncHandler(async (req, res) => {
   try {
     const stats = await Permission.getStats();
     const categories = await Permission.getPermissionCategories();
-
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_STATS_VIEW', 'Viewed permission statistics', 'permission', null);
 
     res.json({
       success: true,
@@ -222,9 +206,6 @@ export const getUnassignedPermissions = asyncHandler(async (req, res) => {
   try {
     const unassignedPermissions = await Permission.getUnassignedPermissions(roleId);
 
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_UNASSIGNED_VIEW', `Viewed unassigned permissions for role ID: ${roleId}`, 'permission', null);
-
     res.json({
       success: true,
       message: 'Unassigned permissions retrieved successfully',
@@ -255,12 +236,6 @@ export const searchPermissions = asyncHandler(async (req, res) => {
     const filteredPermissions = allPermissions.filter(permission => 
       permission.permission_name.toLowerCase().includes(query.toLowerCase())
     );
-
-    // Create audit log
-    await createAuditLog(req.user.id, 'PERMISSION_SEARCH', `Searched permissions with query: ${query}`, 'permission', null, {
-      query,
-      results_count: filteredPermissions.length
-    });
 
     res.json({
       success: true,

@@ -1,9 +1,7 @@
 import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { logger } from '../utils/logger.js';
-import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
-import { validationResult } from 'express-validator';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
  * Get detailed device information for specific IoT entry
@@ -173,13 +171,6 @@ export const getDeviceDetails = asyncHandler(async (req, res) => {
       }
     };
 
-
-    // Create audit log
-    await createAuditLog(user.id, 'DEVICE_DETAIL_VIEW', `Viewed device details for entry ${entryId} (device ${deviceData.Device_ID})`, 'device_detail', entryId, {
-      entry_id: entryId,
-      device_id: deviceData.Device_ID,
-      access_method: 'device_details_api'
-    });
 
     res.json({
       success: true,
@@ -372,18 +363,6 @@ export const getDeviceHistory = asyncHandler(async (req, res) => {
 
     // Return raw data with original column names for frontend compatibility
     const formattedData = dataResult.recordset;
-
-    // Create audit log
-    await createAuditLog(user.id, 'DEVICE_HISTORY_VIEW', `Viewed device history for entry ${entryId} (device ${deviceId})`, 'device_history', entryId, {
-      entry_id: entryId,
-      device_id: deviceId,
-      time_range: timeRange,
-      status_filter: status,
-      search_term: search || null,
-      date_filter: date || null,
-      page: parseInt(page),
-      limit: parseInt(limit)
-    });
 
     res.json({
       success: true,

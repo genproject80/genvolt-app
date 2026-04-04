@@ -85,18 +85,6 @@ export const getUsers = asyncHandler(async (req, res) => {
 
   const users = await User.findAll(filters, parseInt(page), parseInt(limit), sortBy, sortOrder);
 
-  // Log user access
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.USER_MANAGEMENT,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: 'Users list accessed',
-    target_type: TARGET_TYPES.USER,
-    details: JSON.stringify({ page, limit, search, sortBy, sortOrder }),
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
-
   res.json({
     success: true,
     data: users
@@ -124,18 +112,6 @@ export const getUserById = asyncHandler(async (req, res) => {
 
   // Get user permissions
   const permissions = await user.getPermissions();
-
-  // Log user access
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.USER_MANAGEMENT,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: `User profile accessed: ${user.email}`,
-    target_type: TARGET_TYPES.USER,
-    target_id: user.user_id,
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
 
   res.json({
     success: true,
@@ -561,17 +537,6 @@ export const getUserStats = asyncHandler(async (req, res) => {
   }
 
   const stats = await User.getStatistics(clientFilter);
-
-  // Create audit log
-  await createAuditLog({
-    user_id: currentUser.user_id,
-    activity_type: ACTIVITY_TYPES.DATA_ACCESS,
-    action: AUDIT_ACTIONS.DATA_ACCESSED,
-    message: 'User statistics accessed',
-    target_type: TARGET_TYPES.SYSTEM,
-    ip_address: req.ip,
-    user_agent: req.get('User-Agent')
-  });
 
   res.json({
     success: true,

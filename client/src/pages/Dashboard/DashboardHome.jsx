@@ -6,6 +6,7 @@ import HKMITable from '../../components/dashboard/HKMITable';
 import P3Dashboard from '../../components/dashboard/P3Dashboard';
 import P3SSDashboard from '../../components/dashboard/P3SSDashboard';
 import HyPureDashboard from '../../components/dashboard/HyPureDashboard';
+import HKMIDeviceConfig from '../../components/dashboard/HKMIDeviceConfig';
 
 // Dashboard component mapping based on dashboard name
 const dashboardComponents = {
@@ -28,7 +29,10 @@ const dashboardComponents = {
   'P3SS': P3SSDashboard,
   'HyPure': HyPureDashboard,
   'HyPure_Dashboard': HyPureDashboard,
-  'HyPure Dashboard': HyPureDashboard
+  'HyPure Dashboard': HyPureDashboard,
+  'HKMI_Config': HKMIDeviceConfig,
+  'HKMI Config': HKMIDeviceConfig,
+  'HKMI Device Config': HKMIDeviceConfig,
 };
 
 const DashboardHome = () => {

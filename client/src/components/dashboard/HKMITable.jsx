@@ -248,13 +248,7 @@ const HKMITable = () => {
       // Extract date parts from SQL date string (YYYY-MM-DD)
       const dateStr = String(dateString).split('T')[0]; // Handle both "2024-11-20" and "2024-11-20T00:00:00"
 
-      // Debug logging
-      console.log('Raw date string:', dateString);
-      console.log('Extracted date string:', dateStr);
-
       const [year, month, day] = dateStr.split('-').map(num => parseInt(num, 10));
-
-      console.log('Parsed Y/M/D:', year, month, day);
 
       // Create date using local timezone (month is 0-indexed)
       const date = new Date(year, month - 1, day);
@@ -264,8 +258,6 @@ const HKMITable = () => {
         month: 'short',
         day: 'numeric'
       });
-
-      console.log('Formatted date:', formatted);
 
       return formatted;
     } catch (error) {

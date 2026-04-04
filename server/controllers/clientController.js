@@ -26,13 +26,6 @@ export const getAllClients = asyncHandler(async (req, res) => {
     const clients = await Client.findAll(options);
     const totalCount = await Client.getCount(options);
 
-    // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_VIEW', 'Viewed client list', 'client', null, {
-      includeInactive: options.includeInactive,
-      limit: pageSize,
-      page: currentPage
-    });
-
     res.json({
       success: true,
       message: 'Clients retrieved successfully',
@@ -66,11 +59,6 @@ export const getClientById = asyncHandler(async (req, res) => {
   if (!client) {
     throw new NotFoundError('Client not found');
   }
-
-  // Create audit log
-  await createAuditLog(req.user.id, 'CLIENT_VIEW', 'Viewed client details', 'client', client.client_id, {
-    clientName: client.name
-  });
 
   res.json({
     success: true,
@@ -138,14 +126,6 @@ export const getDescendantClients = asyncHandler(async (req, res) => {
       },
       ...descendants
     ];
-
-    logger.info('Retrieved hierarchical clients for user', {
-      userId: currentUser.user_id,
-      clientId: currentUser.client_id,
-      clientName: userClient.name,
-      descendantCount: descendants.length,
-      totalCount: clients.length
-    });
 
     res.json({
       success: true,
@@ -220,18 +200,26 @@ export const createClient = asyncHandler(async (req, res) => {
       is_active: is_active !== undefined ? is_active : true
     };
 
-    const newClient = await Client.create(clientData, req.user.id);
+    const newClient = await Client.create(clientData, req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_CREATE', 'Created new client', 'client', newClient.client_id, {
-      clientName: newClient.name,
-      clientEmail: newClient.email
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_CREATE',
+      message: 'Created new client',
+      target_type: 'CLIENT',
+      target_id: newClient.client_id,
+      details: JSON.stringify({
+        clientName: newClient.name,
+        clientEmail: newClient.email
+      })
     });
 
     logAuth('client_created', {
       clientId: newClient.client_id,
       clientName: newClient.name,
-      createdBy: req.user.id,
+      createdBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -322,18 +310,26 @@ export const updateClient = asyncHandler(async (req, res) => {
       is_active: is_active !== undefined ? is_active : existingClient.is_active
     };
 
-    const updatedClient = await Client.update(parseInt(id), clientData, req.user.id);
+    const updatedClient = await Client.update(parseInt(id), clientData, req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_UPDATE', 'Updated client', 'client', updatedClient.client_id, {
-      clientName: updatedClient.name,
-      changes: clientData
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_UPDATE',
+      message: 'Updated client',
+      target_type: 'CLIENT',
+      target_id: updatedClient.client_id,
+      details: JSON.stringify({
+        clientName: updatedClient.name,
+        changes: clientData
+      })
     });
 
     logAuth('client_updated', {
       clientId: updatedClient.client_id,
       clientName: updatedClient.name,
-      updatedBy: req.user.id,
+      updatedBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -367,17 +363,25 @@ export const deleteClient = asyncHandler(async (req, res) => {
   }
 
   try {
-    await Client.delete(parseInt(id), req.user.id);
+    await Client.delete(parseInt(id), req.user.user_id);
 
     // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_DELETE', 'Deleted client', 'client', parseInt(id), {
-      clientName: existingClient.name
+    await createAuditLog({
+      user_id: req.user.user_id,
+      activity_type: 'CLIENT_MANAGEMENT',
+      action: 'CLIENT_DELETE',
+      message: 'Deleted client',
+      target_type: 'CLIENT',
+      target_id: parseInt(id),
+      details: JSON.stringify({
+        clientName: existingClient.name
+      })
     });
 
     logSecurity('client_deleted', {
       clientId: parseInt(id),
       clientName: existingClient.name,
-      deletedBy: req.user.id,
+      deletedBy: req.user.user_id,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -414,9 +418,6 @@ export const getClientStats = asyncHandler(async (req, res) => {
       totalDevices,
       avgDevicesPerClient
     };
-
-    // Create audit log
-    await createAuditLog(req.user.id, 'CLIENT_STATS', 'Viewed client statistics', 'client', null, stats);
 
     res.json({
       success: true,

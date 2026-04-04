@@ -470,21 +470,16 @@ export const getUserPermissions = asyncHandler(async (req, res) => {
   const user = req.user;
 
   try {
-    // Get user's role permissions
-    const permissions = await Permission.getRolePermissions(user.role_id);
-    const permissionNames = permissions.map(p => p.permission_name);
+    let permissionNames;
 
-    // Create audit log
-    await createAuditLog({
-      user_id: user.user_id,
-      activity_type: 'PERMISSION_CHECK',
-      action: 'PERMISSIONS_VIEWED',
-      message: 'User viewed their permissions',
-      target_type: 'USER',
-      target_id: user.user_id,
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
+    // SYSTEM_ADMIN and SUPER_ADMIN get all permissions — mirrors server-side bypass in canAccessDevice
+    if (['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(user.role_name)) {
+      const allPermissions = await Permission.findAll();
+      permissionNames = allPermissions.map(p => p.permission_name);
+    } else {
+      const permissions = await Permission.getRolePermissions(user.role_id);
+      permissionNames = permissions.map(p => p.permission_name);
+    }
 
     res.json({
       success: true,

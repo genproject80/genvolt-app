@@ -10,3 +10,12 @@ yarn-debug.log*
 #others
 /server/.env
 /server/logs/
+
+# TLS certificates — private keys must not be committed
+/certs/ca.key
+/certs/server.key
+/certs/server.csr
+/certs/ca.srl
+/.idea/modules.xml
+/.idea/vcs.xml
+/.idea/inspectionProfiles/Project_Default.xml

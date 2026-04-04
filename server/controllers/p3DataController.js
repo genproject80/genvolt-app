@@ -2,7 +2,6 @@ import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
 import { Client } from '../models/Client.js';
 
@@ -42,10 +41,6 @@ export const getP3Data = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== P3 CLIENT HIERARCHY ===');
-    console.log('User client_id:', user.client_id);
-    console.log('All client IDs (self + children):', allClientIds);
-    console.log('===========================');
 
     // STEP 2: Get all device IDs belonging to these clients
     const deviceQuery = `
@@ -56,9 +51,6 @@ export const getP3Data = asyncHandler(async (req, res) => {
     const deviceResult = await pool.request().query(deviceQuery);
     const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
 
-    console.log('=== P3 DEVICES ===');
-    console.log('Total devices found:', allDeviceIds.length);
-    console.log('==================');
 
     // If no devices found, return early
     if (allDeviceIds.length === 0) {
@@ -222,9 +214,6 @@ export const getP3Data = asyncHandler(async (req, res) => {
       ) as filtered_data
     `;
 
-    console.log('=== P3 COUNT QUERY ===');
-    console.log(countQuery);
-    console.log('======================');
 
     const countResult = await request.query(countQuery);
     const totalCount = countResult.recordset[0].total;
@@ -318,23 +307,8 @@ export const getP3Data = asyncHandler(async (req, res) => {
     request.input('offset', sql.Int, offset);
     request.input('pageSize', sql.Int, pageSize);
 
-    console.log('=== P3 DATA QUERY ===');
-    console.log(dataQuery);
-    console.log('=== SORT ===');
-    console.log('sortField:', sortField);
-    console.log('sortOrder:', sortOrder);
-    console.log('=====================');
 
     const dataResult = await request.query(dataQuery);
-
-    // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_VIEW', 'Retrieved P3 IoT data', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
-    });
 
     res.json({
       success: true,
@@ -581,15 +555,6 @@ export const exportP3Data = asyncHandler(async (req, res) => {
 
     const result = await request.query(exportQuery);
 
-    // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_EXPORT', 'Exported P3 IoT data', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      format: format,
-      exported_count: result.recordset.length,
-      max_limit: maxExportLimit
-    });
-
     if (format === 'csv') {
       if (result.recordset.length === 0) {
         return res.json({
@@ -749,14 +714,6 @@ export const getP3StatusMetrics = asyncHandler(async (req, res) => {
     const metricsResult = await request.query(statusMetricsQuery);
     const metrics = metricsResult.recordset[0];
 
-    // Create audit log
-    await createAuditLog(user.id, 'P3_STATUS_METRICS', 'Retrieved P3 device status metrics', 'iot_data_sick_p3', null, {
-      device_ids_filter: deviceIds,
-      active_devices: metrics.active_devices,
-      inactive_devices: metrics.inactive_devices,
-      total_devices: metrics.total_devices
-    });
-
     res.json({
       success: true,
       message: 'P3 device status metrics retrieved successfully',
@@ -875,13 +832,6 @@ export const getP3GreaseMetrics = asyncHandler(async (req, res) => {
     const metricsResult = await request.query(greaseMetricsQuery);
     const metrics = metricsResult.recordset[0];
 
-    // Create audit log
-    await createAuditLog(user.id, 'P3_GREASE_METRICS', 'Retrieved P3 grease metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_low_grease: metrics.curves_low_grease,
-      total_curves: metrics.total_curves
-    });
-
     res.json({
       success: true,
       message: 'P3 grease metrics retrieved successfully',
@@ -998,13 +948,6 @@ export const getP3CofDateMetrics = asyncHandler(async (req, res) => {
 
     const metricsResult = await request.query(cofDateMetricsQuery);
     const metrics = metricsResult.recordset[0];
-
-    // Create audit log
-    await createAuditLog(user.id, 'P3_COF_DATE_METRICS', 'Retrieved P3 CoF date metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_old_cof_measurement: metrics.curves_old_cof_measurement,
-      total_curves: metrics.total_curves
-    });
 
     res.json({
       success: true,
@@ -1123,13 +1066,6 @@ export const getP3CofMetrics = asyncHandler(async (req, res) => {
     const metricsResult = await request.query(cofMetricsQuery);
     const metrics = metricsResult.recordset[0];
 
-    // Create audit log
-    await createAuditLog(user.id, 'P3_COF_METRICS', 'Retrieved P3 CoF metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_high_cof: metrics.curves_high_cof,
-      total_curves: metrics.total_curves
-    });
-
     res.json({
       success: true,
       message: 'P3 CoF metrics retrieved successfully',
@@ -1247,13 +1183,6 @@ export const getP3ServiceMetrics = asyncHandler(async (req, res) => {
     const metricsResult = await request.query(serviceMetricsQuery);
     const metrics = metricsResult.recordset[0];
 
-    // Create audit log
-    await createAuditLog(user.id, 'P3_SERVICE_METRICS', 'Retrieved P3 service metrics', 'cloud_dashboard_hkmi', null, {
-      device_ids_filter: deviceIds,
-      curves_needing_service: metrics.curves_needing_service,
-      total_curves: metrics.total_curves
-    });
-
     res.json({
       success: true,
       message: 'P3 service metrics retrieved successfully',
@@ -1334,13 +1263,6 @@ export const getP3Stats = asyncHandler(async (req, res) => {
     `;
 
     const eventBreakdownResult = await request.query(eventBreakdownQuery);
-
-    // Create audit log
-    await createAuditLog(user.id, 'P3_DATA_STATS', 'Retrieved P3 IoT data statistics', 'iot_data_p3', null, {
-      device_ids_filter: deviceIds,
-      total_records: stats.total_records,
-      unique_devices: stats.unique_devices
-    });
 
     res.json({
       success: true,

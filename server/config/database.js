@@ -97,9 +97,14 @@ export const executeQuery = async (query, params = {}) => {
 
     // Add parameters to request
     Object.keys(params).forEach(key => {
-      const value = params[key];
-      // Always bind parameters, including null values
-      request.input(key, value);
+      const param = params[key];
+      if (param && typeof param === 'object' && param.type && param.value !== undefined) {
+        // Typed parameter: { value, type } — e.g. { value: 'HK001', type: sql.NVarChar }
+        request.input(key, param.type, param.value);
+      } else {
+        // Raw value — mssql auto-detects type
+        request.input(key, param);
+      }
     });
 
     const result = await request.query(query);

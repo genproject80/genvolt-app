@@ -51,9 +51,7 @@ export const deviceService = {
    */
   async getAllDevices(options = {}) {
     try {
-      console.log('🔧 DeviceService: Fetching devices with options:', options);
       const response = await api.get('/devices', { params: options });
-      console.log('🔧 DeviceService: Devices fetched successfully');
       return response.data;
     } catch (error) {
       console.error('🔧 DeviceService: Failed to fetch devices:', error);
@@ -68,9 +66,7 @@ export const deviceService = {
    */
   async getDeviceById(deviceId) {
     try {
-      console.log(`🔧 DeviceService: Fetching device ${deviceId}`);
       const response = await api.get(`/devices/${deviceId}`);
-      console.log('🔧 DeviceService: Device fetched successfully');
       return response.data;
     } catch (error) {
       console.error(`🔧 DeviceService: Failed to fetch device ${deviceId}:`, error);
@@ -85,9 +81,7 @@ export const deviceService = {
    */
   async createDevice(deviceData) {
     try {
-      console.log('🔧 DeviceService: Creating device:', deviceData.device_id);
       const response = await api.post('/devices', deviceData);
-      console.log('🔧 DeviceService: Device created successfully');
       return response.data;
     } catch (error) {
       console.error('🔧 DeviceService: Failed to create device:', error);
@@ -103,9 +97,7 @@ export const deviceService = {
    */
   async updateDevice(deviceId, deviceData) {
     try {
-      console.log(`🔧 DeviceService: Updating device ${deviceId}`);
       const response = await api.put(`/devices/${deviceId}`, deviceData);
-      console.log('🔧 DeviceService: Device updated successfully');
       return response.data;
     } catch (error) {
       console.error(`🔧 DeviceService: Failed to update device ${deviceId}:`, error);
@@ -120,9 +112,7 @@ export const deviceService = {
    */
   async deleteDevice(deviceId) {
     try {
-      console.log(`🔧 DeviceService: Deleting device ${deviceId}`);
       const response = await api.delete(`/devices/${deviceId}`);
-      console.log('🔧 DeviceService: Device deleted successfully');
       return response.data;
     } catch (error) {
       console.error(`🔧 DeviceService: Failed to delete device ${deviceId}:`, error);
@@ -136,9 +126,7 @@ export const deviceService = {
    */
   async getDeviceStats() {
     try {
-      console.log('📊 DeviceService: Fetching device statistics');
       const response = await api.get('/devices/stats');
-      console.log('📊 DeviceService: Device statistics fetched successfully');
       return response.data;
     } catch (error) {
       console.error('📊 DeviceService: Failed to fetch device statistics:', error);
@@ -155,8 +143,6 @@ export const deviceService = {
    */
   async transferDevice(deviceId, targetClientId, machineId) {
     try {
-      console.log(`🔧 DeviceService: Transferring device ${deviceId} to client ${targetClientId} with machine ID ${machineId}`);
-
       // Build request body - only include machin_id if it has a value
       const requestBody = {
         target_client_id: targetClientId
@@ -168,7 +154,6 @@ export const deviceService = {
       }
 
       const response = await api.post(`/devices/${deviceId}/transfer`, requestBody);
-      console.log('🔧 DeviceService: Device transferred successfully');
       return response.data;
     } catch (error) {
       console.error(`🔧 DeviceService: Failed to transfer device ${deviceId}:`, error);
@@ -183,15 +168,133 @@ export const deviceService = {
    */
   async getDeviceTransferHistory(deviceId) {
     try {
-      console.log(`🔧 DeviceService: Fetching transfer history for device ${deviceId}`);
       const response = await api.get(`/devices/${deviceId}/history`);
-      console.log('🔧 DeviceService: Transfer history fetched successfully');
       return response.data;
     } catch (error) {
       console.error(`🔧 DeviceService: Failed to fetch transfer history for device ${deviceId}:`, error);
       throw error;
     }
-  }
+  },
+
+  async getPendingDevices() {
+    try {
+      const response = await api.get('/devices/pending');
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to fetch pending devices:', error);
+      throw error;
+    }
+  },
+
+  async activateDevice(deviceId, data) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/activate`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to activate device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async deactivateDevice(deviceId, data) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/deactivate`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to deactivate device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async reactivateDevice(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/reactivate`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to reactivate device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async pauseDevice(deviceId, reason = '') {
+    try {
+      const response = await api.post(`/devices/${deviceId}/pause`, { reason });
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to pause device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async resumeDevice(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/resume`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to resume device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async pauseAllDevices(clientId, reason = '') {
+    try {
+      const response = await api.post('/devices/pause-all', { client_id: clientId, reason });
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to pause all devices:', error);
+      throw error;
+    }
+  },
+
+  async resumeAllDevices(clientId) {
+    try {
+      const response = await api.post('/devices/resume-all', { client_id: clientId });
+      return response.data;
+    } catch (error) {
+      console.error('DeviceService: Failed to resume all devices:', error);
+      throw error;
+    }
+  },
+
+  async pushDeviceConfig(deviceId, config) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/config-push`, config);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to push config for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async rotateDeviceCredentials(deviceId) {
+    try {
+      const response = await api.post(`/devices/${deviceId}/rotate-credentials`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to rotate credentials for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async getDeviceTelemetry(deviceId, params = {}) {
+    try {
+      const response = await api.get(`/devices/${deviceId}/telemetry`, { params });
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to fetch telemetry for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
+
+  async getLatestTelemetry(deviceId) {
+    try {
+      const response = await api.get(`/devices/${deviceId}/telemetry/latest`);
+      return response.data;
+    } catch (error) {
+      console.error(`DeviceService: Failed to fetch latest telemetry for device ${deviceId}:`, error);
+      throw error;
+    }
+  },
 };
 
 export default deviceService;

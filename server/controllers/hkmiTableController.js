@@ -2,7 +2,6 @@ import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
 import { Client } from '../models/Client.js';
 
@@ -33,10 +32,6 @@ export const getHKMITableData = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== HKMI TABLE - CLIENT HIERARCHY ===');
-    console.log('User client_id:', user.client_id);
-    console.log('All client IDs (self + children):', allClientIds);
-    console.log('=====================================');
 
     // STEP 2: Get all device IDs belonging to these clients
     const deviceQuery = `
@@ -47,9 +42,6 @@ export const getHKMITableData = asyncHandler(async (req, res) => {
     const deviceResult = await pool.request().query(deviceQuery);
     const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
 
-    console.log('=== DEVICES ===');
-    console.log('Total devices found:', allDeviceIds.length);
-    console.log('================');
 
     // If no devices found, return early
     if (allDeviceIds.length === 0) {
@@ -151,14 +143,6 @@ export const getHKMITableData = asyncHandler(async (req, res) => {
     request.input('pageSize', sql.Int, pageSize);
 
     const dataResult = await request.query(dataQuery);
-
-    // Create audit log
-    await createAuditLog(user.id, 'HKMI_TABLE_VIEW', 'Retrieved HKMI table data', 'hkmi_table', null, {
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
-    });
 
     res.json({
       success: true,

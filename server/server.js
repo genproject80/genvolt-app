@@ -1,12 +1,11 @@
-// Load environment variables first
-import dotenv from 'dotenv';
-dotenv.config();
+// Load environment variables first — must use side-effect import so dotenv
+// runs during the ES module import phase, before any other module reads process.env
+import 'dotenv/config';
 
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 
@@ -14,6 +13,8 @@ import morgan from 'morgan';
 import { connectDB } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import mqttService from './services/mqttService.js';
+import mqttListenerService from './services/mqttListenerService.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -28,26 +29,23 @@ import deviceDetailRoutes from './routes/deviceDetailRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import userPreferencesRoutes from './routes/userPreferencesRoutes.js';
 import hkmiTableRoutes from './routes/hkmiTableRoutes.js';
+import hkmiConfigRoutes from './routes/hkmiConfigRoutes.js';
 import p3DataRoutes from './routes/p3DataRoutes.js';
 import p3DeviceDetailRoutes from './routes/p3DeviceDetailRoutes.js';
 import deviceTestingRoutes from './routes/deviceTestingRoutes.js';
 import tableConfigRoutes from './routes/tableConfigRoutes.js';
 import hyPureRoutes from './routes/hyPureRoutes.js';
+import mqttAuthRoutes from './routes/mqttAuthRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
+import planRoutes from './routes/planRoutes.js';
+import discountRoutes from './routes/discountRoutes.js';
+import topicConfigRoutes from './routes/topicConfigRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
+import featureFlagRoutes from './routes/featureFlagRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000) / 1000)
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 // Security middleware
 app.use(helmet({
@@ -90,13 +88,15 @@ const corsOptions = {
       'http://localhost:3006',
       'http://localhost:3007',
       'http://localhost:3009',
-      'https://ayesha-ungainsaid-superinquisitively.ngrok-free.dev' // ngrok frontend
+      ...(process.env.CORS_EXTRA_ORIGINS
+        ? process.env.CORS_EXTRA_ORIGINS.split(',').map(s => s.trim())
+        : []),
     ];
 
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin);
+      console.error('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -109,8 +109,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(compression());
 app.use(cookieParser());
-// Temporarily disable rate limiting for debugging
-// app.use(limiter);
+
+// Razorpay webhook — must use raw body BEFORE express.json() parses the body
+// This route captures the raw Buffer needed for HMAC signature verification.
+app.use('/api/razorpay', express.raw({ type: 'application/json' }), webhookRoutes);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -150,7 +152,6 @@ app.get('/health', async (req, res) => {
 
 // Debug logging for all API requests
 app.use('/api', (req, res, next) => {
-  console.log(`API Request: ${req.method} ${req.originalUrl}`);
   next();
 });
 
@@ -170,8 +171,23 @@ app.use('/api/device-details', deviceDetailRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/hkmi-table', hkmiTableRoutes);
+app.use('/api/hkmi-config', hkmiConfigRoutes);
 app.use('/api/iot-data/p3', p3DataRoutes);
 app.use('/api/p3-device-details', p3DeviceDetailRoutes);
+// Subscription & billing routes
+app.use('/api/subscriptions', subscriptionRoutes);
+// Plan management (admin)
+app.use('/api/subscription-plans', planRoutes);
+// Discount management (admin)
+app.use('/api/discounts', discountRoutes);
+// Topic pattern configuration (SYSTEM_ADMIN)
+app.use('/api/topic-config', topicConfigRoutes);
+app.use('/api/inventory', inventoryRoutes);
+// Feature flags (admin toggle + client read)
+app.use('/api/feature-flags', featureFlagRoutes);
+
+// MQTT hooks — called by EMQX broker, no JWT auth
+app.use('/api', mqttAuthRoutes);
 app.use('/api/device-testing', deviceTestingRoutes);
 app.use('/api/table-config', tableConfigRoutes);
 app.use('/api/hypure', hyPureRoutes);
@@ -212,11 +228,15 @@ app.use(errorHandler);
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
+  mqttService.disconnect();
+  mqttListenerService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received. Shutting down gracefully...');
+  mqttService.disconnect();
+  mqttListenerService.disconnect();
   process.exit(0);
 });
 
@@ -232,7 +252,17 @@ const startServer = async () => {
       logger.warn('⚠️  Please check your database configuration in .env file');
       logger.warn('⚠️  Authentication endpoints will not work until database is connected');
     }
-    
+
+    // Connect to MQTT broker (non-blocking — server starts even if MQTT is unavailable)
+    mqttService.connect();
+
+    // Start MQTT listener (pre-activation + telemetry ingestion)
+    mqttListenerService.connect();
+
+    // Start subscription expiry cron (runs every hour)
+    const { startSubscriptionCron } = await import('./services/subscriptionCron.js');
+    startSubscriptionCron();
+
     app.listen(PORT, () => {
       logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
       logger.info(`📊 Health check: http://localhost:${PORT}/health`);

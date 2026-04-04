@@ -289,6 +289,5 @@ export const hierarchyFilterService = {
    */
   clearCache() {
     // Placeholder for future caching implementation
-    console.log('Filter cache cleared');
   }
 };

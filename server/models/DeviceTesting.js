@@ -64,11 +64,12 @@ export class DeviceTesting {
       const countResult = await executeQuery(countQuery, params);
       const total = countResult.recordset[0].total;
 
+      const sortCol = DeviceTesting.#safeName(columns[0].field);
       const dataQuery = `
         SELECT ${selectParts.join(', ')}
         FROM ${safeTable}
         ${whereClause}
-        ORDER BY Entry_ID DESC
+        ORDER BY ${sortCol} DESC
         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       `;
       const dataResult = await executeQuery(dataQuery, params);
@@ -82,22 +83,40 @@ export class DeviceTesting {
 
   /**
    * Fetch statistics for a table.
-   * @param {string} tableName
+   * @param {string}   tableName
+   * @param {Object[]} columns - Column definitions from TableConfig
    * @returns {Promise<Object>}
    */
-  static async getTableStats(tableName) {
+  static async getTableStats(tableName, columns = []) {
     try {
       const safeTable = DeviceTesting.#safeName(tableName);
+
+      // Derive datetime and device columns from config; fall back gracefully
+      const datetimeCol = columns.find((c) => c.type === 'datetime');
+      const deviceCol   = columns.find((c) => /device/i.test(c.field));
+
+      const timestampSelect = datetimeCol
+        ? `MIN(${utcToIstSql(DeviceTesting.#safeName(datetimeCol.field))}) AS oldest_record,
+           MAX(${utcToIstSql(DeviceTesting.#safeName(datetimeCol.field))}) AS latest_record,`
+        : `NULL AS oldest_record, NULL AS latest_record,`;
+
+      const deviceSelect = deviceCol
+        ? `COUNT(DISTINCT ${DeviceTesting.#safeName(deviceCol.field)}) AS unique_devices,`
+        : `NULL AS unique_devices,`;
+
       const query = `
         SELECT
-          COUNT(*)                                          AS total_records,
-          COUNT(DISTINCT Device_ID)                         AS unique_devices,
-          MIN(${utcToIstSql('CreatedAt')})                  AS oldest_record,
-          MAX(${utcToIstSql('CreatedAt')})                  AS latest_record
+          COUNT(*) AS total_records,
+          ${deviceSelect}
+          ${timestampSelect}
+          1 AS _placeholder
         FROM ${safeTable}
       `;
       const result = await executeQuery(query);
-      return result.recordset[0];
+      const row = result.recordset[0];
+      // Remove the placeholder helper column
+      const { _placeholder, ...stats } = row;
+      return stats;
     } catch (error) {
       logger.error('DeviceTesting.getTableStats error:', error);
       throw error;
@@ -135,11 +154,12 @@ export class DeviceTesting {
         whereClause = `WHERE ${conditions}`;
       }
 
+      const sortCol = DeviceTesting.#safeName(columns[0].field);
       const query = `
         SELECT TOP ${maxRows} ${selectParts.join(', ')}
         FROM ${safeTable}
         ${whereClause}
-        ORDER BY Entry_ID DESC
+        ORDER BY ${sortCol} DESC
       `;
       const result = await executeQuery(query, params);
       return result.recordset;
@@ -151,44 +171,53 @@ export class DeviceTesting {
 
   /**
    * Hourly heatmap via SQL PIVOT.
-   * Returns one row per Device_ID with columns H00..H23 (IST hour counts).
-   * @param {string}  tableName
-   * @param {string}  [istDate]  - e.g. '2024-01-15'. If omitted, uses all data.
+   * Returns one row per device column with columns H00..H23 (IST hour counts).
+   * @param {string}   tableName
+   * @param {string}   [istDate]  - e.g. '2024-01-15'. If omitted, uses all data.
+   * @param {Object[]} [columns]  - Column definitions from TableConfig
    * @returns {Promise<Object[]>}
    */
-  static async getHourlyDashboard(tableName, istDate) {
+  static async getHourlyDashboard(tableName, istDate, columns = []) {
     try {
       const safeTable = DeviceTesting.#safeName(tableName);
 
+      const datetimeCol = columns.find((c) => c.type === 'datetime');
+      const deviceCol   = columns.find((c) => /device/i.test(c.field));
+
+      if (!datetimeCol) throw new Error(`No datetime column found in config for table "${tableName}"`);
+      if (!deviceCol)   throw new Error(`No device column found in config for table "${tableName}"`);
+
+      const tsField     = DeviceTesting.#safeName(datetimeCol.field);
+      const deviceField = DeviceTesting.#safeName(deviceCol.field);
+
       const hours = Array.from({ length: 24 }, (_, i) => i);
-      const pivotCols = hours.map((h) => `[${h}]`).join(', ');
+      const pivotCols  = hours.map((h) => `[${h}]`).join(', ');
       const pivotAlias = hours.map((h) => `ISNULL([${h}], 0) AS H${String(h).padStart(2, '0')}`).join(', ');
 
       let dateFilter = '';
       const params = {};
       if (istDate) {
-        // Filter on the IST date (convert back to UTC for the WHERE clause)
-        dateFilter = `AND CreatedAt >= DATEADD(MINUTE, -${IST_OFFSET}, CAST(@istDate + ' 00:00:00' AS DATETIME))
-                      AND CreatedAt <  DATEADD(MINUTE, -${IST_OFFSET}, CAST(@istDate + ' 23:59:59' AS DATETIME))`;
+        dateFilter = `AND ${tsField} >= DATEADD(MINUTE, -${IST_OFFSET}, CAST(@istDate + ' 00:00:00' AS DATETIME))
+                      AND ${tsField} <  DATEADD(MINUTE, -${IST_OFFSET}, CAST(@istDate + ' 23:59:59' AS DATETIME))`;
         params.istDate = istDate;
       }
 
       const query = `
         WITH HourlyCounts AS (
           SELECT
-            Device_ID,
-            DATEPART(HOUR, DATEADD(MINUTE, ${IST_OFFSET}, CreatedAt)) AS hour_ist,
+            ${deviceField},
+            DATEPART(HOUR, DATEADD(MINUTE, ${IST_OFFSET}, ${tsField})) AS hour_ist,
             COUNT(*) AS cnt
           FROM ${safeTable}
-          WHERE Device_ID IS NOT NULL ${dateFilter}
-          GROUP BY Device_ID, DATEPART(HOUR, DATEADD(MINUTE, ${IST_OFFSET}, CreatedAt))
+          WHERE ${deviceField} IS NOT NULL ${dateFilter}
+          GROUP BY ${deviceField}, DATEPART(HOUR, DATEADD(MINUTE, ${IST_OFFSET}, ${tsField}))
         )
-        SELECT Device_ID, ${pivotAlias}
+        SELECT ${deviceField} AS device_id, ${pivotAlias}
         FROM HourlyCounts
         PIVOT (
           SUM(cnt) FOR hour_ist IN (${pivotCols})
         ) AS pvt
-        ORDER BY Device_ID
+        ORDER BY ${deviceField}
       `;
       const result = await executeQuery(query, params);
       return result.recordset;

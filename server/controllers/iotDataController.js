@@ -2,7 +2,6 @@ import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler.js';
-import { createAuditLog } from '../utils/auditLogger.js';
 import { validationResult } from 'express-validator';
 import { Client } from '../models/Client.js';
 
@@ -40,11 +39,6 @@ export const getIoTData = asyncHandler(async (req, res) => {
     const descendantClients = await Client.getDescendantClients(user.client_id);
     const allClientIds = [user.client_id, ...descendantClients.map(c => c.client_id)];
 
-    console.log('=== CLIENT HIERARCHY ===');
-    console.log('User client_id:', user.client_id);
-    console.log('Descendant clients (children):', descendantClients.map(c => c.client_id));
-    console.log('All client IDs (self + children):', allClientIds);
-    console.log('========================');
 
     // STEP 2: Get all device IDs belonging to these clients
     const deviceQuery = `
@@ -54,14 +48,6 @@ export const getIoTData = asyncHandler(async (req, res) => {
     `;
     const deviceResult = await pool.request().query(deviceQuery);
     const allDeviceIds = deviceResult.recordset.map(d => d.device_id);
-
-    console.log('=== DEVICES ===');
-    console.log('Total devices found:', allDeviceIds.length);
-    console.log('Device breakdown by client:', deviceResult.recordset.reduce((acc, d) => {
-      acc[d.client_id] = (acc[d.client_id] || 0) + 1;
-      return acc;
-    }, {}));
-    console.log('================');
 
     // If no devices found, return early
     if (allDeviceIds.length === 0) {
@@ -142,9 +128,6 @@ export const getIoTData = asyncHandler(async (req, res) => {
       request.input(`deviceId${index}`, sql.VarChar, deviceId);
     });
 
-    console.log('=== FINAL DEVICE FILTER ===');
-    console.log('Final device IDs count:', finalDeviceIds.length);
-    console.log('============================');
 
     // Build HKMI WHERE clause based on hierarchy filters
     const hasHierarchyFilters = sden || den || aen || sse;
@@ -233,9 +216,6 @@ export const getIoTData = asyncHandler(async (req, res) => {
     `;
 
     // Log the count query for debugging
-    console.log('=== COUNT QUERY ===');
-    console.log(countQuery);
-    console.log('==================');
 
     const countResult = await request.query(countQuery);
     const totalCount = countResult.recordset[0].total;
@@ -298,25 +278,8 @@ export const getIoTData = asyncHandler(async (req, res) => {
     request.input('pageSize', sql.Int, pageSize);
 
     // Log the main data query for debugging
-    console.log('=== DATA QUERY ===');
-    console.log(dataQuery);
-    console.log('=== SORT ===');
-    console.log('sortField:', sortField);
-    console.log('sortOrder:', sortOrder);
-    console.log('offset:', offset);
-    console.log('pageSize:', pageSize);
-    console.log('==================');
 
     const dataResult = await request.query(dataQuery);
-
-    // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_VIEW', 'Retrieved IoT data', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      page: currentPage,
-      limit: pageSize,
-      total_results: totalCount
-    });
 
     res.json({
       success: true,
@@ -542,15 +505,6 @@ export const exportIoTData = asyncHandler(async (req, res) => {
 
     const result = await request.query(exportQuery);
 
-    // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_EXPORT', 'Exported IoT data', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      search_term: search || null,
-      format: format,
-      exported_count: result.recordset.length,
-      max_limit: maxExportLimit
-    });
-
     if (format === 'csv') {
       // Convert to CSV format
       if (result.recordset.length === 0) {
@@ -649,7 +603,7 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
         AVG(CAST(Motor_ON_Time_sec as FLOAT)) as avg_motor_on_time,
         AVG(CAST(Motor_OFF_Time_sec as FLOAT)) as avg_motor_off_time,
         SUM(CASE WHEN Train_Passed = 1 THEN 1 ELSE 0 END) as trains_passed_count,
-        SUM(CASE WHEN Fault_Code = 1 THEN 1 ELSE 0 END) as fault_records_count,
+        SUM(CASE WHEN Fault_Code IS NOT NULL AND Fault_Code != '' AND Fault_Code != '0' THEN 1 ELSE 0 END) as fault_records_count,
         MIN(Timestamp) as earliest_record,
         MAX(Timestamp) as latest_record
       FROM iot_data_sick
@@ -666,7 +620,7 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
         COUNT(*) as record_count,
         AVG(CAST(GSM_Signal_Strength as FLOAT)) as avg_signal_strength,
         SUM(CASE WHEN Train_Passed = 1 THEN 1 ELSE 0 END) as trains_passed,
-        SUM(CASE WHEN Fault_Code = 1 THEN 1 ELSE 0 END) as faults,
+        SUM(CASE WHEN Fault_Code IS NOT NULL AND Fault_Code != '' AND Fault_Code != '0' THEN 1 ELSE 0 END) as faults,
         MIN(Timestamp) as first_record,
         MAX(Timestamp) as last_record
       FROM iot_data_sick
@@ -676,13 +630,6 @@ export const getIoTDataStats = asyncHandler(async (req, res) => {
     `;
 
     const deviceStatsResult = await request.query(deviceStatsQuery);
-
-    // Create audit log
-    await createAuditLog(user.id, 'IOT_DATA_STATS', 'Retrieved IoT data statistics', 'iot_data', null, {
-      device_ids_filter: deviceIds,
-      total_records: stats.total_records,
-      unique_devices: stats.unique_devices
-    });
 
     res.json({
       success: true,

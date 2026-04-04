@@ -7,8 +7,6 @@ const router = express.Router();
 
 // Debug logging for all P3 device detail routes
 router.use((req, res, next) => {
-  console.log(`P3 Device Detail Route Hit: ${req.method} ${req.originalUrl}`);
-  console.log(`Route params:`, req.params);
   next();
 });
 

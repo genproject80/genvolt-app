@@ -90,7 +90,6 @@ export const userService = {
    * @returns {Promise<Object>} API response with created user
    */
   async createUser(userData) {
-    console.log("in createUser", userData)
     try {
       const response = await api.post('/', userData);
       return response.data;
@@ -107,7 +106,6 @@ export const userService = {
    * @returns {Promise<Object>} API response with updated user
    */
   async updateUser(userId, userData) {
-    console.log(userData)
     try {
       const response = await api.put(`/${userId}`, userData);
       return response.data;

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, useMatch } from 'react-router-dom';
 import {
   HomeIcon,
-  ChartBarIcon,
   CogIcon,
   UsersIcon,
   ChevronDownIcon,
@@ -11,19 +10,27 @@ import {
   BuildingOfficeIcon,
   ComputerDesktopIcon,
   BeakerIcon,
-  ChartBarSquareIcon,
   TableCellsIcon,
-  CircleStackIcon
+  CircleStackIcon,
+  CreditCardIcon,
+  ClipboardDocumentListIcon,
+  RectangleGroupIcon,
+  TagIcon,
+  ServerStackIcon,
+  ArchiveBoxIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useFeatureFlags } from '../../context/FeatureFlagContext';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isDashboardRoute = location.pathname.startsWith('/dashboard');
+  const isClientDeviceRoute = !!useMatch('/admin/clients/:clientId/devices');
   const [isDashboardMenuOpen, setIsDashboardMenuOpen] = useState(true);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(true);
   const [isDeviceTestingMenuOpen, setIsDeviceTestingMenuOpen] = useState(true);
@@ -31,10 +38,13 @@ const Sidebar = () => {
   const { dashboards, activeDashboard, setActiveDashboard } = useDashboard();
   const { user } = useAuth();
   const { hasAnyPermission, canViewDeviceTesting, canManageDeviceTestingTables } = usePermissions();
+  const { isPaymentsEnabled } = useFeatureFlags();
+
+  const isAdmin = ['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(user?.role_name || user?.role);
 
   const handleDashboardClick = (dashboard) => {
     setActiveDashboard(dashboard);
-    // Always navigate to dashboard home when switching dashboards
+    // Always navigate to the dashboard home when switching dashboards
     if (location.pathname !== '/dashboard') {
       navigate('/dashboard');
     }
@@ -105,6 +115,23 @@ const Sidebar = () => {
             <ChartBarIcon className="w-5 h-5 mr-3" />
             Reports
           </NavLink> */}
+
+          {/* Billing - visible only when payments feature flag is enabled */}
+          {isPaymentsEnabled && (
+            <NavLink
+              to="/billing"
+              className={({ isActive }) =>
+                `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`
+              }
+            >
+              <CreditCardIcon className="w-5 h-5 mr-3" />
+              Billing
+            </NavLink>
+          )}
 
           {/* Device Testing - with submenu */}
           {canViewDeviceTesting && (
@@ -190,9 +217,10 @@ const Sidebar = () => {
 
                   <NavLink
                     to="/admin/clients"
+                    end
                     className={({ isActive }) =>
                       `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        isActive
+                        isActive || isClientDeviceRoute
                           ? 'bg-primary-50 text-primary-700'
                           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                       }`
@@ -201,6 +229,15 @@ const Sidebar = () => {
                     <BuildingOfficeIcon className="w-4 h-4 mr-2" />
                     Client Management
                   </NavLink>
+
+                  {isClientDeviceRoute && (
+                    <div className="ml-4 pl-2 border-l-2 border-primary-200">
+                      <span className="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg">
+                        <ServerStackIcon className="w-3.5 h-3.5 mr-1.5" />
+                        Client Devices
+                      </span>
+                    </div>
+                  )}
 
                   {hasAnyPermission(['Create Role', 'Edit Role']) && (
                     <NavLink
@@ -231,6 +268,86 @@ const Sidebar = () => {
                     <ComputerDesktopIcon className="w-4 h-4 mr-2" />
                     Device Management
                   </NavLink>
+
+                  {isPaymentsEnabled && hasAnyPermission(['Manage Plans']) && (
+                    <NavLink
+                      to="/admin/plans"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <RectangleGroupIcon className="w-4 h-4 mr-2" />
+                      Plans
+                    </NavLink>
+                  )}
+
+                  {isPaymentsEnabled && hasAnyPermission(['Manage Discounts']) && (
+                    <NavLink
+                      to="/admin/discounts"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <TagIcon className="w-4 h-4 mr-2" />
+                      Discounts
+                    </NavLink>
+                  )}
+
+                  {isAdmin && (
+                    <NavLink
+                      to="/admin/inventory"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <ArchiveBoxIcon className="w-4 h-4 mr-2" />
+                      Inventory
+                    </NavLink>
+                  )}
+
+                  {isPaymentsEnabled && hasAnyPermission(['Manage Subscriptions']) && (
+                    <NavLink
+                      to="/admin/subscriptions"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <ClipboardDocumentListIcon className="w-4 h-4 mr-2" />
+                      Subscriptions
+                    </NavLink>
+                  )}
+
+                  {isAdmin && (
+                    <NavLink
+                      to="/admin/feature-flags"
+                      className={({ isActive }) =>
+                        `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <FlagIcon className="w-4 h-4 mr-2" />
+                      Feature Flags
+                    </NavLink>
+                  )}
 
                   {canManageDeviceTestingTables && (
                     <NavLink
