@@ -1,5 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import hkmiConfigService from '../../services/hkmiConfigService';
+
+/** Format device for display */
+const deviceLabel = (d) =>
+  `${d.device_id}${d.machin_id ? ` (${d.machin_id})` : ''} — ${d.activation_status || 'UNKNOWN'}`;
 
 const HKMIDeviceConfig = () => {
   const [devices, setDevices] = useState([]);
@@ -7,6 +11,11 @@ const HKMIDeviceConfig = () => {
   const [currentConfig, setCurrentConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(false);
   const [devicesLoading, setDevicesLoading] = useState(true);
+
+  // Searchable dropdown state
+  const [searchText, setSearchText] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Form state
   const [formValues, setFormValues] = useState({
@@ -35,6 +44,28 @@ const HKMIDeviceConfig = () => {
     loadDevices();
   }, []);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered devices based on search
+  const filteredDevices = devices.filter((d) => {
+    if (!searchText) return true;
+    const q = searchText.toLowerCase();
+    return (
+      d.device_id?.toLowerCase().includes(q) ||
+      d.machin_id?.toLowerCase().includes(q) ||
+      d.activation_status?.toLowerCase().includes(q)
+    );
+  });
+
   // Fetch latest config when device changes
   const fetchConfig = useCallback(async (deviceId) => {
     if (!deviceId) {
@@ -54,11 +85,19 @@ const HKMIDeviceConfig = () => {
     }
   }, []);
 
-  const handleDeviceChange = (e) => {
-    const deviceId = e.target.value;
-    setSelectedDeviceId(deviceId);
+  const handleDeviceSelect = (device) => {
+    setSelectedDeviceId(device.device_id);
+    setSearchText(deviceLabel(device));
+    setDropdownOpen(false);
     setFormValues({ Motor_ON_Time_sec: '', Motor_OFF_Time_min: '', Wheel_Threshold: '' });
-    fetchConfig(deviceId);
+    fetchConfig(device.device_id);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedDeviceId('');
+    setSearchText('');
+    setCurrentConfig(null);
+    setFormValues({ Motor_ON_Time_sec: '', Motor_OFF_Time_min: '', Wheel_Threshold: '' });
   };
 
   const handleRefresh = () => {
@@ -103,27 +142,82 @@ const HKMIDeviceConfig = () => {
 
   return (
     <div className="space-y-4">
-      {/* Device Selector */}
+      {/* Searchable Device Selector */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-5 py-4">
-        <label htmlFor="device-select" className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Select HKMI Device
         </label>
-        <select
-          id="device-select"
-          value={selectedDeviceId}
-          onChange={handleDeviceChange}
-          disabled={devicesLoading}
-          className="block w-full max-w-md rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border"
-        >
-          <option value="">
-            {devicesLoading ? 'Loading devices...' : '— Select a device —'}
-          </option>
-          {devices.map((d) => (
-            <option key={d.id} value={d.device_id}>
-              {d.device_id}{d.machin_id ? ` (${d.machin_id})` : ''} — {d.activation_status || 'UNKNOWN'}
-            </option>
-          ))}
-        </select>
+        <div className="relative max-w-md" ref={dropdownRef}>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setDropdownOpen(true);
+                if (selectedDeviceId) {
+                  setSelectedDeviceId('');
+                  setCurrentConfig(null);
+                }
+              }}
+              onFocus={() => setDropdownOpen(true)}
+              placeholder={devicesLoading ? 'Loading devices...' : 'Search by device ID, machine ID...'}
+              disabled={devicesLoading}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 pl-3 pr-16 border"
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center">
+              {selectedDeviceId && (
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="p-1.5 text-gray-400 hover:text-gray-600"
+                  title="Clear selection"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="p-1.5 pr-3 text-gray-400 hover:text-gray-600"
+              >
+                <svg className={`h-4 w-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {dropdownOpen && !devicesLoading && (
+            <ul className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-md bg-white border border-gray-200 shadow-lg py-1">
+              {filteredDevices.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-gray-500">No devices found</li>
+              ) : (
+                filteredDevices.map((d) => (
+                  <li
+                    key={d.id}
+                    onClick={() => handleDeviceSelect(d)}
+                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${
+                      d.device_id === selectedDeviceId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800'
+                    }`}
+                  >
+                    <span className="font-medium">{d.device_id}</span>
+                    {d.machin_id && <span className="text-gray-500 ml-1">({d.machin_id})</span>}
+                    <span className={`ml-2 inline-block text-xs px-1.5 py-0.5 rounded ${
+                      d.activation_status === 'ACTIVE'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {d.activation_status || 'UNKNOWN'}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* Message Banner */}
