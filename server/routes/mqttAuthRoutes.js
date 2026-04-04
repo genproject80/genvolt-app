@@ -42,7 +42,15 @@ function requireEmqxIp(req, res, next) {
 // Service accounts are authenticated by EMQX built-in database — they should
 // never reach this HTTP hook. If they do, return ignore so EMQX falls back to
 // the built-in database check.
-const SERVICE_ACCOUNTS = new Set([process.env.MQTT_BACKEND_USER].filter(Boolean));
+const SERVICE_ACCOUNTS = new Set(
+  [
+    process.env.MQTT_BACKEND_USER,
+    ...(process.env.MQTT_SERVICE_ACCOUNTS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+  ].filter(Boolean)
+);
 
 // IMEI format: exactly 15 decimal digits
 const IMEI_RE = /^\d{15}$/;
