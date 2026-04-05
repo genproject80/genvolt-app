@@ -44,7 +44,6 @@ const DeviceManagement = () => {
 
   // Local state for filters and search
   const [searchTerm, setSearchTerm] = useState('');
-  const [modelFilter, setModelFilter] = useState('');
   const [modelNumberFilter, setModelNumberFilter] = useState('');
   const [inventoryModels, setInventoryModels] = useState([]);
   const [activationStatusFilter, setActivationStatusFilter] = useState('');
@@ -151,10 +150,6 @@ const DeviceManagement = () => {
         options.search = searchTerm.trim();
       }
 
-      if (modelFilter && modelFilter.trim()) {
-        options.Model = modelFilter.trim();
-      }
-
       if (modelNumberFilter && modelNumberFilter.trim()) {
         options.model_number = modelNumberFilter.trim();
       }
@@ -174,7 +169,7 @@ const DeviceManagement = () => {
     } finally {
       isLoadingDevices.current = false;
     }
-  }, [currentPage, searchTerm, modelFilter, modelNumberFilter, activationStatusFilter, startDate, endDate, selectedClientId, getAllDevices]);
+  }, [currentPage, searchTerm, modelNumberFilter, activationStatusFilter, startDate, endDate, selectedClientId, getAllDevices]);
 
   // Initialize selectedClientId with "all" on mount
   // and load all devices under the user's hierarchy automatically
@@ -214,7 +209,7 @@ const DeviceManagement = () => {
       loadDevices();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm, modelFilter, modelNumberFilter, activationStatusFilter, startDate, endDate, selectedClientId]);
+  }, [currentPage, searchTerm, modelNumberFilter, activationStatusFilter, startDate, endDate, selectedClientId]);
 
   // Load device stats only once on component mount
   useEffect(() => {
@@ -255,12 +250,6 @@ const DeviceManagement = () => {
   const handleSearch = (value) => {
     setSearchTerm(value);
     setCurrentPage(1); // Reset to first page
-  };
-
-  // Handle filter changes
-  const handleModelFilter = (value) => {
-    setModelFilter(value);
-    setCurrentPage(1);
   };
 
   // Handle device actions
@@ -623,18 +612,6 @@ const DeviceManagement = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
-          <div className="w-48">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Filter By Model
-            </label>
-            <input
-              type="text"
-              placeholder="Filter by model..."
-              value={modelFilter}
-              onChange={(e) => handleModelFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
           <div className="w-52">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Model Number
@@ -701,9 +678,6 @@ const DeviceManagement = () => {
                 Device ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Model
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Model Number
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -726,7 +700,7 @@ const DeviceManagement = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {devices.length === 0 ? (
               <tr>
-                <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                   {loading ? 'Loading devices...' : 'No devices found'}
                 </td>
               </tr>
@@ -739,15 +713,6 @@ const DeviceManagement = () => {
                     </div>
                     {device.channel_id && (
                       <div className="text-xs text-gray-500">Channel: {device.channel_id}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {device.Model ? (
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {device.Model}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">N/A</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

@@ -22,6 +22,11 @@ export class Inventory {
     }
   }
 
+  // Returns the single logic ID for this model (1:1 relationship with model number)
+  get decoderLogicId() {
+    return this.decoderLogicIdsArray[0] ?? null;
+  }
+
   toJSON() {
     return {
       model_number:      this.model_number,

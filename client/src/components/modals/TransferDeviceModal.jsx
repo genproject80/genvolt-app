@@ -52,10 +52,8 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
         // Only exclude the client that currently owns this device (can't transfer to same client)
         let availableClients = clientsData.filter(client => {
           // Filter out the current device owner
-          if (device?.client_id && client.client_id === device.client_id) {
-            return false;
-          }
-          return true;
+          return !(device?.client_id && client.client_id === device.client_id);
+
         });
 
         setClients(availableClients);
@@ -127,7 +125,7 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
           </div>
           <div>
             <p className="text-xs text-gray-600">Model</p>
-            <p className="text-sm text-gray-900">{device.Model || 'N/A'}</p>
+            <p className="text-sm text-gray-900">{device.model_number || 'N/A'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-600">Current Client</p>

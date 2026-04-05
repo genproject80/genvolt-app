@@ -1,11 +1,11 @@
 import mqtt from 'mqtt';
-import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
-import { decode, resolveLogicIds } from '../decoders/decoder.js';
 import { executeQuery, sql } from '../config/database.js';
 import mqttService from './mqttService.js';
 import { Inventory } from '../models/Inventory.js';
 import { FeatureFlag } from '../models/FeatureFlag.js';
+import { handleSickP3 } from '../telemetry/sickP3Handler.js';
+import { handleHyPure } from '../telemetry/hyPureHandler.js';
 import fs from 'fs';
 
 
@@ -117,7 +117,7 @@ class MQTTListenerService {
 
     const result = await executeQuery(
       `SELECT device_id, activation_status, mqtt_password_plain
-       FROM dbo.device WHERE imei = @imei`,
+       FROM device WHERE imei = @imei`,
       { imei: { value: String(imei), type: sql.NVarChar } }
     );
 
@@ -132,9 +132,11 @@ class MQTTListenerService {
           if (inv?.device_id_prefix) prefix = inv.device_id_prefix;
         } catch { /* keep default */ }
       }
-      const newDeviceId = prefix + crypto.randomBytes(4).toString('hex').toUpperCase();
+      const maxDigits = 7 - prefix.length;
+      const randomNum = Math.floor(Math.random() * Math.pow(10, maxDigits));
+      const newDeviceId = prefix + String(randomNum).padStart(maxDigits, '0');
       await executeQuery(
-        `INSERT INTO dbo.device (device_id, imei, activation_status, onboarding_date, model_number)
+        `INSERT INTO device (device_id, imei, activation_status, onboarding_date, model_number)
          VALUES ( @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
         {
           deviceId: { value: newDeviceId, type: sql.NVarChar },
@@ -178,7 +180,7 @@ class MQTTListenerService {
   // Called when an ACTIVE device publishes to cloudsynk/<IMEI>/telemetry
   // -------------------------------------------------------------------------
   async handleTelemetry(imei, payload) {
-    const { deviceId, field1 } = payload;
+    const { deviceId, field1, created_at } = payload;
 
     if (!deviceId) {
       logger.warn(`Telemetry missing deviceId from IMEI=${imei}`);
@@ -189,11 +191,11 @@ class MQTTListenerService {
       return;
     }
 
-    // Resolve logicId(s) from the device's model — device does not send logicId
-    let resolvedIds = [];
+    // Resolve logicId from the device's model — 1:1 relationship (model → logicId)
+    let logicId = null;
     try {
       const deviceRow = await executeQuery(
-        `SELECT model_number FROM dbo.device WHERE device_id = @deviceId`,
+        `SELECT model_number FROM device WHERE device_id = @deviceId`,
         { deviceId: { value: deviceId, type: sql.NVarChar } }
       );
       if (deviceRow.recordset.length === 0) {
@@ -210,9 +212,9 @@ class MQTTListenerService {
         logger.warn(`No inventory entry for model=${modelNumber} device=${deviceId} — dropping`);
         return;
       }
-      resolvedIds = resolveLogicIds(inv.decoderLogicIdsArray, field1);
-      if (resolvedIds.length === 0) {
-        logger.warn(`Payload size (${field1.length / 2}B) matches no decoder for model=${modelNumber} device=${deviceId} — dropping`);
+      logicId = inv.decoderLogicId;
+      if (!logicId) {
+        logger.warn(`No logicId configured for model=${modelNumber} device=${deviceId} — dropping`);
         return;
       }
     } catch (err) {
@@ -220,31 +222,41 @@ class MQTTListenerService {
       return;
     }
 
-    // Decode and store one record per resolved logicId
-    const rawJson = JSON.stringify(payload);
-    for (const logicId of resolvedIds) {
-      let decoded = null;
-      try {
-        decoded = decode(logicId, field1);
-      } catch (err) {
-        logger.warn(`Decoder failed for logicId=${logicId} device=${deviceId}: ${err.message}`);
-      }
+    const createdAt = created_at ? new Date(created_at) : new Date();
+    const entryId   = Date.now();
 
+    // Insert raw payload into DeviceTelemetry before decoding.
+    // decoded_json is populated below after successful handler execution.
+    try {
       await executeQuery(
         `INSERT INTO dbo.DeviceTelemetry
-           (device_id, imei, logic_id, raw_payload, decoded_data, received_at)
+           (entry_id, device_id, imei, logic_id, created_at, raw_payload, decoded_json)
          VALUES
-           (@deviceId, @imei, @logicId, @raw, @decoded, GETUTCDATE())`,
+           (@entryId, @deviceId, @imei, @logicId, @createdAt, @rawPayload, NULL)`,
         {
-          deviceId: { value: deviceId, type: sql.NVarChar },
-          imei: { value: imei, type: sql.NVarChar },
-          logicId: { value: logicId, type: sql.Int },
-          raw: { value: rawJson, type: sql.NVarChar },
-          decoded: { value: decoded ? JSON.stringify(decoded) : null, type: sql.NVarChar },
+          entryId:    { value: entryId,                    type: sql.BigInt },
+          deviceId:   { value: deviceId,                   type: sql.NVarChar(128) },
+          imei:       { value: String(imei),               type: sql.NVarChar(50) },
+          logicId:    { value: logicId,                    type: sql.Int },
+          createdAt:  { value: createdAt,                  type: sql.DateTime2 },
+          rawPayload: { value: JSON.stringify(payload),    type: sql.NVarChar(sql.MAX) },
         }
       );
+    } catch (err) {
+      logger.error(`DeviceTelemetry raw insert failed for device=${deviceId}: ${err.message}`);
+      // Continue — still attempt decode and device-specific insert
+    }
 
-      logger.info(`Telemetry stored: device=${deviceId} imei=${imei} logicId=${logicId} (resolved from model)`);
+    try {
+      if (logicId === 1) {
+        await handleSickP3(deviceId, field1, createdAt, entryId);
+      } else if (logicId === 2) {
+        await handleHyPure(deviceId, field1, createdAt, entryId);
+      } else {
+        logger.warn(`No target table mapped for logicId=${logicId} device=${deviceId} — dropping`);
+      }
+    } catch (err) {
+      logger.error(`DB insert failed for logicId=${logicId} device=${deviceId}: ${err.message}`);
     }
 
   }
@@ -261,6 +273,8 @@ class MQTTListenerService {
       logger.info(`MQTT not connected — mqtt_telemetry_subscription cached as ${isEnabled}`);
       return;
     }
+
+    logger.info(`Telemetry stored: device=${deviceId} imei=${imei} logicId=${logicId}`);
 
     if (isEnabled && !this._telemetryEnabled) {
       this.client.subscribe('cloudsynk/+/telemetry', { qos: 1 }, (err) => {

@@ -1,18 +1,29 @@
-import { Device } from '../models/Device.js';
-import { Inventory } from '../models/Inventory.js';
-import { Client } from '../models/Client.js';
-import { logger } from '../utils/logger.js';
-import { asyncHandler, ValidationError, NotFoundError, AuthorizationError, ConflictError } from '../middleware/errorHandler.js';
-import { createAuditLog, ACTIVITY_TYPES, AUDIT_ACTIONS, TARGET_TYPES } from '../utils/auditLogger.js';
-import { validationResult } from 'express-validator';
+import {Device} from '../models/Device.js';
+import {Inventory} from '../models/Inventory.js';
+import {Client} from '../models/Client.js';
+import {logger} from '../utils/logger.js';
+import {
+  asyncHandler,
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError
+} from '../middleware/errorHandler.js';
+import {ACTIVITY_TYPES, AUDIT_ACTIONS, createAuditLog, TARGET_TYPES} from '../utils/auditLogger.js';
+import {validationResult} from 'express-validator';
 import sql from 'mssql';
-import { getPool } from '../config/database.js';
+import {getPool} from '../config/database.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import mqttService from '../services/mqttService.js';
-import { kickMqttClientsByUsername } from '../services/emqxMgmtService.js';
-import { checkDeviceActivationEligibility } from '../services/subscriptionService.js';
-import { pauseDevice, resumeDevice, pauseAllDevicesForClient, resumeAllDevicesForClient } from '../services/devicePauseService.js';
+import {kickMqttClientsByUsername} from '../services/emqxMgmtService.js';
+import {checkDeviceActivationEligibility} from '../services/subscriptionService.js';
+import {
+  pauseAllDevicesForClient,
+  pauseDevice,
+  resumeAllDevicesForClient,
+  resumeDevice
+} from '../services/devicePauseService.js';
 
 /**
  * Helper function to check if current user can access target device
@@ -32,8 +43,7 @@ const canAccessDevice = async (currentUser, device) => {
   }
 
   // Check if device belongs to a descendant client
-  const isDescendant = await Client.isDescendant(currentUser.client_id, device.client_id);
-  return isDescendant;
+  return await Client.isDescendant(currentUser.client_id, device.client_id);
 };
 
 /**
@@ -47,7 +57,7 @@ export const getDevices = asyncHandler(async (req, res) => {
     search = '',
     sortBy = 'onboarding_date',
     sortOrder = 'desc',
-    Model,
+    model_number,
     activation_status,
     startDate,
     endDate,
@@ -106,8 +116,8 @@ export const getDevices = asyncHandler(async (req, res) => {
     filters.search = search;
   }
 
-  if (Model) {
-    filters.Model = Model;
+  if (model_number) {
+    filters.model_number = model_number;
   }
 
   if (activation_status) {
@@ -246,7 +256,7 @@ export const createDevice = asyncHandler(async (req, res) => {
     target_id: device.id,
     details: JSON.stringify({
       device_id: device.device_id,
-      Model: device.Model,
+      model_number: device.model_number,
       client_id: device.client_id,
       user_client_id: currentUser.client_id
     }),
@@ -412,7 +422,7 @@ export const deleteDevice = asyncHandler(async (req, res) => {
     target_id: device.id,
     details: JSON.stringify({
       device_id: device.device_id,
-      Model: device.Model,
+      model_number: device.model_number,
       client_id: device.client_id,
       had_transfer_history: transferHistory.length > 0
     }),
@@ -790,7 +800,7 @@ export const deactivateDevice = asyncHandler(async (req, res) => {
     throw new ValidationError(`Device is not ACTIVE (current: ${check.recordset[0].activation_status})`);
   }
 
-  const { client_id, imei } = check.recordset[0];
+  const { imei } = check.recordset[0];
 
   // Notify device before cutting access
   if (imei) {
@@ -834,7 +844,6 @@ export const deactivateDevice = asyncHandler(async (req, res) => {
  */
 export const reactivateDevice = asyncHandler(async (req, res) => {
   const { deviceId } = req.params;
-  const { initial_config } = req.body;
 
   const pool = await getPool();
 
@@ -847,7 +856,7 @@ export const reactivateDevice = asyncHandler(async (req, res) => {
     throw new ValidationError(`Device is not INACTIVE (current: ${check.recordset[0].activation_status})`);
   }
 
-  const { client_id, imei } = check.recordset[0];
+  const { imei } = check.recordset[0];
   if (!imei) throw new ValidationError('Device has no IMEI — cannot send activation payload');
 
   const mqttPassword     = crypto.randomBytes(16).toString('hex');

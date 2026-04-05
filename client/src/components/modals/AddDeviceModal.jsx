@@ -3,6 +3,7 @@ import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { useAuth } from '../../context/AuthContext';
 import { clientService } from '../../services/clientService';
+import { getActiveInventory } from '../../services/inventoryService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
@@ -11,33 +12,36 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
 
   const [formData, setFormData] = useState({
     device_id: '',
+    model_number: '',
+    imei: '',
     machin_id: '',
-    Model: '',
-    client_id: '',
-    conversionLogic_ld: '',
-    TransactionTableID: '',
-    TransactionTableName: ''
+    client_id: ''
   });
 
   const [errors, setErrors] = useState({});
   const [clients, setClients] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Load clients data when modal opens
+  // Load clients and inventory data when modal opens
   useEffect(() => {
     if (isOpen) {
-      loadClients();
+      loadFormData();
     }
   }, [isOpen]);
 
-  const loadClients = async () => {
+  const loadFormData = async () => {
     try {
       setLoadingData(true);
 
-      const clientsResponse = await clientService.getDescendantClients();
+      const [clientsResponse, inventoryItems] = await Promise.all([
+        clientService.getDescendantClients(),
+        getActiveInventory()
+      ]);
+
+      setInventory(inventoryItems || []);
 
       if (clientsResponse && clientsResponse.success) {
-        // Extract the actual clients array from the response
         let clientsData = [];
 
         if (clientsResponse.data?.clients && Array.isArray(clientsResponse.data.clients)) {
@@ -52,8 +56,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
 
         setClients(clientsData);
 
-        // Set default client_id to user's client AFTER clients are loaded
-        // The API returns user's own client as first item (level 0)
         if (user?.client_id && clientsData.length > 0) {
           setFormData(prev => ({
             ...prev,
@@ -78,7 +80,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
       [name]: value
     }));
 
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -93,7 +94,15 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
       newErrors.device_id = 'Device ID must be at least 3 characters';
     }
 
-    // All other fields are optional: Model, machin_id, client_id, conversionLogic_ld, TransactionTableID, and TransactionTableName
+    if (!formData.model_number) {
+      newErrors.model_number = 'Model number is required';
+    }
+
+    if (!formData.imei.trim()) {
+      newErrors.imei = 'IMEI is required';
+    } else if (!/^\d{15,17}$/.test(formData.imei.trim())) {
+      newErrors.imei = 'IMEI must be 15–17 digits';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -107,26 +116,21 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
     }
 
     try {
-      // Prepare data for API
       const createData = {
         device_id: formData.device_id,
+        model_number: formData.model_number,
+        imei: formData.imei,
         machin_id: formData.machin_id || null,
-        Model: formData.Model || null,
-        client_id: formData.client_id ? parseInt(formData.client_id) : null,
-        conversionLogic_ld: formData.conversionLogic_ld || null,
-        TransactionTableID: formData.TransactionTableID ? parseInt(formData.TransactionTableID) : null,
-        TransactionTableName: formData.TransactionTableName || null
+        client_id: formData.client_id ? parseInt(formData.client_id) : null
       };
 
       await createDevice(createData);
       setFormData({
         device_id: '',
+        model_number: '',
+        imei: '',
         machin_id: '',
-        Model: '',
-        client_id: user?.client_id ? user.client_id.toString() : '',
-        conversionLogic_ld: '',
-        TransactionTableID: '',
-        TransactionTableName: ''
+        client_id: user?.client_id ? user.client_id.toString() : ''
       });
       setErrors({});
       onSuccess?.();
@@ -135,7 +139,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
       console.error('Failed to create device:', error);
       console.error('Error details:', error.response?.data);
 
-      // Extract error message from server response
       let errorMessage = 'Failed to create device';
 
       if (error.response?.data?.message) {
@@ -146,7 +149,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
         errorMessage = error.message;
       }
 
-      // Handle specific validation errors for individual fields
       if (error.response?.data?.details) {
         const fieldErrors = {};
         error.response.data.details.forEach(detail => {
@@ -161,7 +163,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
         }
       }
 
-      // Handle common errors
       if (errorMessage.includes('device_id already exists') || errorMessage.includes('duplicate') && errorMessage.includes('device_id')) {
         setErrors({ device_id: 'A device with this ID already exists', submit: errorMessage });
       } else {
@@ -173,12 +174,10 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
   const handleClose = () => {
     setFormData({
       device_id: '',
+      model_number: '',
+      imei: '',
       machin_id: '',
-      Model: '',
-      client_id: user?.client_id ? user.client_id.toString() : '',
-      conversionLogic_ld: '',
-      TransactionTableID: '',
-      TransactionTableName: ''
+      client_id: user?.client_id ? user.client_id.toString() : ''
     });
     setErrors({});
     onClose();
@@ -220,6 +219,52 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
 
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
+            Model Number *
+          </label>
+          <select
+            name="model_number"
+            value={formData.model_number}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+              errors.model_number ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={loading || loadingData}
+          >
+            <option value="">Select model number</option>
+            {inventory.map(item => (
+              <option key={item.model_number} value={item.model_number}>
+                {item.model_number}{item.display_name ? ` — ${item.display_name}` : ''}
+              </option>
+            ))}
+          </select>
+          {errors.model_number && (
+            <p className="text-xs text-red-600 mt-0.5">{errors.model_number}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            IMEI *
+          </label>
+          <input
+            type="text"
+            name="imei"
+            value={formData.imei}
+            onChange={handleChange}
+            placeholder="Enter 15–17 digit IMEI"
+            maxLength={17}
+            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+              errors.imei ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={loading || loadingData}
+          />
+          {errors.imei && (
+            <p className="text-xs text-red-600 mt-0.5">{errors.imei}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
             Machine ID
           </label>
           <input
@@ -240,26 +285,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
 
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Model
-          </label>
-          <input
-            type="text"
-            name="Model"
-            value={formData.Model}
-            onChange={handleChange}
-            placeholder="Enter device model (optional)"
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.Model ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.Model && (
-            <p className="text-xs text-red-600 mt-0.5">{errors.Model}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
             Client
           </label>
           <select
@@ -271,7 +296,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
             }`}
             disabled={loading || loadingData}
           >
-            {/* Show all clients from the API (which includes user's client at level 0) */}
             {clients.map(client => (
               <option key={client.client_id} value={client.client_id}>
                 {client.name} {client.level === 0 ? '(My Client)' : ''}
@@ -280,66 +304,6 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
           </select>
           {errors.client_id && (
             <p className="text-xs text-red-600 mt-0.5">{errors.client_id}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Conversion Logic
-          </label>
-          <input
-            type="text"
-            name="conversionLogic_ld"
-            value={formData.conversionLogic_ld}
-            onChange={handleChange}
-            placeholder="Enter conversion logic (optional)"
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.conversionLogic_ld ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.conversionLogic_ld && (
-            <p className="text-xs text-red-600 mt-0.5">{errors.conversionLogic_ld}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Transaction Table ID
-          </label>
-          <input
-            type="number"
-            name="TransactionTableID"
-            value={formData.TransactionTableID}
-            onChange={handleChange}
-            placeholder="Enter transaction table ID (optional)"
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.TransactionTableID ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.TransactionTableID && (
-            <p className="text-xs text-red-600 mt-0.5">{errors.TransactionTableID}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Transaction Table Name
-          </label>
-          <input
-            type="text"
-            name="TransactionTableName"
-            value={formData.TransactionTableName}
-            onChange={handleChange}
-            placeholder="Enter transaction table name (optional)"
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.TransactionTableName ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.TransactionTableName && (
-            <p className="text-xs text-red-600 mt-0.5">{errors.TransactionTableName}</p>
           )}
         </div>
 
