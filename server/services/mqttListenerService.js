@@ -253,14 +253,17 @@ class MQTTListenerService {
     // Clear the retained activation credential payload from the config topic on first telemetry.
     // Once the device is sending telemetry it has successfully reconnected with device credentials,
     // so the pre-activation credential message is no longer needed on the broker.
+    // Wait 30 seconds before clearing to ensure the device has fully processed the config.
     if (!this._clearedConfigTopics.has(imei)) {
       this._clearedConfigTopics.add(imei);
-      try {
-        await mqttService.publish(`cloudsynk/${imei}/config`, '', { retain: true, qos: 1 });
-        logger.info(`Cleared retained config topic for IMEI=${imei}`);
-      } catch (err) {
-        logger.warn(`Failed to clear retained config topic for IMEI=${imei}: ${err.message}`);
-      }
+      setTimeout(async () => {
+        try {
+          await mqttService.publish(`cloudsynk/${imei}/config`, '', { retain: true, qos: 1 });
+          logger.info(`Cleared retained config topic for IMEI=${imei} (30s after first telemetry)`);
+        } catch (err) {
+          logger.warn(`Failed to clear retained config topic for IMEI=${imei}: ${err.message}`);
+        }
+      }, 30000);
     }
   }
 
