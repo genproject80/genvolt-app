@@ -12,9 +12,6 @@ import fs from 'fs';
 class MQTTListenerService {
   constructor() {
     this.client = null;
-    // IMEIs whose retained config topic has already been cleared after first telemetry.
-    // Prevents repeated empty publishes on every telemetry message.
-    this._clearedConfigTopics = new Set();
     // Cached at connect time from the feature flag — avoids a DB hit on every message.
     this._telemetryEnabled = false;
   }
@@ -250,24 +247,6 @@ class MQTTListenerService {
       logger.info(`Telemetry stored: device=${deviceId} imei=${imei} logicId=${logicId} (resolved from model)`);
     }
 
-    // Clear the retained telemetryConfig from the config topic on first telemetry.
-    // Verify the deviceId in the payload matches the activated device_id for this IMEI
-    // to confirm the device is using the new credentials we provided.
-    if (!this._clearedConfigTopics.has(imei)) {
-      try {
-        const verifyRow = await executeQuery(
-          `SELECT device_id FROM dbo.device WHERE imei = @imei AND activation_status = 'ACTIVE'`,
-          { imei: { value: imei, type: sql.NVarChar } }
-        );
-        if (verifyRow.recordset.length > 0 && verifyRow.recordset[0].device_id === deviceId) {
-          this._clearedConfigTopics.add(imei);
-          await mqttService.publish(`cloudsynk/${imei}/config`, '', { retain: true, qos: 1 });
-          logger.info(`Cleared retained config for IMEI=${imei} — telemetry confirmed from device=${deviceId}`);
-        }
-      } catch (err) {
-        logger.warn(`Failed to clear retained config for IMEI=${imei}: ${err.message}`);
-      }
-    }
   }
 
   // -------------------------------------------------------------------------
