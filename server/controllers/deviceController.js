@@ -723,12 +723,9 @@ export const activateDevice = asyncHandler(async (req, res) => {
 
   // For pre-activation devices (no device_id yet), auto-generate one from inventory counter
   let finalDeviceId = device.device_id || assignedDeviceId || null;
-  if (!finalDeviceId && device.model_number) {
-    finalDeviceId = await Inventory.incrementCounter(device.model_number);
-  }
   if (!finalDeviceId) {
-    // Fallback: no model_number on device — use prefix GV with random suffix
-    finalDeviceId = 'GV' + crypto.randomBytes(4).toString('hex').toUpperCase();
+    if (!device.model_number) throw new ValidationError('Device has no model_number — cannot auto-generate a device ID');
+    finalDeviceId = await Inventory.incrementCounter(device.model_number);
   }
 
   const imei = device.imei;

@@ -122,19 +122,20 @@ class MQTTListenerService {
     );
 
     if (result.recordset.length === 0) {
-      // New device — auto-register as PENDING
-      // Resolve model_number from payload (optional); use its prefix for the temp device_id
+      // New device — auto-register as PENDING with a counter-based device ID
       const modelNumber = payload?.model_number || null;
-      let prefix = 'GV';
+      let newDeviceId;
       if (modelNumber) {
         try {
-          const inv = await Inventory.findByModelNumber(modelNumber);
-          if (inv?.device_id_prefix) prefix = inv.device_id_prefix;
-        } catch { /* keep default */ }
+          newDeviceId = await Inventory.incrementCounter(modelNumber);
+        } catch (err) {
+          logger.warn(`incrementCounter failed for model=${modelNumber}: ${err.message} — skipping pre-activation`);
+          return;
+        }
+      } else {
+        logger.warn(`Pre-activation IMEI=${imei} has no model_number — cannot auto-generate device ID, skipping`);
+        return;
       }
-      const maxDigits = 7 - prefix.length;
-      const randomNum = Math.floor(Math.random() * Math.pow(10, maxDigits));
-      const newDeviceId = prefix + String(randomNum).padStart(maxDigits, '0');
       await executeQuery(
         `INSERT INTO device (device_id, imei, activation_status, onboarding_date, model_number)
          VALUES ( @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
