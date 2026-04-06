@@ -18,6 +18,7 @@ import bcrypt from 'bcryptjs';
 import mqttService from '../services/mqttService.js';
 import {kickMqttClientsByUsername} from '../services/emqxMgmtService.js';
 import {checkDeviceActivationEligibility} from '../services/subscriptionService.js';
+import {FeatureFlag} from '../models/FeatureFlag.js';
 import {
   pauseAllDevicesForClient,
   pauseDevice,
@@ -209,6 +210,13 @@ export const createDevice = asyncHandler(async (req, res) => {
 
   // Create new device
   const device = await Device.create(deviceData);
+
+  // Increment inventory device counter so next auto-generated ID is unique
+  if (deviceData.model_number) {
+    await Inventory.incrementCounter(deviceData.model_number).catch(err =>
+      logger.warn('Failed to increment inventory device_counter:', err)
+    );
+  }
 
   // If device is assigned to a different client than the logged-in user's client,
   // create transfer record(s) in client_device table with hierarchy chain
@@ -676,7 +684,9 @@ export const activateDevice = asyncHandler(async (req, res) => {
     throw new ValidationError('client_id must be a positive integer');
 
   const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(req.user?.role_name);
-  if (!isAdmin) {
+  const paymentsFlag = await FeatureFlag.findByName('payments_enabled');
+  const paymentsEnabled = paymentsFlag ? !!paymentsFlag.is_enabled : false;
+  if (!isAdmin && paymentsEnabled) {
     const eligibility = await checkDeviceActivationEligibility(parsedClientId);
     if (!eligibility.eligible) {
       return res.status(403).json({

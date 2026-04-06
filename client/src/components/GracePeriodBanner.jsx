@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ExclamationTriangleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useFeatureFlags } from '../context/FeatureFlagContext';
 
 /**
  * Renders a persistent banner at the top of the layout when the subscription
@@ -9,8 +10,9 @@ import { useSubscription } from '../context/SubscriptionContext';
  */
 export default function SubscriptionBanner() {
   const { isGrace, isExpired, hasNoSub, daysRemainingInGrace, subscription, loading } = useSubscription();
+  const { isPaymentsEnabled } = useFeatureFlags();
 
-  if (loading || (!isGrace && !isExpired)) return null;
+  if (loading || !isPaymentsEnabled || (!isGrace && !isExpired)) return null;
 
   if (isGrace) {
     return (

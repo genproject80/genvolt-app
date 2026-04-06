@@ -2,6 +2,18 @@ import { Inventory } from '../models/Inventory.js';
 import { asyncHandler, ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 
 // ---------------------------------------------------------------------------
+// GET /api/inventory/:modelNumber/next-device-id
+// Preview the next auto-generated device ID for a model (no DB change)
+// ---------------------------------------------------------------------------
+export const getNextDeviceId = asyncHandler(async (req, res) => {
+  const entry = await Inventory.findByModelNumber(req.params.modelNumber);
+  if (!entry) throw new NotFoundError(`Inventory model '${req.params.modelNumber}' not found`);
+
+  const nextId = await Inventory.getNextDeviceId(req.params.modelNumber);
+  res.json({ success: true, data: { device_id: nextId } });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/inventory
 // All inventory entries including inactive (admin view)
 // ---------------------------------------------------------------------------

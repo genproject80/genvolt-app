@@ -4,6 +4,7 @@ import {
   getAllInventory,
   getActiveInventory,
   getInventoryByModelNumber,
+  getNextDeviceId,
   createInventory,
   updateInventory,
   deactivateInventory,
@@ -25,6 +26,9 @@ const requireAdmin = asyncHandler(async (req, res, next) => {
 
 // GET /api/inventory/active  — active entries (for device form dropdowns, any authenticated user)
 router.get('/active', getActiveInventory);
+
+// GET /api/inventory/:modelNumber/next-device-id — preview next device ID (any authenticated user)
+router.get('/:modelNumber/next-device-id', getNextDeviceId);
 
 // All remaining routes are admin-only
 router.get('/',                    requireAdmin, getAllInventory);

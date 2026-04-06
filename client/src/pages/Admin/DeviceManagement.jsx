@@ -6,6 +6,7 @@ import { useDevice } from '../../context/DeviceContext';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../context/SubscriptionContext';
+import { useFeatureFlags } from '../../context/FeatureFlagContext';
 import { clientService } from '../../services/clientService';
 import SubscribePlanModal from '../../components/modals/SubscribePlanModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -41,6 +42,7 @@ const DeviceManagement = () => {
 
   const { user: currentUser } = useAuth();
   const { isActive, isGrace, subscription } = useSubscription();
+  const { isPaymentsEnabled } = useFeatureFlags();
 
   // Local state for filters and search
   const [searchTerm, setSearchTerm] = useState('');
@@ -283,10 +285,10 @@ const DeviceManagement = () => {
   const handleActivateDevice = (device) => {
     if (!canOnboardDevice) return;
 
-    // SYSTEM_ADMIN / SUPER_ADMIN bypass subscription checks
+    // SYSTEM_ADMIN / SUPER_ADMIN bypass subscription checks; so does payments being disabled
     const isAdmin = ['SYSTEM_ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role);
 
-    if (!isAdmin) {
+    if (!isAdmin && isPaymentsEnabled) {
       if (!isActive && !isGrace) {
         // No subscription or expired — redirect to subscribe
         setSubscriptionBlockReason(!subscription ? 'NO_SUBSCRIPTION' : 'SUBSCRIPTION_EXPIRED');

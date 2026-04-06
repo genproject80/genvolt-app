@@ -9,8 +9,16 @@ export class Inventory {
     this.decoder_logic_ids = data.decoder_logic_ids;  // stored as JSON string e.g. '[1,3]'
     this.description       = data.description;
     this.is_active         = data.is_active;
+    this.device_counter    = data.device_counter ?? 0;
     this.created_at        = data.created_at;
     this.updated_at        = data.updated_at;
+  }
+
+  // Formats a counter value into a device ID: prefix + zero-padded number, minimum 7 chars total
+  static formatDeviceId(prefix, counter) {
+    const numStr = String(counter);
+    const numLen = Math.max(7 - prefix.length, numStr.length);
+    return prefix + numStr.padStart(numLen, '0');
   }
 
   // Returns decoder_logic_ids as a parsed number array
@@ -35,6 +43,7 @@ export class Inventory {
       decoder_logic_ids: this.decoderLogicIdsArray,
       description:       this.description,
       is_active:         Boolean(this.is_active),
+      device_counter:    this.device_counter,
       created_at:        this.created_at,
       updated_at:        this.updated_at,
     };
@@ -177,6 +186,45 @@ export class Inventory {
       return await Inventory.findByModelNumber(modelNumber);
     } catch (error) {
       logger.error('Inventory.deactivate error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // getNextDeviceId — returns the next device ID string (counter + 1, no DB change)
+  // ------------------------------------------------------------------
+  static async getNextDeviceId(modelNumber) {
+    try {
+      const result = await executeQuery(
+        `SELECT device_id_prefix, device_counter FROM dbo.inventory WHERE model_number = @modelNumber`,
+        { modelNumber: { value: modelNumber, type: sql.NVarChar(50) } }
+      );
+      if (result.recordset.length === 0) return null;
+      const { device_id_prefix, device_counter } = result.recordset[0];
+      return Inventory.formatDeviceId(device_id_prefix, (device_counter ?? 0) + 1);
+    } catch (error) {
+      logger.error('Inventory.getNextDeviceId error:', error);
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // incrementCounter — atomically increments device_counter, returns new device ID
+  // ------------------------------------------------------------------
+  static async incrementCounter(modelNumber) {
+    try {
+      const result = await executeQuery(
+        `UPDATE dbo.inventory
+         SET device_counter = device_counter + 1, updated_at = GETUTCDATE()
+         OUTPUT INSERTED.device_id_prefix, INSERTED.device_counter
+         WHERE model_number = @modelNumber`,
+        { modelNumber: { value: modelNumber, type: sql.NVarChar(50) } }
+      );
+      if (result.recordset.length === 0) return null;
+      const { device_id_prefix, device_counter } = result.recordset[0];
+      return Inventory.formatDeviceId(device_id_prefix, device_counter);
+    } catch (error) {
+      logger.error('Inventory.incrementCounter error:', error);
       throw error;
     }
   }

@@ -38,6 +38,13 @@ export const getInventoryByModelNumber = async (modelNumber) => {
   } catch (err) { handleError(err); }
 };
 
+export const getNextDeviceId = async (modelNumber) => {
+  try {
+    const res = await api.get(`/${modelNumber}/next-device-id`);
+    return res.data.data.device_id;
+  } catch (err) { handleError(err); }
+};
+
 export const createInventory = async (data) => {
   try {
     const res = await api.post('/', data);
