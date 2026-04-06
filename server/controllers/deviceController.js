@@ -721,18 +721,15 @@ export const activateDevice = asyncHandler(async (req, res) => {
   if (device.activation_status !== 'PENDING')
     throw new ValidationError(`Device is already ${device.activation_status}`);
 
-  // Resolve device_id prefix from inventory model, fall back to 'GV'
-  let deviceIdPrefix = 'GV';
-  if (device.model_number) {
-    try {
-      const inventoryEntry = await Inventory.findByModelNumber(device.model_number);
-      if (inventoryEntry?.device_id_prefix) deviceIdPrefix = inventoryEntry.device_id_prefix;
-    } catch { /* keep default prefix on error */ }
+  // For pre-activation devices (no device_id yet), auto-generate one from inventory counter
+  let finalDeviceId = device.device_id || assignedDeviceId || null;
+  if (!finalDeviceId && device.model_number) {
+    finalDeviceId = await Inventory.incrementCounter(device.model_number);
   }
-
-  // For pre-activation devices (no device_id yet), auto-generate one using model prefix
-  const finalDeviceId = device.device_id || assignedDeviceId ||
-    (deviceIdPrefix + crypto.randomBytes(4).toString('hex').toUpperCase());
+  if (!finalDeviceId) {
+    // Fallback: no model_number on device — use prefix GV with random suffix
+    finalDeviceId = 'GV' + crypto.randomBytes(4).toString('hex').toUpperCase();
+  }
 
   const imei = device.imei;
   if (!imei) throw new ValidationError('Device has no IMEI — cannot send activation payload');
