@@ -27,8 +27,21 @@ BEGIN
     PRINT 'Dropped existing: dbo.DeviceTelemetry';
 END
 
+-- Sequence that drives entry_id — created once, survives table drops/recreates.
+IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('dbo') AND name = 'telemetry_entry_id_seq')
+BEGIN
+    CREATE SEQUENCE dbo.telemetry_entry_id_seq
+        AS BIGINT
+        START WITH 1
+        INCREMENT BY 1
+        NO CYCLE;
+    PRINT 'Created sequence: dbo.telemetry_entry_id_seq';
+END
+ELSE
+    PRINT 'Sequence dbo.telemetry_entry_id_seq already exists — skipped';
+
 CREATE TABLE dbo.DeviceTelemetry (
-    entry_id      BIGINT           NOT NULL,
+    entry_id      BIGINT           NOT NULL DEFAULT (NEXT VALUE FOR dbo.telemetry_entry_id_seq),
     device_id     NVARCHAR(128)    NOT NULL,
     imei          NVARCHAR(50)     NOT NULL,
     logic_id      INT              NOT NULL,
