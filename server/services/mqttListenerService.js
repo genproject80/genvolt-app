@@ -277,8 +277,6 @@ class MQTTListenerService {
       return;
     }
 
-    logger.info(`Telemetry stored: device=${deviceId} imei=${imei} logicId=${logicId}`);
-
     if (isEnabled && !this._telemetryEnabled) {
       this.client.subscribe('cloudsynk/+/telemetry', { qos: 1 }, (err) => {
         if (err) {
