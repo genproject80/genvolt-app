@@ -144,7 +144,7 @@ class MQTTService {
    * Push a config_update to an ACTIVE device.
    * Topic: cloudsynk/<IMEI>/config, retain: false.
    */
-  async pushConfigUpdate(imei, config, isActive = 1) {
+  async pushConfigUpdate(imei, config) {
     if (!this.connected) {
       logger.warn('MQTT not connected — config update not pushed');
       return false;
@@ -154,7 +154,6 @@ class MQTTService {
     const payload = {
       type: 'config_update',
       ...config,
-      isActive: isActive ? 1 : 0,
     };
 
     return new Promise((resolve, reject) => {

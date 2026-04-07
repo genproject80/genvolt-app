@@ -1019,7 +1019,7 @@ export const pushDeviceConfig = asyncHandler(async (req, res) => {
   if (!await canAccessDevice(req.user, device))
     throw new AuthorizationError('Access denied');
 
-  await mqttService.pushConfigUpdate(device.imei, config, device.data_enabled);
+  await mqttService.pushConfigUpdate(device.imei, config);
 
   await createAuditLog({
     user_id:       req.user.user_id,

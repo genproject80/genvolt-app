@@ -135,7 +135,7 @@ export const publishDeviceConfig = asyncHandler(async (req, res) => {
 
   // Publish via MQTT
   const topic = `cloudsynk/${imei}/config`;
-  const published = await mqttService.pushConfigUpdate(imei, config, device.data_enabled);
+  const published = await mqttService.pushConfigUpdate(imei, config);
 
   if (!published) {
     return res.status(503).json({
