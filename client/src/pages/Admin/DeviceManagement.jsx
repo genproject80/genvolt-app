@@ -680,6 +680,9 @@ const DeviceManagement = () => {
                 Device ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                IMEI
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Model Number
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -702,7 +705,7 @@ const DeviceManagement = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {devices.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
                   {loading ? 'Loading devices...' : 'No devices found'}
                 </td>
               </tr>
@@ -716,6 +719,9 @@ const DeviceManagement = () => {
                     {device.channel_id && (
                       <div className="text-xs text-gray-500">Channel: {device.channel_id}</div>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                    {device.imei || '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {device.model_number ? (
