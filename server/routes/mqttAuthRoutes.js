@@ -65,6 +65,7 @@ const PRE_ACTIVATION_SECRET = process.env.PRE_ACTIVATION_SECRET || '';
 // ---------------------------------------------------------------------------
 router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
   const { username, password } = req.body;
+  logger.info(`MQTT auth attempt: username=${username}, hasPassword=${!!password}`);
 
   if (!username) {
     return res.status(400).json({ result: 'deny', reason: 'Missing username' });
@@ -106,7 +107,7 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
     const result = await pool.request()
       .input('deviceId', sql.NVarChar, username)
       .query(`
-        SELECT activation_status, mqtt_password
+        SELECT activation_status, mqtt_password, mqtt_password_plain
         FROM dbo.device
         WHERE device_id = @deviceId
       `);
@@ -126,6 +127,13 @@ router.post('/mqtt/auth', requireEmqxIp, async (req, res) => {
     }
 
     const valid = await bcrypt.compare(password, device.mqtt_password);
+    if (!valid) {
+      // Diagnostic: check if stored plain password matches the hash (to detect DB sync issues)
+      const plainMatchesHash = device.mqtt_password_plain
+        ? await bcrypt.compare(device.mqtt_password_plain, device.mqtt_password)
+        : null;
+      logger.warn(`MQTT auth FAILED for ${username}: password mismatch | hashLen=${device.mqtt_password?.length} | plainInDB=${!!device.mqtt_password_plain} | plainMatchesHash=${plainMatchesHash} | deviceSentSameAsPlain=${password === device.mqtt_password_plain}`);
+    }
     return valid
       ? res.json({ result: 'allow', is_superuser: false })
       : res.status(401).json({ result: 'deny', reason: 'Invalid password' });

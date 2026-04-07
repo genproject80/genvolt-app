@@ -804,17 +804,6 @@ export const deactivateDevice = asyncHandler(async (req, res) => {
     throw new ValidationError(`Device is not ACTIVE (current: ${check.recordset[0].activation_status})`);
   }
 
-  const { imei } = check.recordset[0];
-
-  // Notify device before cutting access
-  if (imei) {
-    try {
-      await mqttService.publishDeactivationNotice(imei, reason);
-    } catch (mqttErr) {
-      logger.error('Deactivation notice MQTT publish failed:', mqttErr.message);
-    }
-  }
-
   await pool.request()
     .input('deviceId', sql.NVarChar, deviceId)
     .input('deactivatedBy', sql.Int, req.user.user_id)
@@ -897,7 +886,7 @@ export const reactivateDevice = asyncHandler(async (req, res) => {
     message: `Device ${deviceId} reactivated`,
     target_type: 'DEVICE',
     target_id: deviceId,
-    details: JSON.stringify({ config }),
+    details: JSON.stringify({ reactivated: true }),
   });
 
   res.json({ success: true, message: 'Device reactivated successfully' });
@@ -1018,7 +1007,7 @@ export const pushDeviceConfig = asyncHandler(async (req, res) => {
   const pool = await getPool();
   const result = await pool.request()
     .input('deviceId', sql.NVarChar, deviceId)
-    .query(`SELECT device_id, client_id, activation_status, imei FROM dbo.device WHERE device_id = @deviceId`);
+    .query(`SELECT device_id, client_id, activation_status, imei, data_enabled FROM dbo.device WHERE device_id = @deviceId`);
 
   if (result.recordset.length === 0) throw new NotFoundError('Device not found');
   const device = result.recordset[0];
@@ -1030,7 +1019,7 @@ export const pushDeviceConfig = asyncHandler(async (req, res) => {
   if (!await canAccessDevice(req.user, device))
     throw new AuthorizationError('Access denied');
 
-  await mqttService.pushConfigUpdate(device.imei, config);
+  await mqttService.pushConfigUpdate(device.imei, config, device.data_enabled);
 
   await createAuditLog({
     user_id:       req.user.user_id,

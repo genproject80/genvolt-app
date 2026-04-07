@@ -123,7 +123,7 @@ class MQTTService {
 
     const topic = `cloudsynk/${imei}/config`;
     const payload = {
-      type: 'telemetryConfig',
+      type: 'teleActive',
       isActive: isActive ? 1 : 0,
       timestamp: new Date().toISOString(),
     };
@@ -145,7 +145,7 @@ class MQTTService {
    * Push a config_update to an ACTIVE device.
    * Topic: cloudsynk/<IMEI>/config, retain: false.
    */
-  async pushConfigUpdate(imei, config) {
+  async pushConfigUpdate(imei, config, isActive = 1) {
     if (!this.connected) {
       logger.warn('MQTT not connected — config update not pushed');
       return false;
@@ -156,6 +156,7 @@ class MQTTService {
       type: 'config_update',
       timestamp: new Date().toISOString(),
       ...config,
+      isActive: isActive ? 1 : 0,
     };
 
     return new Promise((resolve, reject) => {
@@ -167,30 +168,6 @@ class MQTTService {
           logger.info(`config_update pushed → ${topic}`);
           resolve(true);
         }
-      });
-    });
-  }
-
-  /**
-   * Send a deactivation notice to a device before clearing its MQTT credentials.
-   * Topic: cloudsynk/<IMEI>/config, retain: false.
-   */
-  async publishDeactivationNotice(imei, reason = 'admin_action') {
-    if (!this.connected) return false;
-
-    const topic = `cloudsynk/${imei}/config`;
-    const payload = {
-      type: 'deactivation_notice',
-      status: 'deactivated',
-      reason,
-      timestamp: new Date().toISOString(),
-    };
-
-    return new Promise((resolve) => {
-      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: false }, (err) => {
-        if (err) logger.error(`Deactivation notice failed on ${topic}:`, err.message);
-        else logger.info(`Deactivation notice sent → ${topic}`);
-        resolve(!err);
       });
     });
   }

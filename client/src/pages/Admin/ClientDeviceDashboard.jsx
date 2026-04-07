@@ -222,30 +222,6 @@ const ClientDeviceDashboard = () => {
                           </button>
                         )}
 
-                        {/* Deactivate (ACTIVE) */}
-                        {isActive && canEditDevice && (
-                          <button
-                            onClick={() => setDeactivateDevice(device)}
-                            disabled={isBusy}
-                            className="p-1.5 rounded text-red-600 hover:bg-red-50 disabled:opacity-40"
-                            title="Deactivate"
-                          >
-                            <NoSymbolIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Reactivate (INACTIVE) */}
-                        {isInactive && canOnboardDevice && (
-                          <button
-                            onClick={() => handleReactivate(device)}
-                            disabled={isBusy}
-                            className="p-1.5 rounded text-blue-600 hover:bg-blue-50 disabled:opacity-40"
-                            title="Reactivate"
-                          >
-                            <ArrowPathIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
                         {/* Pause / Resume (ACTIVE) */}
                         {isActive && canPauseResume && (
                           isPaused ? (

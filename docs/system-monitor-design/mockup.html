@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Monitor - GenVolt Dashboard Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd',
+              400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9',
+              800: '#5b21b6', 900: '#4c1d95',
+            }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .progress-bar { transition: width 1s ease-in-out; }
+    /* Simple SVG chart styles */
+    .chart-bar { transition: height 0.8s ease-out, y 0.8s ease-out; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Layout wrapper -->
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <div class="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg border-r border-gray-200">
+      <div class="flex items-center px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Navigation</h3>
+      </div>
+      <nav class="mt-6 px-3">
+        <div class="space-y-1">
+          <!-- Dashboard -->
+          <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+            Dashboard
+          </a>
+          <!-- Admin Section -->
+          <div>
+            <button class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Admin
+              </div>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="ml-8 mt-1 space-y-1">
+              <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                Users
+              </a>
+              <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008V7.5z"/></svg>
+                Clients
+              </a>
+              <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+                Devices
+              </a>
+              <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5"/></svg>
+                Feature Flags
+              </a>
+              <!-- System Monitor - Active -->
+              <a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-primary-50 text-primary-700">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+                System Monitor
+              </a>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="ml-64 flex-1">
+      <!-- Header -->
+      <header class="bg-white shadow-sm border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-gray-500">Admin</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <span class="text-sm font-medium text-gray-900">System Monitor</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-gray-400">admin@cloudsynk.net</span>
+          <div class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold">SA</div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <main class="p-6 space-y-6 fade-in">
+
+        <!-- Page Header -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">System Monitor</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Real-time system health and performance metrics</p>
+          </div>
+          <div class="flex items-center gap-5">
+            <div class="text-right">
+              <p class="text-xs text-gray-400">Last refreshed</p>
+              <p class="text-sm font-medium text-gray-600" id="lastRefreshed">--:--:--</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-600">Auto-refresh</span>
+              <button id="autoRefreshToggle" onclick="toggleAutoRefresh()" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-primary-600 transition-colors duration-200 ease-in-out focus:outline-none">
+                <span id="autoRefreshDot" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-5"></span>
+              </button>
+            </div>
+            <button onclick="refreshAll()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 1: System Health Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+          <!-- Server Status Card -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="p-2 bg-green-50 rounded-lg">
+                  <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+                </div>
+                <h3 class="text-sm font-medium text-gray-600">Server Status</h3>
+              </div>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot"></span>
+                Online
+              </span>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Uptime</span>
+                <span class="font-medium text-gray-900" id="uptime">3d 14h 22m</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Node.js</span>
+                <span class="font-medium text-gray-900">v20.11.0</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Environment</span>
+                <span class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">production</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Memory Usage Card -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="p-2 bg-blue-50 rounded-lg">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z"/></svg>
+              </div>
+              <h3 class="text-sm font-medium text-gray-600">Memory Usage</h3>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Heap Used</span>
+                <span class="font-medium text-gray-900">42 / 65 MB</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-500 h-2 rounded-full progress-bar" style="width: 64.6%"></div>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">RSS</span>
+                <span class="font-medium text-gray-900">85 MB</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Usage</span>
+                <span class="font-semibold text-blue-600">64.6%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CPU Load Card -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="p-2 bg-amber-50 rounded-lg">
+                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z"/></svg>
+              </div>
+              <h3 class="text-sm font-medium text-gray-600">CPU Load</h3>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500">1 min avg</span>
+                  <span class="font-medium text-gray-900">0.45</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                  <div class="bg-amber-500 h-1.5 rounded-full progress-bar" style="width: 22.5%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500">5 min avg</span>
+                  <span class="font-medium text-gray-900">0.38</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                  <div class="bg-amber-400 h-1.5 rounded-full progress-bar" style="width: 19%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500">15 min avg</span>
+                  <span class="font-medium text-gray-900">0.32</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                  <div class="bg-amber-300 h-1.5 rounded-full progress-bar" style="width: 16%"></div>
+                </div>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">CPU Cores</span>
+                <span class="font-medium text-gray-900">2</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Database Health Card -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="p-2 bg-emerald-50 rounded-lg">
+                  <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+                </div>
+                <h3 class="text-sm font-medium text-gray-600">Database</h3>
+              </div>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot"></span>
+                Healthy
+              </span>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Response Time</span>
+                <span class="font-medium text-green-600">8 ms</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Database</span>
+                <span class="font-medium text-gray-900">GenVolt</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Server</span>
+                <span class="font-medium text-gray-900">SQL Server</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Device Performance + MQTT Broker -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Device Performance Panel -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+              Device Performance
+            </h2>
+
+            <!-- Status Summary -->
+            <div class="grid grid-cols-4 gap-3 mb-5">
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-2xl font-bold text-gray-900">50</p>
+                <p class="text-xs text-gray-500">Total</p>
+              </div>
+              <div class="bg-green-50 rounded-lg p-3 text-center">
+                <p class="text-2xl font-bold text-green-700">35</p>
+                <p class="text-xs text-green-600">Active</p>
+              </div>
+              <div class="bg-red-50 rounded-lg p-3 text-center">
+                <p class="text-2xl font-bold text-red-700">10</p>
+                <p class="text-xs text-red-600">Inactive</p>
+              </div>
+              <div class="bg-amber-50 rounded-lg p-3 text-center">
+                <p class="text-2xl font-bold text-amber-700">5</p>
+                <p class="text-xs text-amber-600">Pending</p>
+              </div>
+            </div>
+
+            <!-- Last Seen Distribution -->
+            <div class="mb-5">
+              <h3 class="text-sm font-medium text-gray-700 mb-3">Last Seen Distribution</h3>
+              <div class="flex items-center gap-4">
+                <!-- Pie Chart (SVG) -->
+                <svg viewBox="0 0 120 120" class="w-28 h-28 flex-shrink-0">
+                  <!-- Last 5 min - green -->
+                  <circle cx="60" cy="60" r="50" fill="transparent" stroke="#10b981" stroke-width="20"
+                    stroke-dasharray="125.66 188.50" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+                  <!-- Last 1 hr - blue -->
+                  <circle cx="60" cy="60" r="50" fill="transparent" stroke="#3b82f6" stroke-width="20"
+                    stroke-dasharray="50.27 263.89" stroke-dashoffset="-125.66" transform="rotate(-90 60 60)"/>
+                  <!-- Last 24 hr - amber -->
+                  <circle cx="60" cy="60" r="50" fill="transparent" stroke="#f59e0b" stroke-width="20"
+                    stroke-dasharray="31.42 282.74" stroke-dashoffset="-175.93" transform="rotate(-90 60 60)"/>
+                  <!-- Over 24 hr - red -->
+                  <circle cx="60" cy="60" r="50" fill="transparent" stroke="#ef4444" stroke-width="20"
+                    stroke-dasharray="12.57 301.59" stroke-dashoffset="-207.35" transform="rotate(-90 60 60)"/>
+                  <!-- Never seen - gray -->
+                  <circle cx="60" cy="60" r="50" fill="transparent" stroke="#9ca3af" stroke-width="20"
+                    stroke-dasharray="94.25 219.91" stroke-dashoffset="-219.92" transform="rotate(-90 60 60)"/>
+                  <circle cx="60" cy="60" r="40" fill="white"/>
+                </svg>
+                <!-- Legend -->
+                <div class="space-y-1.5 text-sm flex-1">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="text-gray-600">Last 5 min</span></div>
+                    <span class="font-semibold text-gray-900">20</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span class="text-gray-600">Last 1 hr</span></div>
+                    <span class="font-semibold text-gray-900">8</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span class="text-gray-600">Last 24 hr</span></div>
+                    <span class="font-semibold text-gray-900">5</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span class="text-gray-600">Over 24 hr</span></div>
+                    <span class="font-semibold text-gray-900">2</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span><span class="text-gray-600">Never seen</span></div>
+                    <span class="font-semibold text-gray-900">15</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Telemetry Rate Bar Chart -->
+            <div>
+              <h3 class="text-sm font-medium text-gray-700 mb-3">Telemetry Rate (last hour, 10-min buckets)</h3>
+              <div class="flex items-end justify-between gap-2 h-32 px-2">
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-500 rounded-t chart-bar" style="height: 60%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:00</span>
+                  <span class="text-xs font-medium text-gray-600">78</span>
+                </div>
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-500 rounded-t chart-bar" style="height: 85%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:10</span>
+                  <span class="text-xs font-medium text-gray-600">112</span>
+                </div>
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-500 rounded-t chart-bar" style="height: 70%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:20</span>
+                  <span class="text-xs font-medium text-gray-600">91</span>
+                </div>
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-500 rounded-t chart-bar" style="height: 95%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:30</span>
+                  <span class="text-xs font-medium text-gray-600">125</span>
+                </div>
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-500 rounded-t chart-bar" style="height: 50%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:40</span>
+                  <span class="text-xs font-medium text-gray-600">65</span>
+                </div>
+                <div class="flex flex-col items-center flex-1">
+                  <div class="w-full bg-primary-400 rounded-t chart-bar" style="height: 30%"></div>
+                  <span class="text-xs text-gray-400 mt-1">:50</span>
+                  <span class="text-xs font-medium text-gray-600">38</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MQTT Broker Panel -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"/></svg>
+              MQTT Broker (EMQX)
+            </h2>
+
+            <!-- Connection Status -->
+            <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-5 flex items-center gap-3">
+              <span class="w-3 h-3 rounded-full bg-green-500 pulse-dot"></span>
+              <div>
+                <p class="text-sm font-medium text-green-800">Connected to EMQX Broker</p>
+                <p class="text-xs text-green-600">mqtt.cloudsynk.net:18083</p>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4 mb-5">
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Connected Clients</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1">35</p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Topics</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1">120</p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Subscriptions</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1">200</p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Retained Messages</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1">48</p>
+              </div>
+            </div>
+
+            <!-- Message Throughput -->
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Message Throughput</h3>
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                    Received
+                  </span>
+                  <span class="font-semibold text-gray-900">50,142</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div class="bg-green-500 h-2 rounded-full progress-bar" style="width: 100%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                    Sent
+                  </span>
+                  <span class="font-semibold text-gray-900">48,200</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div class="bg-blue-500 h-2 rounded-full progress-bar" style="width: 96.1%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-500 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Dropped
+                  </span>
+                  <span class="font-semibold text-red-600">50</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div class="bg-red-500 h-2 rounded-full progress-bar" style="width: 0.1%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Database Metrics + Activity Feed -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Database Metrics Panel -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+              Database Metrics
+            </h2>
+
+            <!-- DB Info -->
+            <div class="grid grid-cols-3 gap-3 mb-5">
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Database</p>
+                <p class="text-sm font-bold text-gray-900 mt-1">GenVolt</p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Size</p>
+                <p class="text-sm font-bold text-gray-900 mt-1">256 MB</p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">Response</p>
+                <p class="text-sm font-bold text-green-600 mt-1">8 ms</p>
+              </div>
+            </div>
+
+            <!-- Connection Pool -->
+            <h3 class="text-sm font-medium text-gray-700 mb-2">Connection Pool</h3>
+            <div class="mb-5">
+              <div class="flex gap-1 h-6 rounded-lg overflow-hidden mb-2">
+                <div class="bg-primary-500 transition-all" style="width: 20%" title="Borrowed: 2"></div>
+                <div class="bg-green-400 transition-all" style="width: 80%" title="Available: 8"></div>
+              </div>
+              <div class="flex justify-between text-xs text-gray-500">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-primary-500"></span> Borrowed: 2</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-green-400"></span> Available: 8</span>
+                <span>Total: 10</span>
+              </div>
+            </div>
+
+            <!-- Table Record Counts -->
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Table Record Counts</h3>
+            <div class="space-y-2.5">
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-600">DeviceTelemetry</span>
+                  <span class="font-medium text-gray-900">1,523,847</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                  <div class="bg-primary-400 h-2 rounded-full" style="width: 100%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-600">audit_log</span>
+                  <span class="font-medium text-gray-900">12,456</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                  <div class="bg-primary-400 h-2 rounded-full" style="width: 0.8%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-600">device</span>
+                  <span class="font-medium text-gray-900">50</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                  <div class="bg-primary-400 h-2 rounded-full" style="width: 0.003%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-600">user</span>
+                  <span class="font-medium text-gray-900">15</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                  <div class="bg-primary-400 h-2 rounded-full" style="width: 0.001%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-600">client</span>
+                  <span class="font-medium text-gray-900">5</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                  <div class="bg-primary-400 h-2 rounded-full" style="width: 0.0003%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity Feed Panel -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Recent Activity
+            </h2>
+
+            <div class="space-y-0 max-h-96 overflow-y-auto" id="activityFeed">
+              <!-- Activity Item 1 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">USER_LOGIN</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">2 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-green-50 text-green-600 mt-1">AUTHENTICATION</span>
+                </div>
+              </div>
+              <!-- Activity Item 2 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">DEVICE_ACTIVATED</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">5 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; Device HK-0042</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-orange-50 text-orange-600 mt-1">DEVICE_MANAGEMENT</span>
+                </div>
+              </div>
+              <!-- Activity Item 3 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">DATA_EXPORT</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">12 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">tech@genvolt.com &middot; IoT_Data_Sick_P3</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-600 mt-1">DATA_ACCESS</span>
+                </div>
+              </div>
+              <!-- Activity Item 4 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">USER_CREATED</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">18 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; new_user@client.com</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-600 mt-1">USER_MANAGEMENT</span>
+                </div>
+              </div>
+              <!-- Activity Item 5 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">DEVICE_PAUSE</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">25 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; Device HY-0018</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-orange-50 text-orange-600 mt-1">DEVICE_MANAGEMENT</span>
+                </div>
+              </div>
+              <!-- Activity Item 6 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-gray-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">FEATURE_FLAG_UPDATED</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">32 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; mqtt_telemetry_subscription</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mt-1">CONFIGURATION</span>
+                </div>
+              </div>
+              <!-- Activity Item 7 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">USER_LOGIN</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">41 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">tech@genvolt.com</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-green-50 text-green-600 mt-1">AUTHENTICATION</span>
+                </div>
+              </div>
+              <!-- Activity Item 8 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">LOGIN_FAILED</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">55 min ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">unknown@test.com &middot; IP: 203.0.113.42</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-red-50 text-red-600 mt-1">SECURITY</span>
+                </div>
+              </div>
+              <!-- Activity Item 9 -->
+              <div class="flex items-start gap-3 py-3 border-b border-gray-100">
+                <span class="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">CREDENTIAL_ROTATION</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">1 hr ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; Device HK-0015</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-orange-50 text-orange-600 mt-1">DEVICE_MANAGEMENT</span>
+                </div>
+              </div>
+              <!-- Activity Item 10 -->
+              <div class="flex items-start gap-3 py-3">
+                <span class="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-gray-900 truncate">CLIENT_CREATED</p>
+                    <span class="text-xs text-gray-400 flex-shrink-0">2 hr ago</span>
+                  </div>
+                  <p class="text-xs text-gray-500">admin@cloudsynk.net &middot; Genvolt UK</p>
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-600 mt-1">CLIENT_MANAGEMENT</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Simulated Auto-Refresh Script -->
+  <script>
+    let autoRefresh = true;
+    let refreshInterval = null;
+
+    function updateTimestamp() {
+      const now = new Date();
+      document.getElementById('lastRefreshed').textContent = now.toLocaleTimeString();
+    }
+
+    function toggleAutoRefresh() {
+      autoRefresh = !autoRefresh;
+      const toggle = document.getElementById('autoRefreshToggle');
+      const dot = document.getElementById('autoRefreshDot');
+
+      if (autoRefresh) {
+        toggle.classList.remove('bg-gray-200');
+        toggle.classList.add('bg-primary-600');
+        dot.classList.remove('translate-x-0');
+        dot.classList.add('translate-x-5');
+        startAutoRefresh();
+      } else {
+        toggle.classList.remove('bg-primary-600');
+        toggle.classList.add('bg-gray-200');
+        dot.classList.remove('translate-x-5');
+        dot.classList.add('translate-x-0');
+        stopAutoRefresh();
+      }
+    }
+
+    function refreshAll() {
+      updateTimestamp();
+      // Simulate a brief loading flash
+      const cards = document.querySelectorAll('.rounded-xl');
+      cards.forEach(card => {
+        card.style.opacity = '0.7';
+        setTimeout(() => { card.style.opacity = '1'; }, 300);
+      });
+    }
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      refreshInterval = setInterval(refreshAll, 30000);
+    }
+
+    function stopAutoRefresh() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+    }
+
+    // Simulate uptime counter
+    let uptimeSeconds = 3 * 86400 + 14 * 3600 + 22 * 60;
+    function updateUptime() {
+      uptimeSeconds++;
+      const d = Math.floor(uptimeSeconds / 86400);
+      const h = Math.floor((uptimeSeconds % 86400) / 3600);
+      const m = Math.floor((uptimeSeconds % 3600) / 60);
+      document.getElementById('uptime').textContent = `${d}d ${h}h ${m}m`;
+    }
+
+    // Initialize
+    updateTimestamp();
+    startAutoRefresh();
+    setInterval(updateUptime, 1000);
+  </script>
+
+</body>
+</html>

@@ -24,6 +24,9 @@ const HKMIDeviceConfig = () => {
     Wheel_Threshold: '',
   });
 
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState({});
+
   // Feedback
   const [message, setMessage] = useState(null); // { type: 'success'|'error', text: '' }
   const [publishing, setPublishing] = useState(false);
@@ -90,6 +93,7 @@ const HKMIDeviceConfig = () => {
     setSearchText(deviceLabel(device));
     setDropdownOpen(false);
     setFormValues({ Motor_ON_Time_sec: '', Motor_OFF_Time_min: '', Wheel_Threshold: '' });
+    setFieldErrors({});
     fetchConfig(device.device_id);
   };
 
@@ -98,14 +102,24 @@ const HKMIDeviceConfig = () => {
     setSearchText('');
     setCurrentConfig(null);
     setFormValues({ Motor_ON_Time_sec: '', Motor_OFF_Time_min: '', Wheel_Threshold: '' });
+    setFieldErrors({});
   };
 
   const handleRefresh = () => {
     if (selectedDeviceId) fetchConfig(selectedDeviceId);
   };
 
+  const FIELD_MAX = { Motor_ON_Time_sec: 20, Motor_OFF_Time_min: 1440, Wheel_Threshold: 99 };
+
   const handleFormChange = (field, value) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
+    // Live validation
+    const max = FIELD_MAX[field];
+    if (max != null && value !== '' && Number(value) > max) {
+      setFieldErrors((prev) => ({ ...prev, [field]: `Maximum allowed value is ${max}` }));
+    } else {
+      setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
+    }
   };
 
   const handlePublish = async (e) => {
@@ -115,6 +129,21 @@ const HKMIDeviceConfig = () => {
     if (!Motor_ON_Time_sec || !Motor_OFF_Time_min || !Wheel_Threshold) {
       setMessage({ type: 'error', text: 'All config fields are required' });
       return;
+    }
+
+    // Validate max values
+    const validationRules = [
+      { field: 'Motor_ON_Time_sec', label: 'Motor ON Time', unit: 'seconds' },
+      { field: 'Motor_OFF_Time_min', label: 'Motor OFF Time', unit: 'minutes' },
+      { field: 'Wheel_Threshold', label: 'Wheel Threshold', unit: '' },
+    ];
+    for (const { field, label, unit } of validationRules) {
+      const max = FIELD_MAX[field];
+      if (max != null && Number(formValues[field]) > max) {
+        setFieldErrors((prev) => ({ ...prev, [field]: `Maximum allowed value is ${max}` }));
+        setMessage({ type: 'error', text: `${label} cannot exceed ${max}${unit ? ` ${unit}` : ''}` });
+        return;
+      }
     }
 
     try {
@@ -280,18 +309,24 @@ const HKMIDeviceConfig = () => {
                 value={formValues.Motor_ON_Time_sec}
                 onChange={(v) => handleFormChange('Motor_ON_Time_sec', v)}
                 placeholder={currentConfig?.Motor_ON_Time_sec?.toString() || ''}
+                max={FIELD_MAX.Motor_ON_Time_sec}
+                error={fieldErrors.Motor_ON_Time_sec}
               />
               <ConfigInput
                 label="Motor OFF Time (min)"
                 value={formValues.Motor_OFF_Time_min}
                 onChange={(v) => handleFormChange('Motor_OFF_Time_min', v)}
                 placeholder={currentConfig?.Motor_OFF_Time_min?.toString() || ''}
+                max={FIELD_MAX.Motor_OFF_Time_min}
+                error={fieldErrors.Motor_OFF_Time_min}
               />
               <ConfigInput
                 label="Wheel Threshold"
                 value={formValues.Wheel_Threshold}
                 onChange={(v) => handleFormChange('Wheel_Threshold', v)}
                 placeholder={currentConfig?.Wheel_Threshold?.toString() || ''}
+                max={FIELD_MAX.Wheel_Threshold}
+                error={fieldErrors.Wheel_Threshold}
               />
               <div className="pt-2">
                 <button
@@ -319,7 +354,7 @@ const ConfigRow = ({ label, value }) => (
 );
 
 /** Editable config input */
-const ConfigInput = ({ label, value, onChange, placeholder }) => (
+const ConfigInput = ({ label, value, onChange, placeholder, max, error }) => (
   <div>
     <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
     <input
@@ -327,10 +362,14 @@ const ConfigInput = ({ label, value, onChange, placeholder }) => (
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border"
+      className={`block w-full rounded-md shadow-sm focus:ring-blue-500 text-sm py-2 px-3 border ${
+        error ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+      }`}
       min="0"
+      max={max}
       required
     />
+    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
   </div>
 );
 

@@ -209,14 +209,6 @@ export const deactivateClientDevices = async (clientId, reason = 'subscription_e
           WHERE client_id = @clientId AND activation_status = 'ACTIVE'
         `);
 
-      // Send MQTT disconnect for each device (non-blocking)
-      for (const deviceId of deviceIds) {
-        try {
-          await mqttService.publishDeactivationNotice(clientId, deviceId, reason);
-        } catch (mqttErr) {
-          logger.warn(`MQTT disconnect failed for device ${deviceId}:`, mqttErr.message);
-        }
-      }
     }
 
     logger.info(`Deactivated ${deviceIds.length} devices for client ${clientId}`);

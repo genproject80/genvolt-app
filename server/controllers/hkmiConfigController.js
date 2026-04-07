@@ -116,7 +116,7 @@ export const publishDeviceConfig = asyncHandler(async (req, res) => {
   scopeReq.input('deviceId', sql.VarChar, deviceId);
 
   const deviceResult = await scopeReq.query(`
-    SELECT id, device_id, imei FROM device
+    SELECT id, device_id, imei, data_enabled FROM device
     WHERE device_id = @deviceId AND client_id IN (${placeholders})
   `);
 
@@ -135,7 +135,7 @@ export const publishDeviceConfig = asyncHandler(async (req, res) => {
 
   // Publish via MQTT
   const topic = `cloudsynk/${imei}/config`;
-  const published = await mqttService.pushConfigUpdate(imei, config);
+  const published = await mqttService.pushConfigUpdate(imei, config, device.data_enabled);
 
   if (!published) {
     return res.status(503).json({

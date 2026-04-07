@@ -795,24 +795,6 @@ const DeviceManagement = () => {
                           <CheckCircleIcon className="w-4 h-4" />
                         </button>
                       )}
-                      {canEditDevice && device.activation_status === 'ACTIVE' && (
-                        <button
-                          onClick={() => handleDeactivateDevice(device)}
-                          className="text-amber-600 hover:text-amber-900 cursor-pointer"
-                          title="Deactivate Device"
-                        >
-                          <NoSymbolIcon className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canEditDevice && device.activation_status === 'INACTIVE' && (
-                        <button
-                          onClick={() => handleReactivateDevice(device)}
-                          className="text-blue-600 hover:text-blue-900 cursor-pointer"
-                          title="Reactivate Device"
-                        >
-                          <ArrowPathIcon className="w-4 h-4" />
-                        </button>
-                      )}
                       {/* Pause — ACTIVE + data_enabled=true/1 (not paused) */}
                       {device.activation_status === 'ACTIVE' && !!device.data_enabled && (
                         <button
