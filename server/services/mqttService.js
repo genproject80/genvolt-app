@@ -125,7 +125,6 @@ class MQTTService {
     const payload = {
       type: 'teleActive',
       isActive: isActive ? 1 : 0,
-      timestamp: new Date().toISOString(),
     };
 
     return new Promise((resolve, reject) => {
@@ -154,7 +153,6 @@ class MQTTService {
     const topic = `cloudsynk/${imei}/config`;
     const payload = {
       type: 'config_update',
-      timestamp: new Date().toISOString(),
       ...config,
       isActive: isActive ? 1 : 0,
     };
