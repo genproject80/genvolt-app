@@ -7,12 +7,12 @@
  *
  * Block layout:
  *   Block 1 (bytes  0-3):  Event type + signal strength (nibbles), motor ON time, motor OFF time, wheel threshold
- *   Block 2 (bytes  4-7):  GPS integer parts — latitude (LE uint16), longitude (LE uint16)
- *   Block 3 (bytes  8-11): Latitude decimal (uint32 BE)
- *   Block 4 (bytes 12-15): Longitude decimal (uint32 BE)
+ *   Block 2 (bytes  4-7):  IMSI part 1 (uint32 BE, concatenated with part 2 → IMSI)
+ *   Block 3 (bytes  8-11): IMSI part 2 (uint32 BE, concatenated with part 1 → IMSI)
+ *   Block 4 (bytes 12-15): Unused
  *   Block 5 (bytes 16-19): Wheels detected (uint16 BE), average current mA (uint16 BE)
  *   Block 6 (bytes 20-23): Min current mA (uint16 BE), max current mA (uint16 BE)
- *   Block 7 (bytes 24-27): Binary flags (byte), reserved (byte), battery voltage mV (uint16 BE)
+ *   Block 7 (bytes 24-27): Binary flags word (uint16 BE: bit15=Train_Passed, bit14=Motor_ON), battery voltage mV (uint16 BE)
  *   Block 8 (bytes 28-31): Debug value (uint32 BE)
  */
 
@@ -26,8 +26,8 @@ const EVENT_TYPE_DESCRIPTIONS = {
   6: 'Event_Invalid',
 };
 
-const TRAIN_PASSED_FLAG_MASK = 0x80; // bit 7
-const MOTOR_ON_FLAG_MASK     = 0x40; // bit 6
+const TRAIN_PASSED_FLAG_MASK = 0x8000; // bit 15 of 2-byte word
+const MOTOR_ON_FLAG_MASK     = 0x4000; // bit 14 of 2-byte word
 
 export function decodeHK(buf) {
   if (buf.length < 32) {
@@ -42,16 +42,10 @@ export function decodeHK(buf) {
   const motorOffTimeMin = buf.readUInt8(2);
   const wheelThreshold  = buf.readUInt8(3);
 
-  // Block 2 — GPS integers with byte-swap (little-endian)
-  const latitudeInteger  = buf.readUInt16LE(4);
-  const longitudeInteger = buf.readUInt16LE(6);
+  // Blocks 2 & 3 — IMSI (concatenate decimal values of both 4-byte parts)
+  const imsi = `${buf.readUInt32BE(4)}${buf.readUInt32BE(8)}`;
 
-  // Block 3 & 4 — GPS decimal parts
-  const latitudeDecimal  = buf.readUInt32BE(8);
-  const longitudeDecimal = buf.readUInt32BE(12);
-
-  const latitude  = parseFloat(`${latitudeInteger}.${latitudeDecimal}`);
-  const longitude = parseFloat(`${longitudeInteger}.${longitudeDecimal}`);
+  // Block 4 (bytes 12-15) — Unused
 
   // Block 5
   const numberOfWheelsDetected   = buf.readUInt16BE(16);
@@ -62,9 +56,9 @@ export function decodeHK(buf) {
   const motorCurrentMaxMa = buf.readUInt16BE(22);
 
   // Block 7
-  const flagsByte        = buf.readUInt8(24);
-  const trainPassedFlag  = (flagsByte & TRAIN_PASSED_FLAG_MASK) ? 1 : 0;
-  const motorOnFlag      = (flagsByte & MOTOR_ON_FLAG_MASK)     ? 1 : 0;
+  const flagsWord        = buf.readUInt16BE(24);
+  const trainPassedFlag  = (flagsWord & TRAIN_PASSED_FLAG_MASK) ? 1 : 0;
+  const motorOnFlag      = (flagsWord & MOTOR_ON_FLAG_MASK)     ? 1 : 0;
   const batteryVoltageMv = buf.readUInt16BE(26);
 
   // Block 8
@@ -78,8 +72,7 @@ export function decodeHK(buf) {
     Motor_ON_Time_sec:          motorOnTimeSec,
     Motor_OFF_Time_min:         motorOffTimeMin,
     Wheel_Threshold:            wheelThreshold,
-    Latitude:                   latitude,
-    Longitude:                  longitude,
+    IMSI:                       imsi,
     Number_of_Wheels_Detected:  numberOfWheelsDetected,
     Motor_Current_Average_mA:   motorCurrentAverageMa,
     Motor_Current_Min_mA:       motorCurrentMinMa,

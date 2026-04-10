@@ -41,8 +41,7 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
         p3.Wheel_Threshold,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,
@@ -135,8 +134,7 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
       // Top level fields for easy access
       Device_ID: deviceData.Device_ID,
       Entry_ID: deviceData.Entry_ID,
-      Latitude: deviceData.Latitude,
-      Longitude: deviceData.Longitude,
+      IMSI: deviceData.IMSI,
       GSM_Signal_Strength: deviceData.Signal_Strength,
       Motor_Current_mA: deviceData.Motor_Current_Average_mA,
       Motor_ON_Time_sec: deviceData.Motor_ON_Time_sec,
@@ -161,8 +159,7 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
 
       communication_gps: {
         gsm_signal: deviceData.Signal_Strength || 0,
-        latitude: deviceData.Latitude,
-        longitude: deviceData.Longitude
+        imsi: deviceData.IMSI
       },
 
       fault_diagnostics: {
@@ -349,8 +346,7 @@ export const getP3DeviceHistory = asyncHandler(async (req, res) => {
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
         p3.Wheel_Threshold,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,

@@ -46,11 +46,6 @@ const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFilter
     return `${current} mA`;
   };
 
-  const formatLocation = (latitude, longitude) => {
-    if (!latitude || !longitude) return 'N/A';
-    return `${parseFloat(latitude).toFixed(4)}, ${parseFloat(longitude).toFixed(4)}`;
-  };
-
   const getMotorStatusBadge = (motorStatus, motorOnFlag) => {
     const isRunning = motorStatus === 'Running' || motorOnFlag === 1 || motorOnFlag === true;
     return {
@@ -201,7 +196,7 @@ const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFilter
                   Wheels Configured
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Location
+                  IMSI Number
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Event Type
@@ -253,9 +248,8 @@ const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFilter
                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                       {row.Wheel_Threshold || 0}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {/* DB columns are swapped - Latitude contains Longitude and vice versa */}
-                      {formatLocation(row.Longitude, row.Latitude)}
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                      {row.IMSI != null ? row.IMSI : 'N/A'}
                     </td>
                     <td className="px-3 py-4 text-sm">
                       <div className="flex flex-col gap-1">
