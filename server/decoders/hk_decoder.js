@@ -19,11 +19,12 @@
 const EVENT_TYPE_DESCRIPTIONS = {
   0: 'Event_Idle',
   1: 'Event_Power_ON',
-  2: 'Event_Train_Pass_Normal',
-  3: 'Event_Train_Pass',
+  2: 'Event_Train_Passed_Motor_ON',
+  3: 'Event_Train_Passed_Motor_OFF',
   4: 'Event_Low_Battery',
   5: 'Event_Heartbit',
-  6: 'Event_Invalid',
+  6: 'Event_CLoud_Config_Update',
+  7: 'Event_Device_Pause_Resume',
 };
 
 const TRAIN_PASSED_FLAG_MASK = 0x8000; // bit 15 of 2-byte word
