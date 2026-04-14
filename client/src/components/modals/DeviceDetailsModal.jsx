@@ -4,7 +4,7 @@ import { useDevice } from '../../context/DeviceContext';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
-  const { getDeviceTransferHistory, loading } = useDevice();
+  const { getDeviceTransferHistory } = useDevice();
   const [transferHistory, setTransferHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -64,9 +64,9 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
               <div>
                 <p className="text-xs text-gray-600">Model</p>
                 <p className="text-sm text-gray-900">
-                  {device.Model ? (
+                  {device.model_number ? (
                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {device.Model}
+                      {device.model_number}
                     </span>
                   ) : (
                     'N/A'

@@ -287,7 +287,7 @@ const P3DataTable = ({ className = "", showDeviceId = true, showMachineId = true
       { key: 'section', label: 'Section', sortable: true, width: 'w-24' },
       { key: 'curve_number', label: 'Curve Number', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'line', label: 'Line', sortable: true, width: 'w-16' },
-      { key: 'gps_location', label: 'GPS Location', sortable: false, width: 'w-32' },
+      { key: 'imsi_number', label: 'IMSI Number', sortable: false, width: 'w-32' },
       { key: 'Signal_Strength', label: 'GSM Strength', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'grease_left', label: 'Grease Left (kg)', sortable: true, width: 'w-20', wrapHeader: true },
       { key: 'Motor_Runs', label: 'Motor Runs', sortable: false, width: 'w-20', wrapHeader: true },
@@ -326,13 +326,8 @@ const P3DataTable = ({ className = "", showDeviceId = true, showMachineId = true
         if (row?.line) return row.line;
         const lineMatch = (row?.machine_id || '').match(/-([A-Z]{2})-/);
         return lineMatch ? lineMatch[1] : '-';
-      case 'gps_location':
-        const lat = row?.Latitude;
-        const lng = row?.Longitude;
-        if (lat && lng && lat !== 0 && lng !== 0) {
-          return `${parseFloat(lat).toFixed(4)},${parseFloat(lng).toFixed(4)}`;
-        }
-        return '-';
+      case 'imsi_number':
+        return row?.IMSI != null ? row.IMSI : '-';
       case 'grease_left':
         return row?.grease_left ? parseFloat(row.grease_left).toFixed(1) : '-';
       case 'Motor_Runs':
@@ -661,8 +656,8 @@ const P3DataTable = ({ className = "", showDeviceId = true, showMachineId = true
                         />
                       ) : column.key === 'grease_left' ? (
                         <GreaseLevel greaseLeft={parseFloat(formatCellValue(row[column.key], column.key, row))} />
-                      ) : column.key === 'gps_location' ? (
-                        <span className="font-mono text-xs text-blue-600">
+                      ) : column.key === 'imsi_number' ? (
+                        <span className="font-mono text-xs text-gray-700">
                           {formatCellValue(row[column.key], column.key, row)}
                         </span>
                       ) : column.key === 'Motor_Runs' || column.key === 'Train_Passed_Count' ? (

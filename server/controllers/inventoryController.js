@@ -2,6 +2,18 @@ import { Inventory } from '../models/Inventory.js';
 import { asyncHandler, ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 
 // ---------------------------------------------------------------------------
+// GET /api/inventory/:modelNumber/next-device-id
+// Preview the next auto-generated device ID for a model (no DB change)
+// ---------------------------------------------------------------------------
+export const getNextDeviceId = asyncHandler(async (req, res) => {
+  const entry = await Inventory.findByModelNumber(req.params.modelNumber);
+  if (!entry) throw new NotFoundError(`Inventory model '${req.params.modelNumber}' not found`);
+
+  const nextId = await Inventory.getNextDeviceId(req.params.modelNumber);
+  res.json({ success: true, data: { device_id: nextId } });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/inventory
 // All inventory entries including inactive (admin view)
 // ---------------------------------------------------------------------------
@@ -40,13 +52,13 @@ export const createInventory = asyncHandler(async (req, res) => {
   if (!display_name)      throw new ValidationError('display_name is required');
   if (!device_id_prefix)  throw new ValidationError('device_id_prefix is required');
 
-  // Validate decoder_logic_ids if provided
+  // Validate decoder_logic_ids — must be a single-element array (1:1 model↔logicId)
   if (decoder_logic_ids !== undefined) {
-    if (!Array.isArray(decoder_logic_ids)) {
-      throw new ValidationError('decoder_logic_ids must be an array of integers');
+    if (!Array.isArray(decoder_logic_ids) || decoder_logic_ids.length !== 1) {
+      throw new ValidationError('decoder_logic_ids must be an array with exactly one integer');
     }
-    if (decoder_logic_ids.some(id => typeof id !== 'number' || !Number.isInteger(id))) {
-      throw new ValidationError('decoder_logic_ids must contain only integers');
+    if (typeof decoder_logic_ids[0] !== 'number' || !Number.isInteger(decoder_logic_ids[0])) {
+      throw new ValidationError('decoder_logic_ids must contain exactly one integer');
     }
   }
 
@@ -76,11 +88,11 @@ export const updateInventory = asyncHandler(async (req, res) => {
 
   const { decoder_logic_ids } = req.body;
   if (decoder_logic_ids !== undefined) {
-    if (!Array.isArray(decoder_logic_ids)) {
-      throw new ValidationError('decoder_logic_ids must be an array of integers');
+    if (!Array.isArray(decoder_logic_ids) || decoder_logic_ids.length !== 1) {
+      throw new ValidationError('decoder_logic_ids must be an array with exactly one integer');
     }
-    if (decoder_logic_ids.some(id => typeof id !== 'number' || !Number.isInteger(id))) {
-      throw new ValidationError('decoder_logic_ids must contain only integers');
+    if (typeof decoder_logic_ids[0] !== 'number' || !Number.isInteger(decoder_logic_ids[0])) {
+      throw new ValidationError('decoder_logic_ids must contain exactly one integer');
     }
   }
 

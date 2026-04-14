@@ -1,20 +1,17 @@
 import mqtt from 'mqtt';
-import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
-import { decode, resolveLogicIds } from '../decoders/decoder.js';
 import { executeQuery, sql } from '../config/database.js';
 import mqttService from './mqttService.js';
 import { Inventory } from '../models/Inventory.js';
 import { FeatureFlag } from '../models/FeatureFlag.js';
+import { handleSickP3 } from '../telemetry/sickP3Handler.js';
+import { handleHyPure } from '../telemetry/hyPureHandler.js';
 import fs from 'fs';
 
 
 class MQTTListenerService {
   constructor() {
     this.client = null;
-    // IMEIs whose retained config topic has already been cleared after first telemetry.
-    // Prevents repeated empty publishes on every telemetry message.
-    this._clearedConfigTopics = new Set();
     // Cached at connect time from the feature flag — avoids a DB hit on every message.
     this._telemetryEnabled = false;
   }
@@ -120,24 +117,27 @@ class MQTTListenerService {
 
     const result = await executeQuery(
       `SELECT device_id, activation_status, mqtt_password_plain
-       FROM dbo.device WHERE imei = @imei`,
+       FROM device WHERE imei = @imei`,
       { imei: { value: String(imei), type: sql.NVarChar } }
     );
 
     if (result.recordset.length === 0) {
-      // New device — auto-register as PENDING
-      // Resolve model_number from payload (optional); use its prefix for the temp device_id
+      // New device — auto-register as PENDING with a counter-based device ID
       const modelNumber = payload?.model_number || null;
-      let prefix = 'GV';
+      let newDeviceId;
       if (modelNumber) {
         try {
-          const inv = await Inventory.findByModelNumber(modelNumber);
-          if (inv?.device_id_prefix) prefix = inv.device_id_prefix;
-        } catch { /* keep default */ }
+          newDeviceId = await Inventory.incrementCounter(modelNumber);
+        } catch (err) {
+          logger.warn(`incrementCounter failed for model=${modelNumber}: ${err.message} — skipping pre-activation`);
+          return;
+        }
+      } else {
+        logger.warn(`Pre-activation IMEI=${imei} has no model_number — cannot auto-generate device ID, skipping`);
+        return;
       }
-      const newDeviceId = prefix + crypto.randomBytes(4).toString('hex').toUpperCase();
       await executeQuery(
-        `INSERT INTO dbo.device (device_id, imei, activation_status, onboarding_date, model_number)
+        `INSERT INTO device (device_id, imei, activation_status, onboarding_date, model_number)
          VALUES ( @deviceId, @imei, 'PENDING', GETUTCDATE(), @modelNumber)`,
         {
           deviceId: { value: newDeviceId, type: sql.NVarChar },
@@ -181,7 +181,7 @@ class MQTTListenerService {
   // Called when an ACTIVE device publishes to cloudsynk/<IMEI>/telemetry
   // -------------------------------------------------------------------------
   async handleTelemetry(imei, payload) {
-    const { deviceId, field1 } = payload;
+    const { deviceId, field1, created_at } = payload;
 
     if (!deviceId) {
       logger.warn(`Telemetry missing deviceId from IMEI=${imei}`);
@@ -192,11 +192,11 @@ class MQTTListenerService {
       return;
     }
 
-    // Resolve logicId(s) from the device's model — device does not send logicId
-    let resolvedIds = [];
+    // Resolve logicId from the device's model — 1:1 relationship (model → logicId)
+    let logicId = null;
     try {
       const deviceRow = await executeQuery(
-        `SELECT model_number FROM dbo.device WHERE device_id = @deviceId`,
+        `SELECT model_number FROM device WHERE device_id = @deviceId`,
         { deviceId: { value: deviceId, type: sql.NVarChar } }
       );
       if (deviceRow.recordset.length === 0) {
@@ -213,9 +213,9 @@ class MQTTListenerService {
         logger.warn(`No inventory entry for model=${modelNumber} device=${deviceId} — dropping`);
         return;
       }
-      resolvedIds = resolveLogicIds(inv.decoderLogicIdsArray, field1);
-      if (resolvedIds.length === 0) {
-        logger.warn(`Payload size (${field1.length / 2}B) matches no decoder for model=${modelNumber} device=${deviceId} — dropping`);
+      logicId = inv.decoderLogicId;
+      if (!logicId) {
+        logger.warn(`No logicId configured for model=${modelNumber} device=${deviceId} — dropping`);
         return;
       }
     } catch (err) {
@@ -223,45 +223,45 @@ class MQTTListenerService {
       return;
     }
 
-    // Decode and store one record per resolved logicId
-    const rawJson = JSON.stringify(payload);
-    for (const logicId of resolvedIds) {
-      let decoded = null;
-      try {
-        decoded = decode(logicId, field1);
-      } catch (err) {
-        logger.warn(`Decoder failed for logicId=${logicId} device=${deviceId}: ${err.message}`);
-      }
+    const createdAt = created_at ? new Date(created_at) : new Date();
+    let entryId;
 
-      await executeQuery(
+    // Insert raw payload into DeviceTelemetry before decoding.
+    // entry_id is generated by dbo.telemetry_entry_id_seq via the column DEFAULT.
+    // decoded_json is populated below after successful handler execution.
+    try {
+      const insertResult = await executeQuery(
         `INSERT INTO dbo.DeviceTelemetry
-           (device_id, imei, logic_id, raw_payload, decoded_data, received_at)
+           (device_id, imei, logic_id, created_at, raw_payload, decoded_json)
+         OUTPUT INSERTED.entry_id
          VALUES
-           (@deviceId, @imei, @logicId, @raw, @decoded, GETUTCDATE())`,
+           (@deviceId, @imei, @logicId, @createdAt, @rawPayload, NULL)`,
         {
-          deviceId: { value: deviceId, type: sql.NVarChar },
-          imei: { value: imei, type: sql.NVarChar },
-          logicId: { value: logicId, type: sql.Int },
-          raw: { value: rawJson, type: sql.NVarChar },
-          decoded: { value: decoded ? JSON.stringify(decoded) : null, type: sql.NVarChar },
+          deviceId:   { value: deviceId,                   type: sql.NVarChar(128) },
+          imei:       { value: String(imei),               type: sql.NVarChar(50) },
+          logicId:    { value: logicId,                    type: sql.Int },
+          createdAt:  { value: createdAt,                  type: sql.DateTime2 },
+          rawPayload: { value: JSON.stringify(payload),    type: sql.NVarChar(sql.MAX) },
         }
       );
-
-      logger.info(`Telemetry stored: device=${deviceId} imei=${imei} logicId=${logicId} (resolved from model)`);
+      entryId = insertResult.recordset[0].entry_id;
+    } catch (err) {
+      logger.error(`DeviceTelemetry raw insert failed for device=${deviceId}: ${err.message}`);
+      // Continue — still attempt decode and device-specific insert
     }
 
-    // Clear the retained activation credential payload from the config topic on first telemetry.
-    // Once the device is sending telemetry it has successfully reconnected with device credentials,
-    // so the pre-activation credential message is no longer needed on the broker.
-    if (!this._clearedConfigTopics.has(imei)) {
-      this._clearedConfigTopics.add(imei);
-      try {
-        await mqttService.publish(`cloudsynk/${imei}/config`, '', { retain: true, qos: 1 });
-        logger.info(`Cleared retained config topic for IMEI=${imei}`);
-      } catch (err) {
-        logger.warn(`Failed to clear retained config topic for IMEI=${imei}: ${err.message}`);
+    try {
+      if (logicId === 1) {
+        await handleSickP3(deviceId, field1, createdAt, entryId);
+      } else if (logicId === 2) {
+        await handleHyPure(deviceId, field1, createdAt, entryId);
+      } else {
+        logger.warn(`No target table mapped for logicId=${logicId} device=${deviceId} — dropping`);
       }
+    } catch (err) {
+      logger.error(`DB insert failed for logicId=${logicId} device=${deviceId}: ${err.message}`);
     }
+
   }
 
   // -------------------------------------------------------------------------

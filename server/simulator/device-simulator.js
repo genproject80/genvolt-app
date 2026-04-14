@@ -7,11 +7,15 @@
  *   2. Wait for telemetryConfig on cloudsynk/<IMEI>/config
  *   3. Reconnect with MQTT credentials from telemetryConfig
  *   4. Publish telemetry payloads on cloudsynk/<IMEI>/telemetry at --interval ms
- *      One message per logicId per interval (logicIds sourced from telemetryConfig or --logicIds)
+ *      One message per logicId per interval (logicIds sourced from telemetryConfig)
+ *
+ * Supported model numbers:
+ *   HK  — P3 SICK sensor (logicId 1, 32-byte payload)
+ *   HY  — P4 HyPure telemetry (logicId 2, 28-byte payload)
  *
  * Usage:
- *   node device-simulator.js --imei 123456789012345 --host 127.0.0.1 --port 1883
- *   node device-simulator.js --imei 123456789012345 --model-number GV-M1 --interval 5000
+ *   node device-simulator.js --imei 123456789012345 --model-number HK
+ *   node device-simulator.js --imei 123456789012345 --model-number HY --interval 5000
  *   node device-simulator.js --help
  *
  * Flags:
@@ -21,7 +25,7 @@
  *   --tls           Use mqtts protocol (default: false)
  *   --no-verify     Skip TLS certificate verification (default: false, dev only)
  *   --pre-pass      Pre-activation broker password (default: PRE_ACTIVATION_SECRET env var)
- *   --model-number  Device model number to announce during pre-activation (required)
+ *   --model-number  Device model number — HK or HY (required)
  *                   Logic IDs are derived from the model number server-side via telemetryConfig
  *   --interval      Telemetry publish interval in ms (default: 10000)
  *   --count         Number of telemetry rounds to send, 0=unlimited (default: 0)
@@ -66,7 +70,7 @@ Options:
   --tls           Use TLS (mqtts)               (default: false)
   --no-verify     Skip TLS cert verification    (default: false, dev only)
   --pre-pass      Pre-activation password       (default: PRE_ACTIVATION_SECRET env var)
-  --model-number  Model number to announce      (required)
+  --model-number  Model number — HK or HY        (required)
                   Logic IDs are derived from the model number server-side
   --interval      Telemetry interval (ms)       (default: 10000)
   --count         Rounds to send (0=∞)          (default: 0)
@@ -113,14 +117,8 @@ let isPaused        = false;
 let activeLogicIds  = [1];
 
 const logicLabel = id => ({
-  1: 'voltage/power',
-  2: 'temperature/humidity',
-  3: 'GPS',
-  4: 'energy-v2/power-factor',
-  5: 'energy+environment',
-  6: 'energy+GPS',
-  7: 'EV-charger',
-  8: 'ultra/all-sensors',
+  1: 'HK/P3-SICK',
+  2: 'HY/P4-HyPure',
 }[id] || `logicId${id}`);
 console.log(`[Simulator] IMEI=${IMEI}  model=${MODEL_NUMBER || '(none)'}  broker=${TLS ? 'mqtts' : 'mqtt'}://${HOST}:${PORT}  interval=${INTERVAL}ms  (logicIds derived from model server-side)`);
 
@@ -323,7 +321,7 @@ function publishTelemetry() {
       if (err) {
         console.error(`[Phase 2] Publish error (${logicLabel(logicId)} payload):`, err.message);
       } else {
-        console.log(`[Phase 2] Telemetry round=${sentCount + 1} type=${logicLabel(logicId)} → field1=${field1}`);
+        console.log(`[Phase 2] Telemetry round=${sentCount + 1} topic=${TELEMETRY_TOPIC} type=${logicLabel(logicId)} → field1=${field1}`);
       }
     });
   }
@@ -334,134 +332,82 @@ function publishTelemetry() {
 // Synthetic hex payloads per logicId
 // ---------------------------------------------------------------------------
 
-// Shared helpers to avoid repetition
-function randEnergy() {
-  const voltage = 3700 + Math.floor(Math.random() * 400);  // 3700–4100 mV
-  const current = 500  + Math.floor(Math.random() * 200);  // 500–700 mA
-  const power   = voltage * current;
-  return { voltage, current, power };
-}
-function randEnv() {
-  const temp     = Math.round((20 + Math.random() * 15) * 100);  // 20–35°C ×100
-  const humidity = Math.round((40 + Math.random() * 40) * 100);  // 40–80% ×100
-  const pressure = 101325 + Math.floor(Math.random() * 2000);    // ~1 atm Pa
-  return { temp, humidity, pressure };
-}
-function randGps() {
-  const lat  = Math.round((28.4 + Math.random() * 0.5) * 1e6);  // ~Delhi
-  const lng  = Math.round((77.1 + Math.random() * 0.5) * 1e6);
-  const alt  = 200 + Math.floor(Math.random() * 50);
-  const spd  = Math.floor(Math.random() * 80);
-  const sats = 6   + Math.floor(Math.random() * 6);
-  return { lat, lng, alt, spd, sats };
-}
-
 function buildHexPayload(logicId) {
   let buf;
 
   if (logicId === 1) {
-    // GV-M1: voltage_mv(2) current_ma(2) power_mw(4) — 8 bytes
-    buf = Buffer.alloc(8);
-    const e = randEnergy();
-    buf.writeUInt16BE(e.voltage, 0);
-    buf.writeUInt16BE(e.current, 2);
-    buf.writeUInt32BE(e.power,   4);
+    // HK — P3 SICK sensor, 32 bytes (64 hex chars)
+    buf = Buffer.alloc(32);
+
+    // Block 1: event type (nibble), signal strength (nibble), motor times, wheel threshold
+    const eventType     = Math.floor(Math.random() * 6);          // 0–5
+    const signalStr     = Math.floor(Math.random() * 7);          // 0–6
+    buf.writeUInt8((eventType << 4) | signalStr, 0);
+    buf.writeUInt8(Math.floor(Math.random() * 60),  1);           // motor ON time sec (0–59)
+    buf.writeUInt8(Math.floor(Math.random() * 30),  2);           // motor OFF time min (0–29)
+    buf.writeUInt8(Math.floor(Math.random() * 100), 3);           // wheel threshold
+
+    // Block 2: GPS integer parts, little-endian (byte-swapped)
+    const latInt = 48 + Math.floor(Math.random() * 4);            // 48–51°
+    const lonInt = 10 + Math.floor(Math.random() * 8);            // 10–17°
+    buf.writeUInt16LE(latInt, 4);
+    buf.writeUInt16LE(lonInt, 6);
+
+    // Block 3 & 4: GPS decimal parts (uint32 BE, treated as decimal fraction)
+    buf.writeUInt32BE(Math.floor(Math.random() * 999999), 8);     // lat decimal
+    buf.writeUInt32BE(Math.floor(Math.random() * 999999), 12);    // lon decimal
+
+    // Block 5: wheels detected, average current mA
+    buf.writeUInt16BE(Math.floor(Math.random() * 8),    16);      // wheels (0–7)
+    buf.writeUInt16BE(200 + Math.floor(Math.random() * 800), 18); // avg current mA
+
+    // Block 6: min / max current mA
+    const minCurrent = 100 + Math.floor(Math.random() * 300);
+    const maxCurrent = minCurrent + Math.floor(Math.random() * 500);
+    buf.writeUInt16BE(minCurrent, 20);
+    buf.writeUInt16BE(maxCurrent, 22);
+
+    // Block 7: flags byte, reserved, battery voltage mV
+    const trainPassed = Math.random() > 0.7 ? 0x80 : 0;
+    const motorOn     = Math.random() > 0.5 ? 0x40 : 0;
+    buf.writeUInt8(trainPassed | motorOn, 24);
+    buf.writeUInt8(0, 25);                                         // reserved
+    buf.writeUInt16BE(3200 + Math.floor(Math.random() * 800), 26); // battery mV (3200–4000)
+
+    // Block 8: debug value
+    buf.writeUInt32BE(Math.floor(Math.random() * 0xFFFFFFFF), 28);
+
     return buf.toString('hex');
   }
 
   if (logicId === 2) {
-    // GV-ENV1: temp_c×100(2s) humidity×100(2u) pressure_pa(4u) — 8 bytes
-    buf = Buffer.alloc(8);
-    const v = randEnv();
-    buf.writeInt16BE(v.temp,      0);
-    buf.writeUInt16BE(v.humidity, 2);
-    buf.writeUInt32BE(v.pressure, 4);
-    return buf.toString('hex');
-  }
+    // HY — P4 HyPure telemetry, 28 bytes (56 hex chars)
+    buf = Buffer.alloc(28);
 
-  if (logicId === 3) {
-    // GV-GPS1: lat×1e6(4s) lng×1e6(4s) altitude_m(2u) speed_kmh(2u) satellites(1u) — 13 bytes
-    buf = Buffer.alloc(13);
-    const g = randGps();
-    buf.writeInt32BE(g.lat,  0);
-    buf.writeInt32BE(g.lng,  4);
-    buf.writeUInt16BE(g.alt, 8);
-    buf.writeUInt16BE(g.spd, 10);
-    buf.writeUInt8(g.sats,   12);
-    return buf.toString('hex');
-  }
+    // Chunk 1: status flags, fault flags, signal strength, unused
+    buf.writeUInt8(Math.floor(Math.random() * 256), 0);           // status flags
+    buf.writeUInt8(Math.floor(Math.random() * 256), 1);           // fault flags
+    buf.writeUInt8(Math.floor(Math.random() * 7),   2);           // signal strength (0–6)
+    buf.writeUInt8(0, 3);                                          // unused
 
-  if (logicId === 4) {
-    // GV-M2: voltage_mv(2) current_ma(2) power_mw(4) power_factor×100(2u) — 10 bytes
-    buf = Buffer.alloc(10);
-    const e = randEnergy();
-    const pf = Math.round((0.85 + Math.random() * 0.14) * 100);  // 85–99 → 0.85–0.99
-    buf.writeUInt16BE(e.voltage, 0);
-    buf.writeUInt16BE(e.current, 2);
-    buf.writeUInt32BE(e.power,   4);
-    buf.writeUInt16BE(pf,        8);
-    return buf.toString('hex');
-  }
+    // Chunk 2: electrical readings (1 byte each)
+    buf.writeUInt8(Math.floor(Math.random() * 21),  4);           // kV value (0–20)
+    buf.writeUInt8(Math.floor(Math.random() * 6),   5);           // mA value (0–5)
+    buf.writeUInt8(Math.floor(Math.random() * 21),  6);           // kV minimum (0–20)
+    buf.writeUInt8(Math.floor(Math.random() * 6),   7);           // mA minimum (0–5)
 
-  if (logicId === 5) {
-    // GV-PRO1: energy(8) + env(8) — 16 bytes
-    buf = Buffer.alloc(16);
-    const e = randEnergy();
-    const v = randEnv();
-    buf.writeUInt16BE(e.voltage,  0);
-    buf.writeUInt16BE(e.current,  2);
-    buf.writeUInt32BE(e.power,    4);
-    buf.writeInt16BE(v.temp,      8);
-    buf.writeUInt16BE(v.humidity, 10);
-    buf.writeUInt32BE(v.pressure, 12);
-    return buf.toString('hex');
-  }
+    // Chunk 3: temperature (°C), pressure (barG)
+    buf.writeUInt16BE(20 + Math.floor(Math.random() * 60),  8);   // temperature (20–79°C)
+    buf.writeUInt16BE(Math.floor(Math.random() * 11),       10);  // pressure (0–10 barG)
 
-  if (logicId === 6) {
-    // GV-FLT1: energy(8) + GPS(13) — 21 bytes
-    buf = Buffer.alloc(21);
-    const e = randEnergy();
-    const g = randGps();
-    buf.writeUInt16BE(e.voltage, 0);
-    buf.writeUInt16BE(e.current, 2);
-    buf.writeUInt32BE(e.power,   4);
-    buf.writeInt32BE(g.lat,      8);
-    buf.writeInt32BE(g.lng,      12);
-    buf.writeUInt16BE(g.alt,     16);
-    buf.writeUInt16BE(g.spd,     18);
-    buf.writeUInt8(g.sats,       20);
-    return buf.toString('hex');
-  }
+    // Chunks 4–6: runtime counters (minutes)
+    buf.writeUInt32BE(Math.floor(Math.random() * 100000),   12);  // motor runtime
+    buf.writeUInt32BE(Math.floor(Math.random() * 500000),   16);  // total runtime
+    buf.writeUInt32BE(Math.floor(Math.random() * 500000),   20);  // device runtime
 
-  if (logicId === 7) {
-    // EV-M1: voltage_mv(2) current_ma(2) power_mw(4) energy_wh(4u) — 12 bytes
-    buf = Buffer.alloc(12);
-    const e  = randEnergy();
-    const wh = 500 + Math.floor(Math.random() * 9500);  // 0.5–10 kWh session
-    buf.writeUInt16BE(e.voltage, 0);
-    buf.writeUInt16BE(e.current, 2);
-    buf.writeUInt32BE(e.power,   4);
-    buf.writeUInt32BE(wh,        8);
-    return buf.toString('hex');
-  }
+    // Chunk 7: debug value
+    buf.writeUInt32BE(Math.floor(Math.random() * 0xFFFFFFFF), 24);
 
-  if (logicId === 8) {
-    // GV-ULTRA1: energy(8) + env(8) + GPS(13) — 29 bytes
-    buf = Buffer.alloc(29);
-    const e = randEnergy();
-    const v = randEnv();
-    const g = randGps();
-    buf.writeUInt16BE(e.voltage,  0);
-    buf.writeUInt16BE(e.current,  2);
-    buf.writeUInt32BE(e.power,    4);
-    buf.writeInt16BE(v.temp,      8);
-    buf.writeUInt16BE(v.humidity, 10);
-    buf.writeUInt32BE(v.pressure, 12);
-    buf.writeInt32BE(g.lat,       16);
-    buf.writeInt32BE(g.lng,       20);
-    buf.writeUInt16BE(g.alt,      24);
-    buf.writeUInt16BE(g.spd,      26);
-    buf.writeUInt8(g.sats,        28);
     return buf.toString('hex');
   }
 

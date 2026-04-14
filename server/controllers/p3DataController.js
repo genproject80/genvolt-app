@@ -184,7 +184,7 @@ export const getP3Data = asyncHandler(async (req, res) => {
     // Validate sort fields for P3
     const allowedSortFields = [
       'Entry_ID', 'CreatedAt', 'Device_ID', 'Signal_Strength',
-      'Event_Type', 'Latitude', 'Longitude', 'Battery_Voltage_mV',
+      'Event_Type', 'IMSI', 'Battery_Voltage_mV',
       'machine_id', 'grease_left', 'last_cof_date', 'last_cof_value'
     ];
 
@@ -231,14 +231,11 @@ export const getP3Data = asyncHandler(async (req, res) => {
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
         p3.Wheel_Threshold,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,
         p3.Motor_Current_Max_mA,
-        p3.Train_Passed_Flag,
-        p3.Motor_ON_Flag,
         p3.Battery_Voltage_mV,
         p3.Debug_Value,
         p3.Timestamp,
@@ -486,14 +483,11 @@ export const exportP3Data = asyncHandler(async (req, res) => {
         p3.Signal_Strength,
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,
         p3.Motor_Current_Max_mA,
-        p3.Train_Passed_Flag,
-        p3.Motor_ON_Flag,
         p3.Battery_Voltage_mV,
         hkmi.machine_id,
         hkmi.sden,

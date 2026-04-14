@@ -79,8 +79,9 @@ class MQTTService {
 
   /**
    * Send telemetryConfig to a device via its IMEI-based config topic.
-   * retain: true — device receives it even after reconnecting.
-   * Used for: initial activation, reactivation, reboot recovery, credential rotation.
+   * retain: false — device must be online and subscribed to receive this.
+   * If missed, re-trigger pre-activation from the device.
+   * Used for: initial activation, reactivation, credential rotation.
    */
   async publishTelemetryConfig(imei, deviceId, plainPassword) {
     if (!this.connected) {
@@ -97,7 +98,7 @@ class MQTTService {
     };
 
     return new Promise((resolve, reject) => {
-      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true }, (err) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: false }, (err) => {
         if (err) {
           logger.error(`telemetryConfig publish failed on ${topic}:`, err.message);
           reject(err);
@@ -110,8 +111,8 @@ class MQTTService {
   }
 
   /**
-   * Push an isActive flag update to a device as a telemetryConfig message.
-   * retain: true — device receives it even after reconnecting.
+   * Push an isActive flag update to a device as a teleActive message.
+   * retain: false — device must be online to receive this.
    * Used for pause (isActive=false) and resume (isActive=true).
    */
   async pushActiveStatus(imei, isActive) {
@@ -122,13 +123,12 @@ class MQTTService {
 
     const topic = `cloudsynk/${imei}/config`;
     const payload = {
-      type: 'telemetryConfig',
+      type: 'teleActive',
       isActive: isActive ? 1 : 0,
-      timestamp: new Date().toISOString(),
     };
 
     return new Promise((resolve, reject) => {
-      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true }, (err) => {
+      this.client.publish(topic, JSON.stringify(payload), { qos: 1, retain: false }, (err) => {
         if (err) {
           logger.error(`Active status publish failed on ${topic}:`, err.message);
           reject(err);

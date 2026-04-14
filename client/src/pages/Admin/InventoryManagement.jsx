@@ -8,17 +8,11 @@ import {
 } from '../../services/inventoryService';
 
 const LOGIC_ID_LABELS = {
-  1: 'Voltage/Power',
-  2: 'Temp/Humidity',
-  3: 'GPS',
-  4: 'Energy v2 + Power Factor',
-  5: 'Energy + Environment',
-  6: 'Energy + GPS',
-  7: 'EV Charger',
-  8: 'Ultra (All Sensors)',
+  1: 'HK — P3 SICK Sensor',
+  2: 'HY — P4 HyPure',
 };
 const logicLabel = (id) => LOGIC_ID_LABELS[id] || `LogicId ${id}`;
-const ALL_LOGIC_IDS = [1, 2, 3, 4, 5, 6, 7, 8];
+const ALL_LOGIC_IDS = [1, 2];
 
 const EMPTY_FORM = {
   model_number: '',
@@ -71,20 +65,15 @@ export default function InventoryManagement() {
     setShowModal(true);
   };
 
-  const toggleLogicId = (id) => {
-    setForm(f => {
-      const ids = f.decoder_logic_ids.includes(id)
-        ? f.decoder_logic_ids.filter(x => x !== id)
-        : [...f.decoder_logic_ids, id].sort((a, b) => a - b);
-      return { ...f, decoder_logic_ids: ids };
-    });
+  const selectLogicId = (id) => {
+    setForm(f => ({ ...f, decoder_logic_ids: [id] }));
   };
 
   const handleSave = async () => {
     if (!form.model_number.trim())     { setError('Model number is required'); return; }
     if (!form.display_name.trim())     { setError('Display name is required'); return; }
     if (!form.device_id_prefix.trim()) { setError('Device ID prefix is required'); return; }
-    if (form.decoder_logic_ids.length === 0) { setError('Select at least one decoder logic ID'); return; }
+    if (form.decoder_logic_ids.length !== 1) { setError('Select exactly one decoder logic ID'); return; }
 
     setSaving(true);
     setError('');
@@ -162,7 +151,7 @@ export default function InventoryManagement() {
                   <th className="px-4 py-3">Model Number</th>
                   <th className="px-4 py-3">Display Name</th>
                   <th className="px-4 py-3">ID Prefix</th>
-                  <th className="px-4 py-3">Decoder Logic IDs</th>
+                  <th className="px-4 py-3">Decoder Logic ID</th>
                   <th className="px-4 py-3">Description</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
@@ -182,16 +171,13 @@ export default function InventoryManagement() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(entry.decoder_logic_ids || []).map(id => (
-                          <span
-                            key={id}
-                            className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium"
-                          >
-                            {id} — {logicLabel(id)}
-                          </span>
-                        ))}
-                      </div>
+                      {entry.decoder_logic_ids?.[0] != null ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
+                          {entry.decoder_logic_ids[0]} — {logicLabel(entry.decoder_logic_ids[0])}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 max-w-xs truncate">{entry.description || '—'}</td>
                     <td className="px-4 py-3">
@@ -286,25 +272,19 @@ export default function InventoryManagement() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">Decoder Logic IDs *</label>
-                <div className="flex flex-wrap gap-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Decoder Logic ID *</label>
+                <select
+                  value={form.decoder_logic_ids[0] ?? ''}
+                  onChange={e => selectLogicId(Number(e.target.value))}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="" disabled>Select decoder…</option>
                   {ALL_LOGIC_IDS.map(id => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => toggleLogicId(id)}
-                      className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                        form.decoder_logic_ids.includes(id)
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
-                      }`}
-                    >
-                      {id} — {logicLabel(id)}
-                    </button>
+                    <option key={id} value={id}>{id} — {logicLabel(id)}</option>
                   ))}
-                </div>
+                </select>
                 <p className="text-xs text-gray-400 mt-1">
-                  The server uses the selected logic IDs to decode telemetry — the device does not send a logic ID.
+                  Each model maps to exactly one decoder. The device does not send a logic ID.
                 </p>
               </div>
 

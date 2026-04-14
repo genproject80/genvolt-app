@@ -16,7 +16,6 @@ export class Device {
     this.TransactionTableID = deviceData.TransactionTableID;
     this.TransactionTableName = deviceData.TransactionTableName;
     this.field_id = deviceData.field_id;
-    this.Model = deviceData.Model;
     this.machin_id = deviceData.machin_id;
     this.client_id = deviceData.client_id;
     this.onboarding_date = deviceData.onboarding_date;
@@ -54,7 +53,7 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           d.model_number,
@@ -93,7 +92,7 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           d.model_number,
@@ -145,6 +144,24 @@ export class Device {
     }
   }
 
+  static async checkImeiExists(imei, excludeId = null) {
+    try {
+      const params = { imei };
+      let query = 'SELECT COUNT(*) as count FROM device WHERE imei = @imei';
+
+      if (excludeId) {
+        query += ' AND id != @excludeId';
+        params.excludeId = excludeId;
+      }
+
+      const result = await executeQuery(query, params);
+      return result.recordset[0].count > 0;
+    } catch (error) {
+      logger.error('Error checking IMEI uniqueness:', error);
+      throw error;
+    }
+  }
+
   /**
    * Find devices by client ID
    * @param {number} clientId - Client ID
@@ -157,7 +174,7 @@ export class Device {
       const offset = (page - 1) * limit;
 
       // Validate sort field
-      const allowedSortFields = ['id', 'device_id', 'Model', 'machin_id', 'onboarding_date'];
+      const allowedSortFields = ['id', 'device_id', 'model_number', 'machin_id', 'onboarding_date'];
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'onboarding_date';
       const validSortOrder = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
@@ -165,7 +182,7 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           d.model_number,
@@ -216,11 +233,6 @@ export class Device {
         });
       }
 
-      if (filters.Model) {
-        conditions.push('d.Model = @Model');
-        params.Model = filters.Model;
-      }
-
       if (filters.model_number) {
         conditions.push('d.model_number = @model_number');
         params.model_number = filters.model_number;
@@ -230,7 +242,6 @@ export class Device {
         conditions.push(`(
           d.device_id LIKE @search OR
           d.imei LIKE @search OR
-          d.Model LIKE @search OR
           d.machin_id LIKE @search OR
           c.name LIKE @search
         )`);
@@ -251,7 +262,7 @@ export class Device {
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       // Validate sort field and order
-      const allowedSortFields = ['id', 'device_id', 'Model', 'machin_id', 'onboarding_date', 'client_name'];
+      const allowedSortFields = ['id', 'device_id', 'model_number', 'machin_id', 'onboarding_date', 'client_name'];
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'onboarding_date';
       const validSortOrder = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
@@ -274,7 +285,7 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           d.model_number,
@@ -327,27 +338,27 @@ export class Device {
     try {
       const query = `
         INSERT INTO device (
-          device_id, channel_id, api_key, conversionLogic_ld,
+          device_id, imei, channel_id, api_key, conversionLogic_ld,
           TransactionTableID, TransactionTableName, field_id,
-          Model, machin_id, client_id, onboarding_date, model_number
+          machin_id, client_id, onboarding_date, model_number
         )
         OUTPUT INSERTED.*
         VALUES (
-          @device_id, @channel_id, @api_key, @conversionLogic_ld,
+          @device_id, @imei, @channel_id, @api_key, @conversionLogic_ld,
           @TransactionTableID, @TransactionTableName, @field_id,
-          @Model, @machin_id, @client_id, @onboarding_date, @model_number
+          @machin_id, @client_id, @onboarding_date, @model_number
         )
       `;
 
       const params = {
         device_id: deviceData.device_id,
+        imei: deviceData.imei,
         channel_id: deviceData.channel_id || null,
         api_key: deviceData.api_key || null,
         conversionLogic_ld: deviceData.conversionLogic_ld || null,
         TransactionTableID: deviceData.TransactionTableID || null,
         TransactionTableName: deviceData.TransactionTableName || null,
         field_id: deviceData.field_id || null,
-        Model: deviceData.Model || null,
         machin_id: deviceData.machin_id || null,
         client_id: deviceData.client_id || null,
         onboarding_date: deviceData.onboarding_date || new Date(),
@@ -381,9 +392,9 @@ export class Device {
 
       // Build dynamic UPDATE query based on provided data
       const allowedFields = [
-        'device_id', 'channel_id', 'api_key', 'conversionLogic_ld',
+        'device_id', 'imei', 'channel_id', 'api_key', 'conversionLogic_ld',
         'TransactionTableID', 'TransactionTableName', 'field_id',
-        'Model', 'machin_id', 'client_id', 'onboarding_date', 'model_number'
+        'machin_id', 'client_id', 'onboarding_date', 'model_number'
       ];
 
       allowedFields.forEach(field => {
@@ -484,7 +495,7 @@ export class Device {
         SELECT
           COUNT(*) as total_devices,
           COUNT(DISTINCT d.client_id) as active_clients,
-          COUNT(DISTINCT d.Model) as unique_models,
+          COUNT(DISTINCT d.model_number) as unique_models,
           COUNT(CASE WHEN d.onboarding_date >= DATEADD(day, -30, GETDATE()) THEN 1 END) as recent_onboardings
         FROM device d
         ${clientFilter}
@@ -496,11 +507,11 @@ export class Device {
       // Get model breakdown
       const modelQuery = `
         SELECT
-          d.Model,
+          d.model_number,
           COUNT(*) as device_count
         FROM device d
         ${clientFilter}
-        GROUP BY d.Model
+        GROUP BY d.model_number
         ORDER BY device_count DESC
       `;
 
@@ -556,14 +567,14 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           c.name as client_name,
           c.email as client_email
         FROM device d
         LEFT JOIN client c ON d.client_id = c.client_id
-        WHERE d.Model = @model ${clientFilter}
+        WHERE d.model_number = @model ${clientFilter}
         ORDER BY d.onboarding_date DESC
       `;
 
@@ -595,7 +606,7 @@ export class Device {
         SELECT
           d.id, d.device_id, d.channel_id, d.api_key, d.conversionLogic_ld,
           d.TransactionTableID, d.TransactionTableName, d.field_id,
-          d.Model, d.machin_id, d.client_id, d.onboarding_date,
+          d.machin_id, d.client_id, d.onboarding_date,
           d.imei, d.activation_status, d.data_enabled, d.paused_by,
           d.device_type, d.firmware_version, d.last_seen,
           c.name as client_name,
@@ -1089,7 +1100,6 @@ export class Device {
       TransactionTableID: this.TransactionTableID,
       TransactionTableName: this.TransactionTableName,
       field_id: this.field_id,
-      Model: this.Model,
       machin_id: this.machin_id,
       client_id: this.client_id,
       onboarding_date: this.onboarding_date,

@@ -41,14 +41,11 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
         p3.Wheel_Threshold,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,
         p3.Motor_Current_Max_mA,
-        p3.Train_Passed_Flag,
-        p3.Motor_ON_Flag,
         p3.Battery_Voltage_mV,
         p3.Debug_Value,
         p3.Timestamp,
@@ -121,8 +118,10 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
       batteryStatus = 'Battery Critical';
     }
 
-    // Calculate motor status
-    const motorStatus = deviceData.Motor_ON_Flag ? 'Running' : 'Stopped';
+    // Calculate motor status from Event_Type (2 = Motor ON, 3 = Motor OFF)
+    const motorStatus = deviceData.Event_Type === 2 ? 'Running'
+                      : deviceData.Event_Type === 3 ? 'Stopped'
+                      : 'Unknown';
 
     // Calculate duty cycle
     const motorOnTime = deviceData.Motor_ON_Time_sec || 0;
@@ -135,8 +134,7 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
       // Top level fields for easy access
       Device_ID: deviceData.Device_ID,
       Entry_ID: deviceData.Entry_ID,
-      Latitude: deviceData.Latitude,
-      Longitude: deviceData.Longitude,
+      IMSI: deviceData.IMSI,
       GSM_Signal_Strength: deviceData.Signal_Strength,
       Motor_Current_mA: deviceData.Motor_Current_Average_mA,
       Motor_ON_Time_sec: deviceData.Motor_ON_Time_sec,
@@ -159,10 +157,9 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
         wheel_threshold: deviceData.Wheel_Threshold || 0
       },
 
-      communication_gps: {
+      communication_imsi: {
         gsm_signal: deviceData.Signal_Strength || 0,
-        latitude: deviceData.Latitude,
-        longitude: deviceData.Longitude
+        imsi: deviceData.IMSI
       },
 
       fault_diagnostics: {
@@ -171,8 +168,6 @@ export const getP3DeviceDetails = asyncHandler(async (req, res) => {
         battery_status: batteryStatus,
         battery_voltage_mv: deviceData.Battery_Voltage_mV,
         motor_status: motorStatus,
-        motor_on_flag: deviceData.Motor_ON_Flag,
-        train_passed_flag: deviceData.Train_Passed_Flag,
         event_type: deviceData.Event_Type,
         event_type_description: deviceData.Event_Type_Description
       },
@@ -349,18 +344,16 @@ export const getP3DeviceHistory = asyncHandler(async (req, res) => {
         p3.Motor_ON_Time_sec,
         p3.Motor_OFF_Time_min,
         p3.Wheel_Threshold,
-        p3.Latitude,
-        p3.Longitude,
+        p3.IMSI,
         p3.Number_of_Wheels_Detected,
         p3.Motor_Current_Average_mA,
         p3.Motor_Current_Min_mA,
         p3.Motor_Current_Max_mA,
-        p3.Train_Passed_Flag,
-        p3.Motor_ON_Flag,
         p3.Battery_Voltage_mV,
         CASE
-          WHEN p3.Motor_ON_Flag = 1 THEN 'Running'
-          ELSE 'Stopped'
+          WHEN p3.Event_Type = 2 THEN 'Running'
+          WHEN p3.Event_Type = 3 THEN 'Stopped'
+          ELSE 'Unknown'
         END AS Motor_Status
       FROM [IoT_Data_Sick_P3] p3
       ${whereClause}

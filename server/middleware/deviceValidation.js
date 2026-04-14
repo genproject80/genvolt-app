@@ -2,6 +2,7 @@ import { body, param, query } from 'express-validator';
 import { handleValidationErrors } from './validation.js';
 import { Device } from '../models/Device.js';
 import { Client } from '../models/Client.js';
+import { Inventory } from '../models/Inventory.js';
 
 /**
  * Validation middleware for device operations
@@ -36,6 +37,34 @@ export const createDeviceValidation = [
       const exists = await Device.checkDeviceIdExists(value);
       if (exists) {
         throw new Error('Device ID already exists');
+      }
+      return true;
+    }),
+
+  body('model_number')
+    .trim()
+    .notEmpty().withMessage('Model number is required')
+    .isLength({ max: 50 }).withMessage('Model number must be less than 50 characters')
+    .custom(async (value) => {
+      const item = await Inventory.findByModelNumber(value);
+      if (!item) {
+        throw new Error('Model number not found in inventory');
+      }
+      if (!item.is_active) {
+        throw new Error('Model number is not active');
+      }
+      return true;
+    }),
+
+  body('imei')
+    .trim()
+    .notEmpty().withMessage('IMEI is required')
+    .isLength({ min: 15, max: 17 }).withMessage('IMEI must be 15–17 characters')
+    .matches(/^\d+$/).withMessage('IMEI must contain only digits')
+    .custom(async (value) => {
+      const exists = await Device.checkImeiExists(value);
+      if (exists) {
+        throw new Error('A device with this IMEI already exists');
       }
       return true;
     }),
@@ -80,11 +109,6 @@ export const createDeviceValidation = [
     .optional()
     .trim()
     .isLength({ max: 100 }).withMessage('Field ID must be less than 100 characters'),
-
-  body('Model')
-    .optional({ values: 'falsy' })
-    .trim()
-    .isLength({ min: 2, max: 100 }).withMessage('Model must be 2-100 characters if provided'),
 
   body('machin_id')
     .optional({ values: 'falsy' })
@@ -125,6 +149,34 @@ export const updateDeviceValidation = [
       return true;
     }),
 
+  body('model_number')
+    .trim()
+    .notEmpty().withMessage('Model number is required')
+    .isLength({ max: 50 }).withMessage('Model number must be less than 50 characters')
+    .custom(async (value) => {
+      const item = await Inventory.findByModelNumber(value);
+      if (!item) {
+        throw new Error('Model number not found in inventory');
+      }
+      if (!item.is_active) {
+        throw new Error('Model number is not active');
+      }
+      return true;
+    }),
+
+  body('imei')
+    .trim()
+    .notEmpty().withMessage('IMEI is required')
+    .isLength({ min: 15, max: 17 }).withMessage('IMEI must be 15–17 characters')
+    .matches(/^\d+$/).withMessage('IMEI must contain only digits')
+    .custom(async (value, { req }) => {
+      const exists = await Device.checkImeiExists(value, parseInt(req.params.deviceId));
+      if (exists) {
+        throw new Error('A device with this IMEI already exists');
+      }
+      return true;
+    }),
+
   body('client_id')
     .optional({ values: 'falsy' })
     .isInt({ min: 1 }).withMessage('Valid client ID required if provided')
@@ -165,11 +217,6 @@ export const updateDeviceValidation = [
     .optional()
     .trim()
     .isLength({ max: 100 }).withMessage('Field ID must be less than 100 characters'),
-
-  body('Model')
-    .optional({ values: 'falsy' })
-    .trim()
-    .isLength({ min: 2, max: 100 }).withMessage('Model must be 2-100 characters if provided'),
 
   body('machin_id')
     .optional({ values: 'falsy' })
@@ -236,11 +283,11 @@ export const validateDeviceFilters = [
     .isInt({ min: 1 })
     .withMessage('Client ID must be a positive integer'),
 
-  query('Model')
+  query('model_number')
     .optional()
     .trim()
-    .isLength({ max: 100 })
-    .withMessage('Model must be less than 100 characters'),
+    .isLength({ max: 50 })
+    .withMessage('model_number must be less than 50 characters'),
 
   query('search')
     .optional()
@@ -282,7 +329,7 @@ export const validateDeviceFilters = [
 
   query('sortBy')
     .optional()
-    .isIn(['id', 'device_id', 'Model', 'machin_id', 'onboarding_date', 'client_name'])
+    .isIn(['id', 'device_id', 'model_number', 'machin_id', 'onboarding_date', 'client_name'])
     .withMessage('Invalid sort field'),
 
   query('sortOrder')

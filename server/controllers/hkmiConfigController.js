@@ -24,7 +24,7 @@ export const getHkmiDevices = asyncHandler(async (req, res) => {
   }).join(',');
 
   const result = await request.query(`
-    SELECT id, device_id, client_id, Model, machin_id, imei, activation_status
+    SELECT id, device_id, client_id, model_number, machin_id, imei, activation_status
     FROM device
     WHERE client_id IN (${placeholders})
     ORDER BY device_id
