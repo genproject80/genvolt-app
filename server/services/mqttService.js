@@ -111,7 +111,7 @@ class MQTTService {
   }
 
   /**
-   * Push an isActive flag update to a device as a telemetryConfig message.
+   * Push an isActive flag update to a device as a teleActive message.
    * retain: false — device must be online to receive this.
    * Used for pause (isActive=false) and resume (isActive=true).
    */
@@ -123,9 +123,8 @@ class MQTTService {
 
     const topic = `cloudsynk/${imei}/config`;
     const payload = {
-      type: 'telemetryConfig',
+      type: 'teleActive',
       isActive: isActive ? 1 : 0,
-      timestamp: new Date().toISOString(),
     };
 
     return new Promise((resolve, reject) => {
