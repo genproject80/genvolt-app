@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+        Master changelog for the GenVolt / CloudSynk platform database.
+
+        Structure:
+          001-ddl.xml  — Baseline DDL: all tables, sequences, indexes, and foreign keys.
+          002-dml.xml  — Baseline DML: seed / reference data (roles, permissions, inventory, …).
+          003-*.xml, … — Future incremental changes go here as new numbered files.
+
+        Usage:
+          liquibase --defaultsFile=liquibase.properties update
+    -->
+
+    <include file="changelogs/001-ddl.xml" relativeToChangelogFile="true"/>
+    <include file="changelogs/002-dml.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

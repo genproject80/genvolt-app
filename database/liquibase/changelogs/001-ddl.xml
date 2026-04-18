@@ -1,0 +1,944 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+        DDL baseline — tables, sequences, indexes, and foreign keys.
+        Represents the complete schema as deployed on prod (decoder-migration branch).
+
+        Tables are created in FK-dependency order.
+        Circular FK dependencies (client ↔ user) are resolved by adding those
+        constraints in separate changesets after both tables exist.
+    -->
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 1 — TABLES WITH NO FK DEPENDENCIES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-001-role" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.[role] (
+                role_id   INT           NOT NULL IDENTITY(1,1),
+                role_name NVARCHAR(100) NOT NULL,
+                CONSTRAINT PK_role PRIMARY KEY (role_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-002-permissions" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.permissions (
+                permission_id   INT           NOT NULL IDENTITY(1,1),
+                permission_name NVARCHAR(100) NOT NULL,
+                CONSTRAINT PK_permissions PRIMARY KEY (permission_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-003-inventory" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.inventory (
+                model_number      NVARCHAR(50)  NOT NULL,
+                display_name      NVARCHAR(100) NOT NULL,
+                device_id_prefix  NVARCHAR(20)  NOT NULL,
+                decoder_logic_ids NVARCHAR(200) NOT NULL DEFAULT ('[]'),
+                description       NVARCHAR(500) NULL,
+                is_active         BIT           NOT NULL DEFAULT (1),
+                created_at        DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at        DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                device_counter    INT           NOT NULL DEFAULT (0),
+                CONSTRAINT PK_inventory PRIMARY KEY (model_number)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-004-payment-plan-legacy" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.payment_plan (
+                id               INT           NOT NULL IDENTITY(1,1),
+                name             NVARCHAR(50)  NOT NULL,
+                device_quota     INT           NOT NULL,
+                price_monthly    DECIMAL(10,2) NOT NULL,
+                price_annual     DECIMAL(10,2) NOT NULL,
+                currency         NVARCHAR(10)  NOT NULL DEFAULT ('INR'),
+                razorpay_plan_id NVARCHAR(100) NULL,
+                features         NVARCHAR(MAX) NULL,
+                is_active        BIT           NOT NULL DEFAULT (1),
+                created_at       DATETIME      NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_payment_plan PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-005-feature-flags" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.FeatureFlags (
+                flag_id      INT           NOT NULL IDENTITY(1,1),
+                flag_name    NVARCHAR(100) NOT NULL,
+                display_name NVARCHAR(200) NOT NULL,
+                description  NVARCHAR(500) NULL,
+                is_enabled   BIT           NOT NULL DEFAULT (0),
+                updated_at   DATETIME      NOT NULL DEFAULT (GETUTCDATE()),
+                updated_by   INT           NULL,
+                CONSTRAINT PK_FeatureFlags      PRIMARY KEY (flag_id),
+                CONSTRAINT UQ_FeatureFlags_name UNIQUE      (flag_name)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-006-device-testing-table-config" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.DeviceTesting_TableConfig (
+                config_id     INT           NOT NULL IDENTITY(1,1),
+                table_key     VARCHAR(50)   NOT NULL,
+                table_name    VARCHAR(100)  NOT NULL,
+                display_name  VARCHAR(100)  NOT NULL,
+                is_active     BIT           DEFAULT (1),
+                icon_name     VARCHAR(50)   DEFAULT ('DocumentTextIcon'),
+                is_exportable BIT           DEFAULT (1),
+                sort_order    INT           DEFAULT (0),
+                column_config NVARCHAR(MAX) NULL,
+                created_at    DATETIME      DEFAULT (GETDATE()),
+                created_by    INT           NULL,
+                updated_at    DATETIME      NULL,
+                updated_by    INT           NULL,
+                CONSTRAINT PK_DeviceTesting_TableConfig     PRIMARY KEY (config_id),
+                CONSTRAINT UQ_DeviceTesting_TableConfig_key UNIQUE      (table_key)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-007-iot-raw-messages" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.IoT_Raw_Messages (
+                Entry_ID  BIGINT        NOT NULL IDENTITY(1,1),
+                CreatedAt DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                Device_ID NVARCHAR(128) NOT NULL,
+                LogicId   INT           NOT NULL,
+                RawJson   NVARCHAR(MAX) NOT NULL,
+                CONSTRAINT PK_IoT_Raw_Messages PRIMARY KEY (Entry_ID)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-008-cloud-dashboard-hkmi" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.cloud_dashboard_hkmi (
+                id                INT           NOT NULL IDENTITY(1,1),
+                device_id         VARCHAR(50)   NOT NULL,
+                machine_id        VARCHAR(255)  NOT NULL,
+                sden              VARCHAR(100)  NULL,
+                den               VARCHAR(100)  NULL,
+                aen               VARCHAR(100)  NULL,
+                sse               VARCHAR(100)  NULL,
+                curve_number      VARCHAR(100)  NULL,
+                line              VARCHAR(50)   NULL,
+                created_at        DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at        DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                grease_left       DECIMAL(18,4) NULL,
+                last_service_date DATE          NULL,
+                div_rly           VARCHAR(100)  NULL,
+                section           VARCHAR(100)  NULL,
+                last_cof_date     DATE          NULL,
+                last_cof_value    DECIMAL(18,4) NULL,
+                CONSTRAINT PK_cloud_dashboard_hkmi PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 2 — CLIENT (no user FKs yet — circular dep resolved below)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-009-client" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.client (
+                client_id                    INT           NOT NULL IDENTITY(1,1),
+                parent_id                    INT           NULL,
+                name                         NVARCHAR(255) NOT NULL,
+                email                        NVARCHAR(255) NOT NULL,
+                phone                        NVARCHAR(20)  NULL,
+                Address                      NVARCHAR(500) NULL,
+                contact_person               NVARCHAR(255) NULL,
+                thinkspeak_subscription_info NVARCHAR(500) NULL,
+                city                         NVARCHAR(100) NULL,
+                state                        NVARCHAR(100) NULL,
+                is_active                    BIT           NOT NULL DEFAULT (1),
+                created_by_user_id           INT           NULL,
+                created_at                   DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at                   DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_by_user_id           INT           NULL,
+                CONSTRAINT PK_client PRIMARY KEY (client_id)
+            )
+        </sql>
+        <rollback>DROP TABLE dbo.client</rollback>
+    </changeSet>
+
+    <changeSet id="baseline-009a-client-self-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_client_ParentClient"
+            baseTableSchemaName="dbo" baseTableName="client" baseColumnNames="parent_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 3 — USER (FK to client + role)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-010-user" author="genvolt" dbms="mssql">
+        <!-- [user] is a reserved word in SQL Server — quoted in the CREATE TABLE -->
+        <sql splitStatements="false">
+            CREATE TABLE dbo.[user] (
+                user_id            INT           NOT NULL IDENTITY(1,1),
+                client_id          INT           NOT NULL,
+                first_name         NVARCHAR(100) NULL,
+                last_name          NVARCHAR(100) NULL,
+                email              NVARCHAR(255) NOT NULL,
+                ph_no              NVARCHAR(20)  NULL,
+                password           NVARCHAR(255) NOT NULL,
+                user_name          NVARCHAR(50)  NOT NULL,
+                is_active          BIT           NOT NULL DEFAULT (1),
+                role_id            INT           NOT NULL,
+                created_by_user_id INT           NULL,
+                created_at         DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at         DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_by_user_id INT           NULL,
+                CONSTRAINT PK_user PRIMARY KEY (user_id)
+            )
+        </sql>
+        <rollback>DROP TABLE dbo.[user]</rollback>
+    </changeSet>
+
+    <changeSet id="baseline-010a-user-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_user_Client"
+            baseTableSchemaName="dbo" baseTableName="user" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_user_Role"
+            baseTableSchemaName="dbo" baseTableName="user" baseColumnNames="role_id"
+            referencedTableSchemaName="dbo" referencedTableName="role" referencedColumnNames="role_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_user_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="user" baseColumnNames="created_by_user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_user_UpdatedBy"
+            baseTableSchemaName="dbo" baseTableName="user" baseColumnNames="updated_by_user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <!-- Now that user exists, add the circular FKs on client -->
+    <changeSet id="baseline-009b-client-user-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_client_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="client" baseColumnNames="created_by_user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_client_UpdatedBy"
+            baseTableSchemaName="dbo" baseTableName="client" baseColumnNames="updated_by_user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 4 — ROLE_PERMISSION JUNCTION TABLE
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-011-role-permission" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.role_permission (
+                role_id       INT NOT NULL,
+                permission_id INT NOT NULL,
+                CONSTRAINT PK_role_permission PRIMARY KEY (role_id, permission_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-011a-role-permission-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_role_permission_Role"
+            baseTableSchemaName="dbo" baseTableName="role_permission" baseColumnNames="role_id"
+            referencedTableSchemaName="dbo" referencedTableName="role" referencedColumnNames="role_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_role_permission_Permission"
+            baseTableSchemaName="dbo" baseTableName="role_permission" baseColumnNames="permission_id"
+            referencedTableSchemaName="dbo" referencedTableName="permissions" referencedColumnNames="permission_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 5 — USER PREFERENCES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-012-user-preferences" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.user_preferences (
+                id               INT           NOT NULL IDENTITY(1,1),
+                user_id          INT           NOT NULL,
+                client_id        INT           NOT NULL,
+                preference_name  NVARCHAR(255) NOT NULL,
+                preference_value NVARCHAR(255) NOT NULL,
+                CONSTRAINT PK_user_preferences PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-012a-user-preferences-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_user_preferences_Client"
+            baseTableSchemaName="dbo" baseTableName="user_preferences" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_user_preferences_User"
+            baseTableSchemaName="dbo" baseTableName="user_preferences" baseColumnNames="user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 6 — LEGACY PAYMENT TABLES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-013-client-subscription-legacy" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.client_subscription (
+                id                       INT           NOT NULL IDENTITY(1,1),
+                client_id                INT           NOT NULL,
+                plan_id                  INT           NOT NULL,
+                status                   NVARCHAR(20)  NOT NULL DEFAULT ('trialing'),
+                razorpay_subscription_id NVARCHAR(100) NULL,
+                billing_cycle            NVARCHAR(10)  NOT NULL DEFAULT ('monthly'),
+                current_period_start     DATETIME      NULL,
+                current_period_end       DATETIME      NULL,
+                grace_period_end         DATETIME      NULL,
+                trial_end                DATETIME      NULL,
+                cancelled_at             DATETIME      NULL,
+                created_at               DATETIME      NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at               DATETIME      NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_client_subscription PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-013a-client-subscription-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_client_subscription_Plan"
+            baseTableSchemaName="dbo" baseTableName="client_subscription" baseColumnNames="plan_id"
+            referencedTableSchemaName="dbo" referencedTableName="payment_plan" referencedColumnNames="id"/>
+    </changeSet>
+
+    <changeSet id="baseline-014-payment-transaction-legacy" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.payment_transaction (
+                id                 INT           NOT NULL IDENTITY(1,1),
+                client_id          INT           NOT NULL,
+                subscription_id    INT           NULL,
+                gateway            NVARCHAR(20)  NOT NULL,
+                gateway_payment_id NVARCHAR(100) NOT NULL,
+                amount             DECIMAL(10,2) NOT NULL,
+                currency           NVARCHAR(10)  NOT NULL DEFAULT ('INR'),
+                status             NVARCHAR(20)  NOT NULL,
+                event_type         NVARCHAR(50)  NOT NULL,
+                raw_payload        NVARCHAR(MAX) NULL,
+                created_at         DATETIME      NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_payment_transaction PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-014a-payment-transaction-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_payment_transaction_Subscription"
+            baseTableSchemaName="dbo" baseTableName="payment_transaction" baseColumnNames="subscription_id"
+            referencedTableSchemaName="dbo" referencedTableName="client_subscription" referencedColumnNames="id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 7 — DEVICE (all columns including those added in migrations)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-015-device" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.device (
+                id                        INT           NOT NULL IDENTITY(1,1),
+                device_id                 NVARCHAR(100) NULL,
+                channel_id                NVARCHAR(100) NULL,
+                api_key                   NVARCHAR(255) NULL,
+                conversionLogic_ld        NVARCHAR(MAX) NULL,
+                TransactionTableID        INT           NULL,
+                TransactionTableName      NVARCHAR(255) NULL,
+                field_id                  NVARCHAR(100) NULL,
+                machin_id                 NVARCHAR(100) NULL,
+                client_id                 INT           NULL,
+                onboarding_date           DATETIME2     NULL,
+                ingest_endpoint           NVARCHAR(MAX) NULL,
+                user_func_config          NVARCHAR(MAX) NULL,
+                activation_status         NVARCHAR(20)  NOT NULL DEFAULT ('PENDING'),
+                mqtt_password             NVARCHAR(255) NULL,
+                mqtt_username             NVARCHAR(100) NULL,
+                device_type               NVARCHAR(50)  NULL,
+                firmware_version          NVARCHAR(50)  NULL,
+                mac_address               NVARCHAR(50)  NULL,
+                first_seen                DATETIME      NULL,
+                last_seen                 DATETIME      NULL,
+                activated_at              DATETIME      NULL,
+                activated_by              INT           NULL,
+                deactivated_at            DATETIME      NULL,
+                deactivated_by            INT           NULL,
+                subscription_id           INT           NULL,
+                data_enabled              BIT           NOT NULL DEFAULT (1),
+                paused_by                 NVARCHAR(20)  NULL,
+                paused_at                 DATETIME2     NULL,
+                paused_reason             NVARCHAR(500) NULL,
+                imei                      NVARCHAR(20)  NULL,
+                mqtt_password_plain       NVARCHAR(100) NULL,
+                activation_blocked_reason NVARCHAR(200) NULL,
+                model_number              NVARCHAR(50)  NULL,
+                CONSTRAINT PK_device    PRIMARY KEY (id),
+                CONSTRAINT UQ_device_id UNIQUE      (device_id)
+            )
+        </sql>
+        <rollback>DROP TABLE dbo.device</rollback>
+    </changeSet>
+
+    <changeSet id="baseline-015a-device-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_device_Client"
+            baseTableSchemaName="dbo" baseTableName="device" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_device_inventory"
+            baseTableSchemaName="dbo" baseTableName="device" baseColumnNames="model_number"
+            referencedTableSchemaName="dbo" referencedTableName="inventory" referencedColumnNames="model_number"/>
+        <addForeignKeyConstraint
+            constraintName="FK_device_Subscription"
+            baseTableSchemaName="dbo" baseTableName="device" baseColumnNames="subscription_id"
+            referencedTableSchemaName="dbo" referencedTableName="client_subscription" referencedColumnNames="id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 8 — AUDIT LOG + DASHBOARD
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-016-audit-log" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.audit_log (
+                audit_id      BIGINT         NOT NULL IDENTITY(1,1),
+                user_id       INT            NULL,
+                activity_type NVARCHAR(100)  NOT NULL,
+                action        NVARCHAR(255)  NOT NULL,
+                message       NVARCHAR(1000) NULL,
+                target_type   NVARCHAR(100)  NULL,
+                target_id     INT            NULL,
+                details       NVARCHAR(MAX)  NULL,
+                ip_address    NVARCHAR(45)   NULL,
+                user_agent    NVARCHAR(500)  NULL,
+                created_at    DATETIME2      NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_audit_log PRIMARY KEY (audit_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-016a-audit-log-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_audit_log_User"
+            baseTableSchemaName="dbo" baseTableName="audit_log" baseColumnNames="user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <changeSet id="baseline-017-dashboard" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.dashboard (
+                id           INT            NOT NULL IDENTITY(1,1),
+                name         NVARCHAR(255)  NOT NULL,
+                display_name NVARCHAR(255)  NOT NULL,
+                description  NVARCHAR(1000) NULL,
+                client_id    NVARCHAR(MAX)  NULL,
+                is_active    BIT            NOT NULL DEFAULT (1),
+                created_by   INT            NOT NULL,
+                created_at   DATETIME2      NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_dashboard PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-017a-dashboard-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_dashboard_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="dashboard" baseColumnNames="created_by"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 9 — IoT DATA TABLES (depend on device)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-018-iot-data-new" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.iot_data_new (
+                id                BIGINT        NOT NULL IDENTITY(1,1),
+                device_id         INT           NOT NULL,
+                timestamp         DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                sensor_type       NVARCHAR(100) NULL,
+                sensor_value      DECIMAL(18,4) NULL,
+                unit              NVARCHAR(50)  NULL,
+                quality_indicator INT           NULL,
+                data_json         NVARCHAR(MAX) NULL,
+                created_at        DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_iot_data_new PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-018a-iot-data-new-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_iot_data_new_Device"
+            baseTableSchemaName="dbo" baseTableName="iot_data_new" baseColumnNames="device_id"
+            referencedTableSchemaName="dbo" referencedTableName="device" referencedColumnNames="id"/>
+    </changeSet>
+
+    <changeSet id="baseline-019-client-device" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.client_device (
+                id            INT       NOT NULL IDENTITY(1,1),
+                seller_id     INT       NOT NULL,
+                buyer_id      INT       NOT NULL,
+                device_id     INT       NOT NULL,
+                transfer_date DATETIME2 NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_client_device PRIMARY KEY (id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-019a-client-device-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_client_device_Seller"
+            baseTableSchemaName="dbo" baseTableName="client_device" baseColumnNames="seller_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_client_device_Buyer"
+            baseTableSchemaName="dbo" baseTableName="client_device" baseColumnNames="buyer_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_client_device_Device"
+            baseTableSchemaName="dbo" baseTableName="client_device" baseColumnNames="device_id"
+            referencedTableSchemaName="dbo" referencedTableName="device" referencedColumnNames="id"/>
+    </changeSet>
+
+    <!-- IoT_Data_Sick — P1/P2 SICK sensor data (Device_ID is a string FK to device.device_id) -->
+    <changeSet id="baseline-020-iot-data-sick" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.IoT_Data_Sick (
+                Entry_ID                    BIGINT        NOT NULL IDENTITY(1,1),
+                Device_ID                   NVARCHAR(50)  NOT NULL,
+                CreatedAt                   DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                MessageType                 NVARCHAR(50)  NULL,
+                HexField                    NVARCHAR(MAX) NULL,
+                GSM_Signal_Strength         INT           NULL,
+                Motor_ON_Time_sec           INT           NULL,
+                Motor_OFF_Time_sec          INT           NULL,
+                Motor_OFF_Time_min          INT           NULL,
+                Number_of_Wheels_Configured INT           NULL,
+                Number_of_Wheels_Detected   INT           NULL,
+                Latitude                    DECIMAL(10,6) NULL,
+                Longitude                   DECIMAL(10,6) NULL,
+                Fault_Code                  NVARCHAR(50)  NULL,
+                Motor_Current_mA            INT           NULL,
+                Timestamp                   DATETIME2     NULL,
+                InsertedAt                  DATETIME2     NULL DEFAULT (GETUTCDATE()),
+                Train_Passed                BIT           NULL,
+                FaultDescriptions           NVARCHAR(MAX) NULL,
+                Debug_Value                 BIGINT        NULL,
+                CONSTRAINT PK_IoT_Data_Sick PRIMARY KEY (Entry_ID)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-020a-iot-data-sick-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_iot_data_sick_Device"
+            baseTableSchemaName="dbo" baseTableName="IoT_Data_Sick" baseColumnNames="Device_ID"
+            referencedTableSchemaName="dbo" referencedTableName="device" referencedColumnNames="device_id"/>
+    </changeSet>
+
+    <!-- IoT_Data_Sick_P3 — HK device (logicId 1) — current schema after all p3 migrations -->
+    <changeSet id="baseline-021-iot-data-sick-p3" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.IoT_Data_Sick_P3 (
+                Entry_ID                  BIGINT        NOT NULL,
+                CreatedAt                 DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                Device_ID                 NVARCHAR(128) NOT NULL,
+                HexField                  NVARCHAR(MAX) NULL,
+                Event_Type                INT           NULL,
+                Event_Type_Description    NVARCHAR(50)  NULL,
+                Signal_Strength           INT           NULL,
+                Motor_ON_Time_sec         INT           NULL,
+                Motor_OFF_Time_min        INT           NULL,
+                Wheel_Threshold           INT           NULL,
+                IMSI                      NVARCHAR(20)  NULL,
+                Number_of_Wheels_Detected INT           NULL,
+                Motor_Current_Average_mA  INT           NULL,
+                Motor_Current_Min_mA      INT           NULL,
+                Motor_Current_Max_mA      INT           NULL,
+                Battery_Voltage_mV        INT           NULL,
+                Debug_Value               BIGINT        NULL,
+                Timestamp                 DATETIME2     NULL,
+                CONSTRAINT PK_IoT_Data_Sick_P3 PRIMARY KEY (Entry_ID)
+            )
+        </sql>
+    </changeSet>
+
+    <!-- IoT_Data_HyPure — HY device (logicId 2) -->
+    <changeSet id="baseline-022-iot-data-hypure" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.IoT_Data_HyPure (
+                Entry_ID               BIGINT        NOT NULL,
+                CreatedAt              DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                Device_ID              NVARCHAR(128) NOT NULL,
+                HexField               NVARCHAR(500) NULL,
+                Oil_Level              BIT           NULL,
+                Limit_Switch           BIT           NULL,
+                Spark                  BIT           NULL,
+                Motor_Trip             BIT           NULL,
+                Buzzer                 BIT           NULL,
+                HVS                    BIT           NULL,
+                Motor_Reverse          BIT           NULL,
+                Motor_Forward          BIT           NULL,
+                Oil_Level_2            BIT           NULL,
+                Tank_Pressure          BIT           NULL,
+                Motor_Trip_Fault       BIT           NULL,
+                Moisture_Contamination BIT           NULL,
+                HVS_OFF                BIT           NULL,
+                Change_Collector       BIT           NULL,
+                Pump_Suction           BIT           NULL,
+                Drain_Period_Over      BIT           NULL,
+                Signal_Strength        INT           NULL,
+                kV_Value               INT           NULL,
+                mA_Value               INT           NULL,
+                kV_Minimum             INT           NULL,
+                mA_Minimum             INT           NULL,
+                Temperature            INT           NULL,
+                Pressure               INT           NULL,
+                Motor_Runtime_Min      INT           NULL,
+                Total_Runtime_Min      INT           NULL,
+                Device_Runtime_Min     INT           NULL,
+                Debug_Value            BIGINT        NULL,
+                Timestamp              DATETIME2     NULL,
+                CONSTRAINT PK_IoT_Data_HyPure PRIMARY KEY (Entry_ID)
+            )
+        </sql>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 10 — SUBSCRIPTION TABLES (depend on client + user)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-023-subscription-plans" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.SubscriptionPlans (
+                plan_id                  INT           NOT NULL IDENTITY(1,1),
+                name                     NVARCHAR(100) NOT NULL,
+                description              NVARCHAR(500) NULL,
+                max_devices              INT           NOT NULL,
+                price_monthly            DECIMAL(10,2) NOT NULL,
+                price_yearly             DECIMAL(10,2) NOT NULL,
+                grace_days               INT           NOT NULL DEFAULT (7),
+                features                 NVARCHAR(MAX) NULL,
+                razorpay_plan_id_monthly NVARCHAR(100) NULL,
+                razorpay_plan_id_yearly  NVARCHAR(100) NULL,
+                is_active                BIT           NOT NULL DEFAULT (1),
+                created_at               DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at               DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_by               INT           NULL,
+                CONSTRAINT PK_SubscriptionPlans PRIMARY KEY (plan_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-023a-subscription-plans-fk" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_SubscriptionPlans_UpdatedBy"
+            baseTableSchemaName="dbo" baseTableName="SubscriptionPlans" baseColumnNames="updated_by"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <changeSet id="baseline-024-client-subscriptions" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.ClientSubscriptions (
+                subscription_id          INT           NOT NULL IDENTITY(1,1),
+                client_id                INT           NOT NULL,
+                plan_id                  INT           NOT NULL,
+                status                   NVARCHAR(20)  NOT NULL DEFAULT ('PENDING'),
+                billing_cycle            NVARCHAR(10)  NOT NULL DEFAULT ('monthly'),
+                start_date               DATETIME2     NULL,
+                end_date                 DATETIME2     NULL,
+                grace_end_date           DATETIME2     NULL,
+                razorpay_subscription_id NVARCHAR(100) NULL,
+                razorpay_customer_id     NVARCHAR(100) NULL,
+                auto_renew               BIT           NOT NULL DEFAULT (1),
+                cancelled_at             DATETIME2     NULL,
+                cancellation_reason      NVARCHAR(500) NULL,
+                created_at               DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at               DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                created_by_user_id       INT           NULL,
+                assignment_type          NVARCHAR(20)  NOT NULL DEFAULT ('PAYMENT'),
+                assigned_by_admin_id     INT           NULL,
+                admin_notes              NVARCHAR(500) NULL,
+                CONSTRAINT PK_ClientSubscriptions PRIMARY KEY (subscription_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-024a-client-subscriptions-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_ClientSubscriptions_Client"
+            baseTableSchemaName="dbo" baseTableName="ClientSubscriptions" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientSubscriptions_Plan"
+            baseTableSchemaName="dbo" baseTableName="ClientSubscriptions" baseColumnNames="plan_id"
+            referencedTableSchemaName="dbo" referencedTableName="SubscriptionPlans" referencedColumnNames="plan_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientSubscriptions_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="ClientSubscriptions" baseColumnNames="created_by_user_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientSubscriptions_AssignedBy"
+            baseTableSchemaName="dbo" baseTableName="ClientSubscriptions" baseColumnNames="assigned_by_admin_id"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <changeSet id="baseline-025-payment-transactions" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.PaymentTransactions (
+                transaction_id      INT           NOT NULL IDENTITY(1,1),
+                subscription_id     INT           NOT NULL,
+                client_id           INT           NOT NULL,
+                razorpay_order_id   NVARCHAR(100) NULL,
+                razorpay_payment_id NVARCHAR(100) NULL,
+                razorpay_signature  NVARCHAR(500) NULL,
+                amount              DECIMAL(10,2) NOT NULL,
+                currency            NVARCHAR(5)   NOT NULL DEFAULT ('INR'),
+                status              NVARCHAR(20)  NOT NULL DEFAULT ('PENDING'),
+                payment_mode        NVARCHAR(50)  NULL,
+                failure_reason      NVARCHAR(500) NULL,
+                invoice_number      NVARCHAR(50)  NULL,
+                created_at          DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at          DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                CONSTRAINT PK_PaymentTransactions PRIMARY KEY (transaction_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-025a-payment-transactions-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_PaymentTransactions_Subscription"
+            baseTableSchemaName="dbo" baseTableName="PaymentTransactions" baseColumnNames="subscription_id"
+            referencedTableSchemaName="dbo" referencedTableName="ClientSubscriptions" referencedColumnNames="subscription_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_PaymentTransactions_Client"
+            baseTableSchemaName="dbo" baseTableName="PaymentTransactions" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+    </changeSet>
+
+    <changeSet id="baseline-026-client-discounts" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.ClientDiscounts (
+                discount_id      INT           NOT NULL IDENTITY(1,1),
+                client_id        INT           NOT NULL,
+                discount_type    NVARCHAR(20)  NOT NULL,
+                discount_value   DECIMAL(10,2) NOT NULL,
+                is_used          BIT           NOT NULL DEFAULT (0),
+                created_by       INT           NOT NULL,
+                created_at       DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                applied_at       DATETIME2     NULL,
+                applied_to_order NVARCHAR(100) NULL,
+                CONSTRAINT PK_ClientDiscounts PRIMARY KEY (discount_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-026a-client-discounts-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_ClientDiscounts_Client"
+            baseTableSchemaName="dbo" baseTableName="ClientDiscounts" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientDiscounts_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="ClientDiscounts" baseColumnNames="created_by"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <changeSet id="baseline-027-client-topic-config" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.ClientTopicConfig (
+                config_id             INT           NOT NULL IDENTITY(1,1),
+                client_id             INT           NOT NULL,
+                topic_prefix          NVARCHAR(200) NOT NULL DEFAULT ('cloudsynk'),
+                telemetry_suffix      NVARCHAR(200) NOT NULL DEFAULT ('telemetry'),
+                config_suffix         NVARCHAR(200) NOT NULL DEFAULT ('config'),
+                device_type_overrides NVARCHAR(MAX) NULL,
+                created_by            INT           NOT NULL,
+                created_at            DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_at            DATETIME2     NOT NULL DEFAULT (GETUTCDATE()),
+                updated_by            INT           NULL,
+                CONSTRAINT PK_ClientTopicConfig       PRIMARY KEY (config_id),
+                CONSTRAINT UQ_ClientTopicConfig_client UNIQUE      (client_id)
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="baseline-027a-client-topic-config-fks" author="genvolt" dbms="mssql">
+        <addForeignKeyConstraint
+            constraintName="FK_ClientTopicConfig_Client"
+            baseTableSchemaName="dbo" baseTableName="ClientTopicConfig" baseColumnNames="client_id"
+            referencedTableSchemaName="dbo" referencedTableName="client" referencedColumnNames="client_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientTopicConfig_CreatedBy"
+            baseTableSchemaName="dbo" baseTableName="ClientTopicConfig" baseColumnNames="created_by"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+        <addForeignKeyConstraint
+            constraintName="FK_ClientTopicConfig_UpdatedBy"
+            baseTableSchemaName="dbo" baseTableName="ClientTopicConfig" baseColumnNames="updated_by"
+            referencedTableSchemaName="dbo" referencedTableName="user" referencedColumnNames="user_id"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 11 — SEQUENCES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <!-- device_id_seq: referenced by app code (NEXT VALUE FOR) for device ID generation -->
+    <changeSet id="baseline-028-device-id-seq" author="genvolt" dbms="mssql">
+        <createSequence
+            sequenceName="device_id_seq"
+            schemaName="dbo"
+            dataType="INT"
+            startValue="1"
+            incrementBy="1"
+            minValue="1"
+            cycle="false"
+            cacheSize="50"/>
+    </changeSet>
+
+    <!-- telemetry_entry_id_seq: provides entry_id for DeviceTelemetry (survives table drops) -->
+    <changeSet id="baseline-029-telemetry-entry-id-seq" author="genvolt" dbms="mssql">
+        <createSequence
+            sequenceName="telemetry_entry_id_seq"
+            schemaName="dbo"
+            dataType="BIGINT"
+            startValue="1"
+            incrementBy="1"
+            cycle="false"/>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 12 — DEVICE TELEMETRY (uses sequence for entry_id default)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-030-device-telemetry" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            CREATE TABLE dbo.DeviceTelemetry (
+                entry_id     BIGINT        NOT NULL DEFAULT (NEXT VALUE FOR dbo.telemetry_entry_id_seq),
+                device_id    NVARCHAR(128) NOT NULL,
+                imei         NVARCHAR(50)  NOT NULL,
+                logic_id     INT           NOT NULL,
+                created_at   DATETIME2     NOT NULL,
+                raw_payload  NVARCHAR(MAX) NOT NULL,
+                decoded_json NVARCHAR(MAX) NULL,
+                CONSTRAINT PK_DeviceTelemetry PRIMARY KEY (entry_id)
+            )
+        </sql>
+        <rollback>DROP TABLE dbo.DeviceTelemetry</rollback>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PART 13 — INDEXES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-031-idx-device-activation-status" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="device" indexName="IX_device_activation_status">
+            <column name="activation_status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-032-idx-device-mqtt-username" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="device" indexName="IX_device_mqtt_username">
+            <column name="mqtt_username"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Filtered unique indexes — use raw sql as createIndex does not support WHERE clause -->
+    <changeSet id="baseline-033-idx-device-imei" author="genvolt" dbms="mssql">
+        <sql>CREATE UNIQUE INDEX IX_device_imei ON dbo.device (imei) WHERE imei IS NOT NULL</sql>
+    </changeSet>
+
+    <changeSet id="baseline-034-idx-device-model-number" author="genvolt" dbms="mssql">
+        <sql>CREATE INDEX IX_device_model_number ON dbo.device (model_number) WHERE model_number IS NOT NULL</sql>
+    </changeSet>
+
+    <changeSet id="baseline-035-idx-clientsubs-client" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="ClientSubscriptions" indexName="IX_ClientSubscriptions_client">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-036-idx-clientsubs-status" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="ClientSubscriptions" indexName="IX_ClientSubscriptions_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-037-idx-clientsubs-end-date" author="genvolt" dbms="mssql">
+        <sql>CREATE INDEX IX_ClientSubscriptions_end_date ON dbo.ClientSubscriptions (end_date) WHERE status IN ('ACTIVE', 'GRACE')</sql>
+    </changeSet>
+
+    <changeSet id="baseline-038-idx-payments-client" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="PaymentTransactions" indexName="IX_PaymentTransactions_client">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-039-idx-payments-subscription" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="PaymentTransactions" indexName="IX_PaymentTransactions_subscription">
+            <column name="subscription_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-040-idx-payments-razorpay-order" author="genvolt" dbms="mssql">
+        <sql>CREATE UNIQUE INDEX IX_PaymentTransactions_razorpay_order ON dbo.PaymentTransactions (razorpay_order_id) WHERE razorpay_order_id IS NOT NULL</sql>
+    </changeSet>
+
+    <changeSet id="baseline-041-idx-discounts-client" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="ClientDiscounts" indexName="IX_ClientDiscounts_client">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-042-idx-discounts-unused" author="genvolt" dbms="mssql">
+        <sql>CREATE INDEX IX_ClientDiscounts_unused ON dbo.ClientDiscounts (client_id) WHERE is_used = 0</sql>
+    </changeSet>
+
+    <changeSet id="baseline-043-idx-telemetry-device" author="genvolt" dbms="mssql">
+        <sql>CREATE INDEX IX_DeviceTelemetry_DeviceId ON dbo.DeviceTelemetry (device_id)</sql>
+    </changeSet>
+
+    <changeSet id="baseline-044-idx-telemetry-createdat" author="genvolt" dbms="mssql">
+        <sql>CREATE INDEX IX_DeviceTelemetry_CreatedAt ON dbo.DeviceTelemetry (created_at)</sql>
+    </changeSet>
+
+    <changeSet id="baseline-045-idx-p3-device-ts" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="IoT_Data_Sick_P3" indexName="IX_IoT_Data_Sick_P3_Device_Ts">
+            <column name="Device_ID"/>
+            <column name="Timestamp"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="baseline-046-idx-raw-messages-device" author="genvolt" dbms="mssql">
+        <createIndex schemaName="dbo" tableName="IoT_Raw_Messages" indexName="IX_IoT_Raw_Messages_Device_CreatedAt">
+            <column name="Device_ID"/>
+            <column name="CreatedAt" descending="true"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

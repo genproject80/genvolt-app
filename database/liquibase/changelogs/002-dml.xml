@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+        DML baseline — seed / reference data for a fresh database.
+        Must run after 001-ddl.xml (all tables must already exist).
+    -->
+
+    <!-- ══════════════════════════════════════════════════════════════
+         ROLES
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-047-seed-roles" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="role">
+            <column name="role_name" value="SYSTEM_ADMIN"/>
+        </insert>
+        <insert schemaName="dbo" tableName="role">
+            <column name="role_name" value="SUPER_ADMIN"/>
+        </insert>
+        <insert schemaName="dbo" tableName="role">
+            <column name="role_name" value="CLIENT_ADMIN"/>
+        </insert>
+        <insert schemaName="dbo" tableName="role">
+            <column name="role_name" value="CLIENT_USER"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PERMISSIONS
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-048-seed-permissions" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Manage Plans"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Manage Discounts"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Pause Resume Devices"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Manage Topic Config"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="View Billing"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Manage Subscriptions"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Override Subscription"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="View Device Testing"/>
+        </insert>
+        <insert schemaName="dbo" tableName="permissions">
+            <column name="permission_name" value="Manage Device Testing Tables"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         ROLE-PERMISSION ASSIGNMENTS
+         SYSTEM_ADMIN  — all permissions
+         SUPER_ADMIN   — all except Manage Topic Config, Manage Device Testing Tables
+         CLIENT_ADMIN  — Pause Resume Devices, View Billing, View Device Testing
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-049-seed-role-permissions" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            INSERT INTO dbo.role_permission (role_id, permission_id)
+            SELECT r.role_id, p.permission_id
+            FROM dbo.[role] r CROSS JOIN dbo.permissions p
+            WHERE r.role_name = 'SYSTEM_ADMIN'
+
+            INSERT INTO dbo.role_permission (role_id, permission_id)
+            SELECT r.role_id, p.permission_id
+            FROM dbo.[role] r CROSS JOIN dbo.permissions p
+            WHERE r.role_name = 'SUPER_ADMIN'
+              AND p.permission_name NOT IN ('Manage Topic Config', 'Manage Device Testing Tables')
+
+            INSERT INTO dbo.role_permission (role_id, permission_id)
+            SELECT r.role_id, p.permission_id
+            FROM dbo.[role] r CROSS JOIN dbo.permissions p
+            WHERE r.role_name = 'CLIENT_ADMIN'
+              AND p.permission_name IN ('Pause Resume Devices', 'View Billing', 'View Device Testing')
+        </sql>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         INVENTORY — HK (logicId 1, P3 SICK) and HY (logicId 2, HyPure)
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-050-seed-inventory" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="inventory">
+            <column name="model_number"      value="HK"/>
+            <column name="display_name"      value="HK Device"/>
+            <column name="device_id_prefix"  value="HK"/>
+            <column name="decoder_logic_ids" value="[1]"/>
+            <column name="description"       value="P3 SICK sensor — event-based train detection, current monitoring, battery (logicId 1). 32-byte payload."/>
+            <column name="is_active"         valueBoolean="true"/>
+            <column name="device_counter"    valueNumeric="0"/>
+        </insert>
+        <insert schemaName="dbo" tableName="inventory">
+            <column name="model_number"      value="HY"/>
+            <column name="display_name"      value="HY Device"/>
+            <column name="device_id_prefix"  value="HY"/>
+            <column name="decoder_logic_ids" value="[2]"/>
+            <column name="description"       value="P4 HyPure — status/fault flags, electrical readings, temperature, pressure, runtime counters (logicId 2). 28-byte payload."/>
+            <column name="is_active"         valueBoolean="true"/>
+            <column name="device_counter"    valueNumeric="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         FEATURE FLAGS
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-051-seed-feature-flags" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="FeatureFlags">
+            <column name="flag_name"    value="payments_enabled"/>
+            <column name="display_name" value="Payments / Billing"/>
+            <column name="description"  value="Controls visibility of billing, subscription plans, discounts, and payment features across the platform."/>
+            <column name="is_enabled"   valueBoolean="false"/>
+        </insert>
+        <insert schemaName="dbo" tableName="FeatureFlags">
+            <column name="flag_name"    value="mqtt_telemetry_subscription"/>
+            <column name="display_name" value="MQTT Telemetry Subscription"/>
+            <column name="description"  value="Enables the backend MQTT listener to subscribe to cloudsynk/+/telemetry and ingest device telemetry."/>
+            <column name="is_enabled"   valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         SUBSCRIPTION PLANS
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-052-seed-subscription-plans" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="SubscriptionPlans">
+            <column name="name"          value="Basic"/>
+            <column name="description"   value="Ideal for small deployments. Up to 5 active devices."/>
+            <column name="max_devices"   valueNumeric="5"/>
+            <column name="price_monthly" valueNumeric="999.00"/>
+            <column name="price_yearly"  valueNumeric="9990.00"/>
+            <column name="grace_days"    valueNumeric="7"/>
+            <column name="features"      value='["Up to 5 devices","Real-time monitoring","Email support","7-day grace period"]'/>
+            <column name="is_active"     valueBoolean="true"/>
+        </insert>
+        <insert schemaName="dbo" tableName="SubscriptionPlans">
+            <column name="name"          value="Pro"/>
+            <column name="description"   value="For growing teams. Up to 25 active devices with priority support."/>
+            <column name="max_devices"   valueNumeric="25"/>
+            <column name="price_monthly" valueNumeric="2999.00"/>
+            <column name="price_yearly"  valueNumeric="29990.00"/>
+            <column name="grace_days"    valueNumeric="14"/>
+            <column name="features"      value='["Up to 25 devices","Real-time monitoring","Priority email support","Advanced analytics","14-day grace period"]'/>
+            <column name="is_active"     valueBoolean="true"/>
+        </insert>
+        <insert schemaName="dbo" tableName="SubscriptionPlans">
+            <column name="name"          value="Enterprise"/>
+            <column name="description"   value="Unlimited devices with dedicated support and custom integrations."/>
+            <column name="max_devices"   valueNumeric="-1"/>
+            <column name="price_monthly" valueNumeric="7999.00"/>
+            <column name="price_yearly"  valueNumeric="79990.00"/>
+            <column name="grace_days"    valueNumeric="30"/>
+            <column name="features"      value='["Unlimited devices","Real-time monitoring","Dedicated support","Advanced analytics","Custom integrations","30-day grace period"]'/>
+            <column name="is_active"     valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         LEGACY PAYMENT PLANS
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-053-seed-payment-plan-legacy" author="genvolt" dbms="mssql">
+        <insert schemaName="dbo" tableName="payment_plan">
+            <column name="name"          value="Starter"/>
+            <column name="device_quota"  valueNumeric="10"/>
+            <column name="price_monthly" valueNumeric="2999"/>
+            <column name="price_annual"  valueNumeric="29999"/>
+            <column name="currency"      value="INR"/>
+        </insert>
+        <insert schemaName="dbo" tableName="payment_plan">
+            <column name="name"          value="Growth"/>
+            <column name="device_quota"  valueNumeric="50"/>
+            <column name="price_monthly" valueNumeric="9999"/>
+            <column name="price_annual"  valueNumeric="99999"/>
+            <column name="currency"      value="INR"/>
+        </insert>
+        <insert schemaName="dbo" tableName="payment_plan">
+            <column name="name"          value="Enterprise"/>
+            <column name="device_quota"  valueNumeric="200"/>
+            <column name="price_monthly" valueNumeric="29999"/>
+            <column name="price_annual"  valueNumeric="299999"/>
+            <column name="currency"      value="INR"/>
+        </insert>
+    </changeSet>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         DEVICE TESTING TABLE CONFIG
+    ══════════════════════════════════════════════════════════════ -->
+
+    <changeSet id="baseline-054-seed-device-testing-config" author="genvolt" dbms="mssql">
+        <sql splitStatements="false">
+            INSERT INTO dbo.DeviceTesting_TableConfig
+                (table_key, table_name, display_name, icon_name, is_exportable, sort_order, column_config)
+            VALUES
+            (
+                'raw_messages', 'IoT_Raw_Messages', 'Raw Messages', 'DocumentTextIcon', 1, 1,
+                '[
+                    {"field":"Entry_ID","header":"Entry ID","type":"number","sortable":true},
+                    {"field":"CreatedAt","header":"Created At (IST)","type":"datetime","sortable":true,"format":"utc_to_ist"},
+                    {"field":"Device_ID","header":"Device ID","type":"string","sortable":true,"searchable":true},
+                    {"field":"LogicId","header":"Logic ID","type":"number","sortable":true},
+                    {"field":"RawJson","header":"Raw JSON","type":"json","sortable":false}
+                ]'
+            ),
+            (
+                'sick_data', 'IoT_Data_Sick', 'SICK Data (P1/P2)', 'CpuChipIcon', 1, 2,
+                '[
+                    {"field":"Entry_ID","header":"Entry ID","type":"number","sortable":true},
+                    {"field":"CreatedAt","header":"Created At (IST)","type":"datetime","sortable":true,"format":"utc_to_ist"},
+                    {"field":"Device_ID","header":"Device ID","type":"string","sortable":true,"searchable":true},
+                    {"field":"MessageType","header":"Message Type","type":"string","sortable":true},
+                    {"field":"GSM_Signal_Strength","header":"GSM Signal","type":"number","sortable":true},
+                    {"field":"Motor_ON_Time_sec","header":"Motor ON (sec)","type":"number","sortable":true},
+                    {"field":"Latitude","header":"Latitude","type":"number","sortable":true},
+                    {"field":"Longitude","header":"Longitude","type":"number","sortable":true},
+                    {"field":"Fault_Code","header":"Fault Code","type":"string","sortable":true}
+                ]'
+            ),
+            (
+                'sick_data_p3', 'IoT_Data_Sick_P3', 'SICK Data (P3)', 'BoltIcon', 1, 3,
+                '[
+                    {"field":"Entry_ID","header":"Entry ID","type":"number","sortable":true},
+                    {"field":"CreatedAt","header":"Created At (IST)","type":"datetime","sortable":true,"format":"utc_to_ist"},
+                    {"field":"Device_ID","header":"Device ID","type":"string","sortable":true,"searchable":true},
+                    {"field":"Event_Type","header":"Event Type","type":"string","sortable":true},
+                    {"field":"Event_Type_Description","header":"Description","type":"string","sortable":true},
+                    {"field":"Signal_Strength","header":"Signal","type":"number","sortable":true},
+                    {"field":"Battery_Voltage_mV","header":"Battery (mV)","type":"number","sortable":true}
+                ]'
+            )
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
