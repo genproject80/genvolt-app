@@ -64,11 +64,11 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          mantine: ['@mantine/core', '@mantine/hooks', '@mantine/notifications', '@mantine/form', '@mantine/dates'],
-          router: ['react-router-dom'],
-          charts: ['@mantine/charts', 'recharts'],
+        manualChunks(id) {
+          if (id.includes('react-dom') || id.includes('react/')) return 'vendor';
+          if (id.includes('@mantine/charts') || id.includes('recharts')) return 'charts';
+          if (id.includes('@mantine/')) return 'mantine';
+          if (id.includes('react-router-dom')) return 'router';
         }
       }
     }
