@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import StatusBadge from '../common/StatusBadge';
+import SearchableSelect from '../common/SearchableSelect';
 
 const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersChange, filters, onRowClick }) => {
   const [localFilters, setLocalFilters] = useState(filters || {
@@ -94,17 +95,18 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
           {/* Time Range Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Time Range:</label>
-            <select
-              value={localFilters.timeRange}
-              onChange={(e) => handleFilterChange('timeRange', e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-            >
-              <option value="all">All Time</option>
-              <option value="2h">Last 2 Hours</option>
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-            </select>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'All Time' },
+                { value: '2h', label: 'Last 2 Hours' },
+                { value: '24h', label: 'Last 24 Hours' },
+                { value: '7d', label: 'Last 7 Days' },
+                { value: '30d', label: 'Last 30 Days' },
+              ]}
+              value={localFilters.timeRange === 'all' ? '' : localFilters.timeRange}
+              onChange={(v) => handleFilterChange('timeRange', v || 'all')}
+              placeholder="All Time"
+            />
           </div>
 
           {/* Date Picker Filter */}
@@ -135,15 +137,16 @@ const HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersC
           {/* Status Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status:</label>
-            <select
-              value={localFilters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="fault">Fault</option>
-            </select>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'fault', label: 'Fault' },
+              ]}
+              value={localFilters.status === 'all' ? '' : localFilters.status}
+              onChange={(v) => handleFilterChange('status', v || 'all')}
+              placeholder="All Status"
+            />
           </div>
 
           {/* Search Filter */}

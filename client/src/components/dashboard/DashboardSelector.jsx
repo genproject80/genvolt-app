@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import LoadingSpinner from '../common/LoadingSpinner';
+import SearchableSelect from '../common/SearchableSelect';
 
 const DashboardSelector = ({ className = "" }) => {
   const {
@@ -47,23 +48,18 @@ const DashboardSelector = ({ className = "" }) => {
   }
 
   return (
-    <div className={`flex items-center space-x-3 ${className}`}>
-      <label htmlFor="dashboard-select" className="text-sm font-medium text-gray-700">
-        Dashboard:
-      </label>
-      <select
-        id="dashboard-select"
-        value={activeDashboard?.id || ''}
-        onChange={handleDashboardChange}
-        className="form-select block w-auto min-w-[200px] px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-      >
-        {dashboards.map((dashboard) => (
-          <option key={dashboard.id} value={dashboard.id}>
-            {dashboard.display_name}
-          </option>
-        ))}
-      </select>
-
+    <div className={`flex flex-wrap items-center gap-3 ${className}`}>
+      <label className="text-sm font-medium text-gray-700 shrink-0">Dashboard:</label>
+      <SearchableSelect
+        options={dashboards.map((d) => ({ value: String(d.id), label: d.display_name }))}
+        value={activeDashboard ? String(activeDashboard.id) : ''}
+        onChange={(v) => {
+          const selected = dashboards.find((d) => String(d.id) === v);
+          if (selected) setActiveDashboard(selected);
+        }}
+        placeholder="Select dashboard…"
+        className="w-full sm:w-56"
+      />
       {activeDashboard && (
         <div className="flex items-center space-x-2 text-xs text-gray-500">
           <span>•</span>

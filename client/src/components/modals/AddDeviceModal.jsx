@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -242,22 +243,17 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Model Number *
           </label>
-          <select
-            name="model_number"
+          <SearchableSelect
+            options={inventory.map(item => ({
+              value: item.model_number,
+              label: item.model_number + (item.display_name ? ` — ${item.display_name}` : ''),
+            }))}
             value={formData.model_number}
-            onChange={handleChange}
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.model_number ? 'border-red-500' : 'border-gray-300'
-            }`}
+            onChange={(v) => handleChange({ target: { name: 'model_number', value: v } })}
+            placeholder="Select model number"
             disabled={loading || loadingData}
-          >
-            <option value="">Select model number</option>
-            {inventory.map(item => (
-              <option key={item.model_number} value={item.model_number}>
-                {item.model_number}{item.display_name ? ` — ${item.display_name}` : ''}
-              </option>
-            ))}
-          </select>
+            className={errors.model_number ? 'ring-1 ring-red-500 rounded-md' : ''}
+          />
           {errors.model_number && (
             <p className="text-xs text-red-600 mt-0.5">{errors.model_number}</p>
           )}
@@ -308,21 +304,17 @@ const AddDeviceModal = ({ isOpen, onClose, onSuccess }) => {
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Client
           </label>
-          <select
-            name="client_id"
-            value={formData.client_id}
-            onChange={handleChange}
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.client_id ? 'border-red-500' : 'border-gray-300'
-            }`}
+          <SearchableSelect
+            options={clients.map(client => ({
+              value: String(client.client_id),
+              label: client.name + (client.level === 0 ? ' (My Client)' : ''),
+            }))}
+            value={formData.client_id ? String(formData.client_id) : ''}
+            onChange={(v) => handleChange({ target: { name: 'client_id', value: v } })}
+            placeholder="Select a client"
             disabled={loading || loadingData}
-          >
-            {clients.map(client => (
-              <option key={client.client_id} value={client.client_id}>
-                {client.name} {client.level === 0 ? '(My Client)' : ''}
-              </option>
-            ))}
-          </select>
+            className={errors.client_id ? 'ring-1 ring-red-500 rounded-md' : ''}
+          />
           {errors.client_id && (
             <p className="text-xs text-red-600 mt-0.5">{errors.client_id}</p>
           )}

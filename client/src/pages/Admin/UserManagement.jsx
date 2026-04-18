@@ -4,6 +4,7 @@ import { useUser } from '../../context/UserContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import SearchableSelect from '../../components/common/SearchableSelect';
 import AddUserModal from '../../components/modals/AddUserModal';
 import EditUserModal from '../../components/modals/EditUserModal';
 import DeleteUserModal from '../../components/modals/DeleteUserModal';
@@ -202,7 +203,7 @@ const UserManagement = () => {
       )}
 
       {/* Search and Filter */}
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
           <input
             type="text"
@@ -212,26 +213,28 @@ const UserManagement = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
-        <select
+        <SearchableSelect
+          options={[
+            { value: 'SYSTEM_ADMIN', label: 'System Admin' },
+            { value: 'SUPER_ADMIN', label: 'Super Admin' },
+            { value: 'CLIENT_ADMIN', label: 'Client Admin' },
+            { value: 'CLIENT_USER', label: 'Client User' },
+          ]}
           value={roleFilter}
-          onChange={(e) => handleRoleFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">All Roles</option>
-          <option value="SYSTEM_ADMIN">System Admin</option>
-          <option value="SUPER_ADMIN">Super Admin</option>
-          <option value="CLIENT_ADMIN">Client Admin</option>
-          <option value="CLIENT_USER">Client User</option>
-        </select>
-        <select
+          onChange={handleRoleFilter}
+          placeholder="All Roles"
+          className="w-full sm:w-44"
+        />
+        <SearchableSelect
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
           value={statusFilter}
-          onChange={(e) => handleStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+          onChange={handleStatusFilter}
+          placeholder="All Status"
+          className="w-full sm:w-36"
+        />
       </div>
 
       {/* Users Table */}

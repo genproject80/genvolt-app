@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { clientService } from '../../services/clientService';
@@ -141,16 +142,12 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess, fixedClientId
             {loadingClients ? (
               <p className="text-sm text-gray-500">Loading clients...</p>
             ) : (
-              <select
+              <SearchableSelect
+                options={clients.map(c => ({ value: String(c.client_id), label: c.name }))}
                 value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-              >
-                <option value="">Select a client...</option>
-                {clients.map(c => (
-                  <option key={c.client_id} value={c.client_id}>{c.name}</option>
-                ))}
-              </select>
+                onChange={setSelectedClientId}
+                placeholder="Select a client..."
+              />
             )}
           </div>
         )}

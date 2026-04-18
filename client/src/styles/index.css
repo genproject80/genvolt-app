@@ -8,6 +8,17 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Prevent iOS Safari from zooming on input/select focus (triggers when font-size < 16px).
+   Zoom causes the picker to appear disconnected from the element. */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    touch-action: manipulation;
+  }
+}
+
 /* Custom styles for the IoT Dashboard */
 .login-container {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

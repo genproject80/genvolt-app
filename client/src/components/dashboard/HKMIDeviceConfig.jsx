@@ -191,7 +191,7 @@ const HKMIDeviceConfig = () => {
           </div>
 
           {dropdownOpen && !devicesLoading && (
-            <ul className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-md bg-white border border-gray-200 shadow-lg py-1">
+            <ul className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-md bg-white border border-gray-200 shadow-lg py-1">
               {filteredDevices.length === 0 ? (
                 <li className="px-3 py-2 text-sm text-gray-500">No devices found</li>
               ) : (

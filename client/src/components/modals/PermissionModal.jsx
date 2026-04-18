@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import {
@@ -316,18 +317,12 @@ const PermissionModal = ({ isOpen, onClose, role = null, onSuccess }) => {
                       </div>
                     </div>
                     <div className="sm:w-48">
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      >
-                        <option value="all">All Categories</option>
-                        {Object.keys(permissionCategories).map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={Object.keys(permissionCategories).map(c => ({ value: c, label: c }))}
+                        value={selectedCategory === 'all' ? '' : selectedCategory}
+                        onChange={(v) => setSelectedCategory(v || 'all')}
+                        placeholder="All Categories"
+                      />
                     </div>
                   </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
@@ -339,22 +340,17 @@ const EditUserModal = ({ isOpen, onClose, user, onSuccess }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Role *
           </label>
-          <select
-            name="role_id"
-            value={formData.role_id}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.role_id ? 'border-red-500' : 'border-gray-300'
-            }`}
+          <SearchableSelect
+            options={getAvailableRoles().map(role => ({
+              value: String(role.role_id),
+              label: role.role_name,
+            }))}
+            value={formData.role_id ? String(formData.role_id) : ''}
+            onChange={(v) => handleChange({ target: { name: 'role_id', value: v } })}
+            placeholder="Select a role"
             disabled={loading || loadingData}
-          >
-            <option value="">Select a role</option>
-            {getAvailableRoles().map(role => (
-              <option key={role.role_id} value={role.role_id}>
-                {role.role_name}
-              </option>
-            ))}
-          </select>
+            className={errors.role_id ? 'ring-1 ring-red-500 rounded-md' : ''}
+          />
           {errors.role_id && (
             <p className="text-sm text-red-600 mt-1">{errors.role_id}</p>
           )}
@@ -365,22 +361,17 @@ const EditUserModal = ({ isOpen, onClose, user, onSuccess }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Client *
           </label>
-          <select
-            name="client_id"
-            value={formData.client_id}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.client_id ? 'border-red-500' : 'border-gray-300'
-            }`}
+          <SearchableSelect
+            options={getAvailableClients().map(client => ({
+              value: String(client.client_id),
+              label: client.name,
+            }))}
+            value={formData.client_id ? String(formData.client_id) : ''}
+            onChange={(v) => handleChange({ target: { name: 'client_id', value: v } })}
+            placeholder="Select a client"
             disabled={loading || loadingData}
-          >
-            <option value="">Select a client</option>
-            {getAvailableClients().map(client => (
-              <option key={client.client_id} value={client.client_id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+            className={errors.client_id ? 'ring-1 ring-red-500 rounded-md' : ''}
+          />
           {errors.client_id && (
             <p className="text-sm text-red-600 mt-1">{errors.client_id}</p>
           )}

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
+import SearchableSelect from '../common/SearchableSelect';
 
 const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFiltersChange, filters, onRowClick, deviceId }) => {
   const [localFilters, setLocalFilters] = useState(filters || {
@@ -98,17 +99,18 @@ const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFilter
         {/* Time Range Filter */}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Time Range:</label>
-          <select
-            value={localFilters.timeRange}
-            onChange={(e) => handleFilterChange('timeRange', e.target.value)}
-            className="w-full text-sm border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-          >
-            <option value="all">All Time</option>
-            <option value="2h">Last 2 Hours</option>
-            <option value="24h">Last 24 Hours</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-          </select>
+          <SearchableSelect
+            options={[
+              { value: 'all', label: 'All Time' },
+              { value: '2h', label: 'Last 2 Hours' },
+              { value: '24h', label: 'Last 24 Hours' },
+              { value: '7d', label: 'Last 7 Days' },
+              { value: '30d', label: 'Last 30 Days' },
+            ]}
+            value={localFilters.timeRange === 'all' ? '' : localFilters.timeRange}
+            onChange={(v) => handleFilterChange('timeRange', v || 'all')}
+            placeholder="All Time"
+          />
         </div>
 
         {/* Specific Date */}
@@ -127,15 +129,16 @@ const P3HistoricDataTable = ({ data, loading, pagination, onPageChange, onFilter
         {/* Status Filter */}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Status:</label>
-          <select
-            value={localFilters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-            className="w-full text-sm border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="fault">Fault</option>
-          </select>
+          <SearchableSelect
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'fault', label: 'Fault' },
+            ]}
+            value={localFilters.status === 'all' ? '' : localFilters.status}
+            onChange={(v) => handleFilterChange('status', v || 'all')}
+            placeholder="All Status"
+          />
         </div>
 
         {/* Search */}

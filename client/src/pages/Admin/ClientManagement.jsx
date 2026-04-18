@@ -7,6 +7,7 @@ import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import AddClientModal from '../../components/modals/AddClientModal';
 import DeleteClientModal from '../../components/modals/DeleteClientModal';
 import { getAllSubscriptions } from '../../services/subscriptionService';
+import SearchableSelect from '../../components/common/SearchableSelect';
 
 const SUB_STATUS_STYLES = {
   ACTIVE:    'bg-green-100 text-green-800',
@@ -251,7 +252,7 @@ const ClientManagement = () => {
       </div>
 
       {/* Search and Filter */}
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
           <input
             type="text"
@@ -261,15 +262,16 @@ const ClientManagement = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-        <select 
+        <SearchableSelect
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+          onChange={setStatusFilter}
+          placeholder="All Status"
+          className="w-full sm:w-36"
+        />
       </div>
 
       {/* Clients Table */}

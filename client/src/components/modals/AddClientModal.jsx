@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import { useClient } from '../../context/ClientContext';
 import { useClientPermissions } from '../../hooks/useClientPermissions';
 import AccessDeniedModal from '../common/AccessDeniedModal';
@@ -409,21 +410,16 @@ const AddClientModal = ({ isOpen, onClose, onSuccess, client = null, mode = 'add
               <label htmlFor="parent_id" className="block text-sm font-medium text-gray-700 mb-1">
                 Parent Client
               </label>
-              <select
-                id="parent_id"
-                name="parent_id"
-                value={formData.parent_id}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <SearchableSelect
+                options={clientHierarchy.map(client => ({
+                  value: String(client.client_id),
+                  label: client.name,
+                }))}
+                value={formData.parent_id ? String(formData.parent_id) : ''}
+                onChange={(v) => handleInputChange({ target: { name: 'parent_id', value: v } })}
+                placeholder="Select Parent Client (Optional)"
                 disabled={isSubmitting}
-              >
-                <option value="">Select Parent Client (Optional)</option>
-                {clientHierarchy.map(client => (
-                  <option key={client.client_id} value={client.client_id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="flex items-center">

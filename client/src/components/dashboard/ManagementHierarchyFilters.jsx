@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import LoadingSpinner from '../common/LoadingSpinner';
+import SearchableSelect from '../common/SearchableSelect';
 
 const FilterTag = ({ label, value, onRemove }) => (
   <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -217,85 +218,49 @@ const ManagementHierarchyFilters = ({ className = "" }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {/* Overall Manager (SDEN) */}
         <div>
-          <label htmlFor="sden-filter" className="block text-xs font-medium text-gray-700 mb-1">
-            Overall Manager
-          </label>
-          <select
-            id="sden-filter"
+          <label className="block text-xs font-medium text-gray-700 mb-1">Overall Manager</label>
+          <SearchableSelect
+            options={filterOptions.sden}
             value={localFilters.sden || ''}
-            onChange={(e) => handleFilterChange('sden', e.target.value)}
-            className="block w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 text-sm"
-          >
-            <option value="">All Managers</option>
-            {filterOptions.sden.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => handleFilterChange('sden', v)}
+            placeholder="All Managers"
+          />
         </div>
 
         {/* Level 2 Manager (DEN) */}
         <div>
-          <label htmlFor="den-filter" className="block text-xs font-medium text-gray-700 mb-1">
-            Level 2 Manager
-          </label>
-          <select
-            id="den-filter"
+          <label className="block text-xs font-medium text-gray-700 mb-1">Level 2 Manager</label>
+          <SearchableSelect
+            options={filterOptions.den}
             value={localFilters.den || ''}
-            onChange={(e) => handleFilterChange('den', e.target.value)}
-            className="block w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 text-sm"
+            onChange={(v) => handleFilterChange('den', v)}
+            placeholder="All Managers"
             disabled={filterOptions.den.length === 0}
-          >
-            <option value="">All Managers</option>
-            {filterOptions.den.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Level 3 Manager (AEN) */}
         <div>
-          <label htmlFor="aen-filter" className="block text-xs font-medium text-gray-700 mb-1">
-            Level 3 Manager
-          </label>
-          <select
-            id="aen-filter"
+          <label className="block text-xs font-medium text-gray-700 mb-1">Level 3 Manager</label>
+          <SearchableSelect
+            options={filterOptions.aen}
             value={localFilters.aen || ''}
-            onChange={(e) => handleFilterChange('aen', e.target.value)}
-            className="block w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 text-sm"
+            onChange={(v) => handleFilterChange('aen', v)}
+            placeholder="All Managers"
             disabled={filterOptions.aen.length === 0}
-          >
-            <option value="">All Managers</option>
-            {filterOptions.aen.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Level 4 Manager (SSE) */}
         <div>
-          <label htmlFor="sse-filter" className="block text-xs font-medium text-gray-700 mb-1">
-            Level 4 Manager
-          </label>
-          <select
-            id="sse-filter"
+          <label className="block text-xs font-medium text-gray-700 mb-1">Level 4 Manager</label>
+          <SearchableSelect
+            options={filterOptions.sse}
             value={localFilters.sse || ''}
-            onChange={(e) => handleFilterChange('sse', e.target.value)}
-            className="block w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 text-sm"
+            onChange={(v) => handleFilterChange('sse', v)}
+            placeholder="All Managers"
             disabled={filterOptions.sse.length === 0}
-          >
-            <option value="">All Managers</option>
-            {filterOptions.sse.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 

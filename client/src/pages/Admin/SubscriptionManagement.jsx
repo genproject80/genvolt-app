@@ -5,6 +5,7 @@ import {
 } from '../../services/subscriptionService';
 import { clientService } from '../../services/clientService';
 import { FunnelIcon, PlusIcon, PencilSquareIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
+import SearchableSelect from '../../components/common/SearchableSelect';
 
 const STATUS_STYLES = {
   ACTIVE:    'bg-green-100 text-green-800',
@@ -188,20 +189,26 @@ export default function SubscriptionManagement() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white rounded-xl border border-gray-200 p-4">
         <FunnelIcon className="w-4 h-4 text-gray-400" />
-        <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="">All Statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="GRACE">Grace Period</option>
-          <option value="EXPIRED">Expired</option>
-          <option value="CANCELLED">Cancelled</option>
-          <option value="PENDING">Pending</option>
-        </select>
-        <select value={filterPlan} onChange={(e) => { setFilterPlan(e.target.value); setPage(1); }}
-          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="">All Plans</option>
-          {plans.map((p) => <option key={p.plan_id} value={p.plan_id}>{p.name}</option>)}
-        </select>
+        <SearchableSelect
+          options={[
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'GRACE', label: 'Grace Period' },
+            { value: 'EXPIRED', label: 'Expired' },
+            { value: 'CANCELLED', label: 'Cancelled' },
+            { value: 'PENDING', label: 'Pending' },
+          ]}
+          value={filterStatus}
+          onChange={(v) => { setFilterStatus(v); setPage(1); }}
+          placeholder="All Statuses"
+          className="w-full sm:w-40"
+        />
+        <SearchableSelect
+          options={plans.map((p) => ({ value: String(p.plan_id), label: p.name }))}
+          value={filterPlan}
+          onChange={(v) => { setFilterPlan(v); setPage(1); }}
+          placeholder="All Plans"
+          className="w-full sm:w-44"
+        />
         <button onClick={() => { setFilterStatus(''); setFilterPlan(''); setPage(1); }}
           className="text-sm text-gray-500 hover:text-gray-700 underline">
           Clear filters

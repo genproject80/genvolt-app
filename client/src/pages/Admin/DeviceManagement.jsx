@@ -17,6 +17,7 @@ import TransferDeviceModal from '../../components/modals/TransferDeviceModal';
 import DeviceDetailsModal from '../../components/modals/DeviceDetailsModal';
 import ActivateDeviceModal from '../../components/modals/ActivateDeviceModal';
 import DeactivateDeviceModal from '../../components/modals/DeactivateDeviceModal';
+import SearchableSelect from '../../components/common/SearchableSelect';
 
 const DeviceManagement = () => {
   const {
@@ -491,6 +492,7 @@ const DeviceManagement = () => {
               Refresh
             </button>
           </div>
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -543,6 +545,7 @@ const DeviceManagement = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -573,36 +576,32 @@ const DeviceManagement = () => {
 
       {/* Client Filter, Search and Filter in One Row */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <div className="flex items-end space-x-3">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-full sm:flex-1 sm:min-w-[160px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Client
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'All Clients' },
+                ...clients.map(c => ({ value: String(c.client_id), label: c.name })),
+              ]}
               value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              onChange={setSelectedClientId}
+              placeholder="Select a client"
               disabled={loadingClients}
-            >
-              <option value="">Select a client</option>
-              <option value="all">All Clients</option>
-              {clients.map(client => (
-                <option key={client.client_id} value={client.client_id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
-          <div>
+          <div className="w-full sm:w-auto">
             <button
               onClick={handleShowDevices}
               disabled={!selectedClientId || selectedClientId === '' || loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               Show Devices
             </button>
           </div>
-          <div className="flex-1">
+          <div className="w-full sm:flex-1 sm:min-w-[160px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Search Devices
             </label>
@@ -614,39 +613,36 @@ const DeviceManagement = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
-          <div className="w-52">
+          <div className="w-full sm:w-52">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Model Number
             </label>
-            <select
+            <SearchableSelect
+              options={inventoryModels.map(m => ({
+                value: m.model_number,
+                label: `${m.model_number} — ${m.display_name}`,
+              }))}
               value={modelNumberFilter}
-              onChange={(e) => { setModelNumberFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">All Models</option>
-              {inventoryModels.map(m => (
-                <option key={m.model_number} value={m.model_number}>
-                  {m.model_number} — {m.display_name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => { setModelNumberFilter(v); setCurrentPage(1); }}
+              placeholder="All Models"
+            />
           </div>
-          <div className="w-44">
+          <div className="w-full sm:w-44">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Activation Status
             </label>
-            <select
+            <SearchableSelect
+              options={[
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'PENDING', label: 'Pending' },
+                { value: 'INACTIVE', label: 'Inactive' },
+              ]}
               value={activationStatusFilter}
-              onChange={(e) => { setActivationStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="PENDING">Pending</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
+              onChange={(v) => { setActivationStatusFilter(v); setCurrentPage(1); }}
+              placeholder="All Statuses"
+            />
           </div>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               From Date
             </label>
@@ -657,7 +653,7 @@ const DeviceManagement = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               To Date
             </label>
@@ -673,6 +669,7 @@ const DeviceManagement = () => {
 
       {/* Devices Table */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -845,6 +842,7 @@ const DeviceManagement = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Pagination */}

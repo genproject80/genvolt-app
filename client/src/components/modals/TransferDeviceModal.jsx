@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { clientService } from '../../services/clientService';
@@ -139,22 +140,16 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Transfer to Client *
           </label>
-          <select
+          <SearchableSelect
+            options={clients.map(client => ({
+              value: String(client.client_id),
+              label: client.name,
+            }))}
             value={targetClientId}
-            onChange={(e) => {
-              setTargetClientId(e.target.value);
-              setError('');
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            onChange={(v) => { setTargetClientId(v); setError(''); }}
+            placeholder="Select target client"
             disabled={loading || loadingData}
-          >
-            <option value="">Select target client</option>
-            {clients.map(client => (
-              <option key={client.client_id} value={client.client_id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>

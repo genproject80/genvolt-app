@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 import { XMarkIcon, ArrowLeftIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { tableConfigService } from '../../services/tableConfigService';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -269,15 +270,12 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
-                  <select
+                  <SearchableSelect
+                    options={ICON_OPTIONS.map(icon => ({ value: icon, label: icon.replace('Icon', '') }))}
                     value={iconName}
-                    onChange={(e) => setIconName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    {ICON_OPTIONS.map((icon) => (
-                      <option key={icon} value={icon}>{icon.replace('Icon', '')}</option>
-                    ))}
-                  </select>
+                    onChange={setIconName}
+                    placeholder="Select icon"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
@@ -367,25 +365,22 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
                               className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
                             />
 
-                            <select
+                            <SearchableSelect
+                              options={['string', 'number', 'datetime', 'boolean', 'json'].map(t => ({ value: t, label: t }))}
                               value={col.type}
-                              onChange={(e) => updateSelectedColumn(col.field, 'type', e.target.value)}
-                              className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            >
-                              {['string', 'number', 'datetime', 'boolean', 'json'].map((t) => (
-                                <option key={t} value={t}>{t}</option>
-                              ))}
-                            </select>
+                              onChange={(v) => updateSelectedColumn(col.field, 'type', v || 'string')}
+                              placeholder="type"
+                              className="w-28"
+                            />
 
                             {col.type === 'datetime' && (
-                              <select
-                                value={col.format}
-                                onChange={(e) => updateSelectedColumn(col.field, 'format', e.target.value)}
-                                className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              >
-                                <option value="">No conversion</option>
-                                <option value="utc_to_ist">UTC → IST</option>
-                              </select>
+                              <SearchableSelect
+                                options={[{ value: 'utc_to_ist', label: 'UTC → IST' }]}
+                                value={col.format || ''}
+                                onChange={(v) => updateSelectedColumn(col.field, 'format', v)}
+                                placeholder="No conversion"
+                                className="w-32"
+                              />
                             )}
 
                             <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
