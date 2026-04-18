@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { MantineProvider, createTheme } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import App from './App'
+import '@mantine/charts/styles.css'
 import './styles/index.css'
 
 const theme = createTheme({

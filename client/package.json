@@ -11,30 +11,35 @@
     "@mantine/hooks": "^9.0.2",
     "@mantine/notifications": "^9.0.2",
     "@tabler/icons-react": "^3.41.1",
-    "axios": "^1.3.0",
+    "axios": "1.15.0",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.20",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-is": "^19.2.5",
     "react-router-dom": "^6.8.0",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.13",
     "postcss": "^8.4.21",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
     "tailwindcss": "^4.2.2",
-    "vite": "^5.4.21",
-    "vite-plugin-pwa": "^1.2.0",
+    "vite": "8.0.5",
+    "vite-plugin-pwa": "^0.19.8",
     "workbox-window": "^7.4.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
+  },
+  "overrides": {
+    "serialize-javascript": "7.0.5",
+    "@rollup/plugin-terser": "1.0.0"
   },
   "browserslist": {
     "production": [

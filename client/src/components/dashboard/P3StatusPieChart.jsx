@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { DonutChart } from '@mantine/charts';
 import { useDashboard } from '../../context/DashboardContext';
 import { fetchP3StatusMetrics } from '../../services/p3DataService';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -75,35 +75,14 @@ const P3StatusPieChart = ({ className = "" }) => {
         </div>
 
         {hasData && totalDevices > 0 && !loading && (
-          <div className="ml-3">
-            <ResponsiveContainer width={80} height={80}>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={20}
-                  outerRadius={35}
-                  fill="#8884d8"
-                  dataKey="value"
-                  paddingAngle={2}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value, name) => [`${value} (${((value / totalDevices) * 100).toFixed(1)}%)`, name]}
-                  contentStyle={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '0.5rem',
-                    padding: '6px 10px',
-                    fontSize: '12px'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="ml-3" style={{ width: 80, height: 80 }}>
+            <DonutChart
+              data={chartData}
+              size={80}
+              thickness={15}
+              withTooltip
+              tooltipDataSource="segment"
+            />
           </div>
         )}
 

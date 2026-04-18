@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell
-} from 'recharts';
+import { LineChart, DonutChart } from '@mantine/charts';
 import { hyPureService } from '../../services/hyPureService';
 
 // ─────────────────────────────────────────────
@@ -608,23 +605,16 @@ const HyPureDashboard = () => {
                 {/* Runtime Pie */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                   <h3 className="text-sm font-semibold text-gray-600 mb-2">Runtime</h3>
-                  <div>
-                    <ResponsiveContainer width="100%" height={120} minWidth={0}>
-                      <PieChart>
-                        <Pie
-                          data={runtimePieData}
-                          cx="50%" cy="50%"
-                          innerRadius={30} outerRadius={50}
-                          dataKey="value"
-                          paddingAngle={2}
-                        >
-                          {runtimePieData.map((entry, i) => (
-                            <Cell key={i} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v, n) => [`${v} Hrs`, n]} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div className="flex justify-center">
+                    <div style={{ width: 120, height: 120 }}>
+                      <DonutChart
+                        data={runtimePieData}
+                        size={120}
+                        thickness={20}
+                        withTooltip
+                        tooltipDataSource="segment"
+                      />
+                    </div>
                   </div>
                   <div className="mt-2 space-y-1 text-xs">
                     <div className="flex justify-between items-center">
@@ -651,17 +641,20 @@ const HyPureDashboard = () => {
                 ].map(({ title, key, color, unit }) => (
                   <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <h3 className="text-sm font-semibold text-gray-600 mb-3">{title}</h3>
-                    <div>
-                      <ResponsiveContainer width="100%" height={200} minWidth={0}>
-                        <LineChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                          <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Tooltip formatter={(v) => [`${v} ${unit}`, title]} />
-                          <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <LineChart
+                      data={chartData}
+                      dataKey="time"
+                      h={200}
+                      w="100%"
+                      style={{ minWidth: 0 }}
+                      series={[{ name: key, color, label: `${title} (${unit})` }]}
+                      withDots={false}
+                      curveType="monotone"
+                      withTooltip
+                      withXAxis
+                      withYAxis
+                      gridAxis="xy"
+                    />
                   </div>
                 ))}
               </div>
@@ -674,17 +667,20 @@ const HyPureDashboard = () => {
                 ].map(({ title, key, color, unit }) => (
                   <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <h3 className="text-sm font-semibold text-gray-600 mb-3">{title}</h3>
-                    <div>
-                      <ResponsiveContainer width="100%" height={200} minWidth={0}>
-                        <LineChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                          <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Tooltip formatter={(v) => [`${v} ${unit}`, title]} />
-                          <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <LineChart
+                      data={chartData}
+                      dataKey="time"
+                      h={200}
+                      w="100%"
+                      style={{ minWidth: 0 }}
+                      series={[{ name: key, color, label: `${title} (${unit})` }]}
+                      withDots={false}
+                      curveType="monotone"
+                      withTooltip
+                      withXAxis
+                      withYAxis
+                      gridAxis="xy"
+                    />
                   </div>
                 ))}
               </div>
