@@ -4,7 +4,7 @@ import {
   createManualSubscription, changePlan, extendEndDate,
 } from '../../services/subscriptionService';
 import { clientService } from '../../services/clientService';
-import { FunnelIcon, PlusIcon, PencilSquareIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
+import { IconFilter, IconPlus, IconPencil, IconCalendar } from '@tabler/icons-react';
 import SearchableSelect from '../../components/common/SearchableSelect';
 
 const STATUS_STYLES = {
@@ -181,14 +181,14 @@ export default function SubscriptionManagement() {
           }}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
         >
-          <PlusIcon className="w-4 h-4" />
+          <IconPlus className="w-4 h-4" />
           Assign Subscription
         </button>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white rounded-xl border border-gray-200 p-4">
-        <FunnelIcon className="w-4 h-4 text-gray-400" />
+        <IconFilter className="w-4 h-4 text-gray-400" />
         <SearchableSelect
           options={[
             { value: 'ACTIVE', label: 'Active' },
@@ -280,7 +280,7 @@ export default function SubscriptionManagement() {
                               className="text-indigo-500 hover:text-indigo-700"
                               title="Change Plan"
                             >
-                              <PencilSquareIcon className="w-4 h-4" />
+                              <IconPencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => {
@@ -291,7 +291,7 @@ export default function SubscriptionManagement() {
                               className="text-green-500 hover:text-green-700"
                               title="Extend End Date"
                             >
-                              <CalendarDaysIcon className="w-4 h-4" />
+                              <IconCalendar className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => { setTargetSub(sub); setShowCancelModal(true); }}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BeakerIcon, ChartBarIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconFlask, IconChartBar, IconAlertTriangle } from '@tabler/icons-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { deviceTestingService } from '../../services/deviceTestingService';
 import GenericDataTable from '../../components/deviceTesting/GenericDataTable';
@@ -43,7 +43,7 @@ const DeviceTesting = () => {
   if (!canViewDeviceTesting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-64 text-center">
-        <ExclamationTriangleIcon className="w-12 h-12 text-yellow-400 mb-3" />
+        <IconAlertTriangle className="w-12 h-12 text-yellow-400 mb-3" />
         <h3 className="text-lg font-semibold text-gray-800">Access Denied</h3>
         <p className="text-sm text-gray-500 mt-1">You do not have permission to view Device Testing data.</p>
       </div>
@@ -58,7 +58,7 @@ const DeviceTesting = () => {
       {/* Page Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 bg-primary-100 rounded-lg">
-          <BeakerIcon className="w-6 h-6 text-primary-700" />
+          <IconFlask className="w-6 h-6 text-primary-700" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Device Testing</h1>
@@ -95,7 +95,7 @@ const DeviceTesting = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            <ChartBarIcon className="w-4 h-4" />
+            <IconChartBar className="w-4 h-4" />
             Hourly Dashboard
           </button>
 

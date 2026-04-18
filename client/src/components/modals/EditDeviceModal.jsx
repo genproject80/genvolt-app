@@ -1,35 +1,25 @@
 import { useState, useEffect } from 'react';
+import { TextInput, Button, Group, Stack, Alert } from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { clientService } from '../../services/clientService';
 import { getActiveInventory } from '../../services/inventoryService';
-import LoadingSpinner from '../common/LoadingSpinner';
 
 const EditDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
   const { updateDevice, loading } = useDevice();
 
-  const [formData, setFormData] = useState({
-    device_id: '',
-    model_number: '',
-    imei: '',
-    machin_id: '',
-    client_id: ''
-  });
-
+  const [formData, setFormData] = useState({ device_id: '', model_number: '', imei: '', machin_id: '', client_id: '' });
   const [errors, setErrors] = useState({});
   const [clients, setClients] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Load clients and inventory data when modal opens
   useEffect(() => {
-    if (isOpen) {
-      loadFormData();
-    }
+    if (isOpen) loadFormData();
   }, [isOpen]);
 
-  // Populate form with device data
   useEffect(() => {
     if (device && isOpen) {
       setFormData({
@@ -37,286 +27,139 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
         model_number: device.model_number || '',
         imei: device.imei || '',
         machin_id: device.machin_id || '',
-        client_id: device.client_id || ''
+        client_id: device.client_id || '',
       });
     }
   }, [device, isOpen]);
 
   const loadFormData = async () => {
+    setLoadingData(true);
     try {
-      setLoadingData(true);
-
-      const [clientsResponse, inventoryItems] = await Promise.all([
+      const [clientsRes, inventoryItems] = await Promise.all([
         clientService.getDescendantClients(),
-        getActiveInventory()
+        getActiveInventory(),
       ]);
-
       setInventory(inventoryItems || []);
-
-      if (clientsResponse && clientsResponse.success) {
-        let clientsData = [];
-
-        if (clientsResponse.data?.clients && Array.isArray(clientsResponse.data.clients)) {
-          clientsData = clientsResponse.data.clients;
-        } else if (clientsResponse.data?.data && Array.isArray(clientsResponse.data.data)) {
-          clientsData = clientsResponse.data.data;
-        } else if (clientsResponse.clients && Array.isArray(clientsResponse.clients)) {
-          clientsData = clientsResponse.clients;
-        } else if (Array.isArray(clientsResponse.data)) {
-          clientsData = clientsResponse.data;
-        }
-
-        setClients(clientsData);
+      if (clientsRes?.success) {
+        const data = clientsRes.data?.clients || clientsRes.data?.data || clientsRes.clients || (Array.isArray(clientsRes.data) ? clientsRes.data : []);
+        setClients(data);
       } else {
         setErrors({ submit: 'Failed to load clients data' });
       }
-    } catch (error) {
+    } catch {
       setErrors({ submit: 'Failed to load form data. Please try again.' });
     } finally {
       setLoadingData(false);
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+  const setField = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
   const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.device_id.trim()) {
-      newErrors.device_id = 'Device ID is required';
-    } else if (formData.device_id.length < 3) {
-      newErrors.device_id = 'Device ID must be at least 3 characters';
-    }
-
-    if (!formData.model_number) {
-      newErrors.model_number = 'Model number is required';
-    }
-
-    if (!formData.imei.trim()) {
-      newErrors.imei = 'IMEI is required';
-    } else if (!/^\d{15,17}$/.test(formData.imei.trim())) {
-      newErrors.imei = 'IMEI must be 15–17 digits';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e = {};
+    if (!formData.device_id.trim()) e.device_id = 'Device ID is required';
+    else if (formData.device_id.length < 3) e.device_id = 'Device ID must be at least 3 characters';
+    if (!formData.model_number) e.model_number = 'Model number is required';
+    if (!formData.imei.trim()) e.imei = 'IMEI is required';
+    else if (!/^\d{15,17}$/.test(formData.imei.trim())) e.imei = 'IMEI must be 15–17 digits';
+    setErrors(e);
+    return !Object.keys(e).length;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     try {
-      const updateData = {
+      await updateDevice(device.id, {
         device_id: formData.device_id,
         model_number: formData.model_number,
         imei: formData.imei,
         machin_id: formData.machin_id || null,
-        client_id: formData.client_id ? parseInt(formData.client_id) : null
-      };
-
-      await updateDevice(device.id, updateData);
+        client_id: formData.client_id ? parseInt(formData.client_id) : null,
+      });
       setErrors({});
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('Failed to update device:', error);
-      console.error('Error details:', error.response?.data);
-
-      let errorMessage = 'Failed to update device';
-
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
+      const msg = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to update device';
       if (error.response?.data?.details) {
         const fieldErrors = {};
-        error.response.data.details.forEach(detail => {
-          if (detail.path) {
-            fieldErrors[detail.path] = detail.msg || detail.message;
-          }
-        });
-
-        if (Object.keys(fieldErrors).length > 0) {
-          setErrors({ ...fieldErrors, submit: errorMessage });
-          return;
-        }
+        error.response.data.details.forEach(d => { if (d.path) fieldErrors[d.path] = d.msg || d.message; });
+        if (Object.keys(fieldErrors).length) { setErrors({ ...fieldErrors, submit: msg }); return; }
       }
-
-      if (errorMessage.includes('device_id already exists') || errorMessage.includes('duplicate') && errorMessage.includes('device_id')) {
-        setErrors({ device_id: 'A device with this ID already exists', submit: errorMessage });
-      } else {
-        setErrors({ submit: errorMessage });
-      }
+      if (msg.includes('device_id already exists')) setErrors({ device_id: 'A device with this ID already exists', submit: msg });
+      else setErrors({ submit: msg });
     }
   };
 
   const handleClose = () => {
-    setFormData({
-      device_id: '',
-      model_number: '',
-      imei: '',
-      machin_id: '',
-      client_id: ''
-    });
+    setFormData({ device_id: '', model_number: '', imei: '', machin_id: '', client_id: '' });
     setErrors({});
     onClose();
   };
 
-  if (!device) {
-    return null;
-  }
+  if (!device) return null;
+
+  const isDisabled = loading || loadingData;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="Edit Device"
-      size="md"
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {errors.submit && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-700">{errors.submit}</p>
-          </div>
-        )}
+    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Device" size="md">
+      <form onSubmit={handleSubmit}>
+        <Stack gap="sm">
+          {errors.submit && (
+            <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">{errors.submit}</Alert>
+          )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Device ID *
-          </label>
-          <input
-            type="text"
-            name="device_id"
+          <TextInput label="Device ID" required placeholder="Enter unique device ID"
             value={formData.device_id}
-            onChange={handleChange}
-            placeholder="Enter unique device ID"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.device_id ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.device_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.device_id}</p>
-          )}
-        </div>
+            onChange={(e) => setField('device_id', e.target.value)}
+            error={errors.device_id} disabled={isDisabled} />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Model Number *
-          </label>
-          <SearchableSelect
-            options={inventory.map(item => ({
-              value: item.model_number,
-              label: item.model_number + (item.display_name ? ` — ${item.display_name}` : ''),
-            }))}
-            value={formData.model_number}
-            onChange={(v) => handleChange({ target: { name: 'model_number', value: v } })}
-            placeholder="Select model number"
-            disabled={loading || loadingData}
-            className={errors.model_number ? 'ring-1 ring-red-500 rounded-md' : ''}
-          />
-          {errors.model_number && (
-            <p className="text-sm text-red-600 mt-1">{errors.model_number}</p>
-          )}
-        </div>
+          <div>
+            <SearchableSelect
+              label="Model Number *"
+              options={inventory.map(item => ({
+                value: item.model_number,
+                label: item.model_number + (item.display_name ? ` — ${item.display_name}` : ''),
+              }))}
+              value={formData.model_number}
+              onChange={(v) => setField('model_number', v || '')}
+              placeholder="Select model number"
+              disabled={isDisabled}
+            />
+            {errors.model_number && <p style={{ color: 'var(--mantine-color-red-6)', fontSize: 12, marginTop: 4 }}>{errors.model_number}</p>}
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            IMEI *
-          </label>
-          <input
-            type="text"
-            name="imei"
+          <TextInput label="IMEI" required placeholder="Enter 15–17 digit IMEI" maxLength={17}
             value={formData.imei}
-            onChange={handleChange}
-            placeholder="Enter 15–17 digit IMEI"
-            maxLength={17}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.imei ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.imei && (
-            <p className="text-sm text-red-600 mt-1">{errors.imei}</p>
-          )}
-        </div>
+            onChange={(e) => setField('imei', e.target.value)}
+            error={errors.imei} disabled={isDisabled} />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Machine ID
-          </label>
-          <input
-            type="text"
-            name="machin_id"
+          <TextInput label="Machine ID" placeholder="Enter machine ID (optional)"
             value={formData.machin_id}
-            onChange={handleChange}
-            placeholder="Enter machine ID (optional)"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.machin_id ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.machin_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.machin_id}</p>
-          )}
-        </div>
+            onChange={(e) => setField('machin_id', e.target.value)}
+            error={errors.machin_id} disabled={isDisabled} />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Client
-          </label>
-          <SearchableSelect
-            options={clients.map(client => ({
-              value: String(client.client_id),
-              label: client.name,
-            }))}
-            value={formData.client_id ? String(formData.client_id) : ''}
-            onChange={(v) => handleChange({ target: { name: 'client_id', value: v } })}
-            placeholder="No client assigned"
-            disabled={loading || loadingData}
-            className={errors.client_id ? 'ring-1 ring-red-500 rounded-md' : ''}
-          />
-          {errors.client_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.client_id}</p>
-          )}
-        </div>
+          <div>
+            <SearchableSelect
+              label="Client"
+              options={clients.map(c => ({ value: String(c.client_id), label: c.name }))}
+              value={formData.client_id ? String(formData.client_id) : ''}
+              onChange={(v) => setField('client_id', v || '')}
+              placeholder="No client assigned"
+              disabled={isDisabled}
+            />
+            {errors.client_id && <p style={{ color: 'var(--mantine-color-red-6)', fontSize: 12, marginTop: 4 }}>{errors.client_id}</p>}
+          </div>
 
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            disabled={loading || loadingData}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            disabled={loading || loadingData}
-          >
-            {loading && <LoadingSpinner size="sm" inline className="mr-2" />}
-            Update Device
-          </button>
-        </div>
+          <Group justify="flex-end" pt="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Button variant="default" onClick={handleClose} disabled={isDisabled}>Cancel</Button>
+            <Button type="submit" color="violet" loading={loading} disabled={isDisabled}>Update Device</Button>
+          </Group>
+        </Stack>
       </form>
     </Modal>
   );

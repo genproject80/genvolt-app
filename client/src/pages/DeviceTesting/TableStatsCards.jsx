@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CircleStackIcon, DevicePhoneMobileIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
+import { IconDatabase, IconDeviceMobile, IconCalendar } from '@tabler/icons-react';
 import { deviceTestingService } from '../../services/deviceTestingService';
 
 /**
@@ -27,7 +27,7 @@ const TableStatsCards = ({ tableKey }) => {
     {
       label: 'Total Records',
       value: loading ? '…' : stats ? Number(stats.total_records).toLocaleString() : '—',
-      icon: <CircleStackIcon className="w-6 h-6" />,
+      icon: <IconDatabase className="w-6 h-6" />,
       bg: 'bg-blue-50',
       text: 'text-blue-700',
       iconBg: 'bg-blue-100',
@@ -35,7 +35,7 @@ const TableStatsCards = ({ tableKey }) => {
     {
       label: 'Unique Devices',
       value: loading ? '…' : stats ? Number(stats.unique_devices).toLocaleString() : '—',
-      icon: <DevicePhoneMobileIcon className="w-6 h-6" />,
+      icon: <IconDeviceMobile className="w-6 h-6" />,
       bg: 'bg-green-50',
       text: 'text-green-700',
       iconBg: 'bg-green-100',
@@ -43,7 +43,7 @@ const TableStatsCards = ({ tableKey }) => {
     {
       label: 'Oldest Record (IST)',
       value: loading ? '…' : fmt(stats?.oldest_record),
-      icon: <CalendarDaysIcon className="w-6 h-6" />,
+      icon: <IconCalendar className="w-6 h-6" />,
       bg: 'bg-yellow-50',
       text: 'text-yellow-700',
       iconBg: 'bg-yellow-100',
@@ -51,7 +51,7 @@ const TableStatsCards = ({ tableKey }) => {
     {
       label: 'Latest Record (IST)',
       value: loading ? '…' : fmt(stats?.latest_record),
-      icon: <CalendarDaysIcon className="w-6 h-6" />,
+      icon: <IconCalendar className="w-6 h-6" />,
       bg: 'bg-purple-50',
       text: 'text-purple-700',
       iconBg: 'bg-purple-100',

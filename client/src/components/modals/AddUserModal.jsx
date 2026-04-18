@@ -1,182 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { TextInput, PasswordInput, Checkbox, Button, Group, Stack, Alert, SimpleGrid } from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { roleService } from '../../services/roleService';
 import { clientService } from '../../services/clientService';
-import LoadingSpinner from '../common/LoadingSpinner';
+
+const INITIAL_FORM = (currentUser) => ({
+  first_name: '',
+  last_name: '',
+  email: '',
+  user_name: '',
+  password: '!Ktest123',
+  role_id: '',
+  role_name: '',
+  client_id: currentUser?.role_name === 'CLIENT_ADMIN' ? currentUser.client_id : '',
+  is_active: true,
+});
 
 const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const { createUser, loading } = useUser();
   const { user: currentUser } = useAuth();
 
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    user_name: '',
-    password: '!Ktest123',
-    role_id: '',
-    role_name: '',
-    client_id: currentUser?.role_name === 'CLIENT_ADMIN' ? currentUser.client_id : '',
-    is_active: true
-  });
-
+  const [formData, setFormData] = useState(() => INITIAL_FORM(currentUser));
   const [errors, setErrors] = useState({});
   const [roles, setRoles] = useState([]);
   const [clients, setClients] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Load roles and clients data when modal opens
   useEffect(() => {
-    if (isOpen) {
-      loadRolesAndClients();
-    }
+    if (isOpen) loadRolesAndClients();
   }, [isOpen]);
 
-  // Set default role for CLIENT_ADMIN users after roles are loaded
   useEffect(() => {
     if (isOpen && currentUser?.role_name === 'CLIENT_ADMIN' && roles.length > 0) {
-      const clientUserRole = roles.find(role => role.role_name === 'CLIENT_USER');
+      const clientUserRole = roles.find(r => r.role_name === 'CLIENT_USER');
       if (clientUserRole && !formData.role_id) {
-        setFormData(prev => ({
-          ...prev,
-          role_id: clientUserRole.role_id,
-          role_name: 'CLIENT_USER'
-        }));
+        setFormData(prev => ({ ...prev, role_id: clientUserRole.role_id, role_name: 'CLIENT_USER' }));
       }
     }
-  }, [isOpen, roles, currentUser?.role_name, formData.role_id]);
-
+  }, [isOpen, roles, currentUser?.role_name]);
 
   const loadRolesAndClients = async () => {
+    setLoadingData(true);
     try {
-      setLoadingData(true);
-
-      // Load roles and hierarchical clients (descendants only)
-      const [rolesResponse, clientsResponse] = await Promise.all([
+      const [rolesRes, clientsRes] = await Promise.all([
         roleService.getAllRoles({ limit: 100 }),
-        clientService.getDescendantClients() // Fetch only user's client and descendants
+        clientService.getDescendantClients(),
       ]);
 
-      if (rolesResponse && rolesResponse.success) {
-        // Extract the actual roles array from the response
-        let rolesData = [];
+      const extractArray = (res, key) => {
+        if (res?.data?.[key] && Array.isArray(res.data[key])) return res.data[key];
+        if (res?.data?.data && Array.isArray(res.data.data)) return res.data.data;
+        if (res?.[key] && Array.isArray(res[key])) return res[key];
+        if (Array.isArray(res?.data)) return res.data;
+        return [];
+      };
 
-        if (rolesResponse.data?.roles && Array.isArray(rolesResponse.data.roles)) {
-          rolesData = rolesResponse.data.roles;
-        } else if (rolesResponse.data?.data && Array.isArray(rolesResponse.data.data)) {
-          rolesData = rolesResponse.data.data;
-        } else if (rolesResponse.roles && Array.isArray(rolesResponse.roles)) {
-          rolesData = rolesResponse.roles;
-        } else if (Array.isArray(rolesResponse.data)) {
-          rolesData = rolesResponse.data;
-        }
+      if (rolesRes?.success) setRoles(extractArray(rolesRes, 'roles'));
+      else setErrors({ submit: 'Failed to load roles data' });
 
-        setRoles(rolesData);
-      } else {
-        setErrors({ submit: 'Failed to load roles data' });
-      }
-
-      if (clientsResponse && clientsResponse.success) {
-        // Extract the actual clients array from the response
-        let clientsData = [];
-
-        if (clientsResponse.data?.clients && Array.isArray(clientsResponse.data.clients)) {
-          clientsData = clientsResponse.data.clients;
-        } else if (clientsResponse.data?.data && Array.isArray(clientsResponse.data.data)) {
-          clientsData = clientsResponse.data.data;
-        } else if (clientsResponse.clients && Array.isArray(clientsResponse.clients)) {
-          clientsData = clientsResponse.clients;
-        } else if (Array.isArray(clientsResponse.data)) {
-          clientsData = clientsResponse.data;
-        }
-
-        setClients(clientsData);
-      } else {
-        setErrors({ submit: 'Failed to load clients data' });
-      }
-    } catch (error) {
+      if (clientsRes?.success) setClients(extractArray(clientsRes, 'clients'));
+      else setErrors({ submit: 'Failed to load clients data' });
+    } catch {
       setErrors({ submit: 'Failed to load form data. Please try again.' });
     } finally {
       setLoadingData(false);
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    let newValue = type === 'checkbox' ? checked : value;
-
-    // Handle role change - find role_name when role_id changes
+  const setField = (name, value) => {
     if (name === 'role_id') {
-      const selectedRole = roles.find(role => role.role_id === parseInt(value));
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-        role_name: selectedRole?.role_name || ''
-      }));
+      const role = roles.find(r => r.role_id === parseInt(value));
+      setFormData(prev => ({ ...prev, role_id: value, role_name: role?.role_name || '' }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: newValue
-      }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
-
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
   const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.first_name.trim()) {
-      newErrors.first_name = 'First name is required';
-    }
-
-    if (!formData.last_name.trim()) {
-      newErrors.last_name = 'Last name is required';
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
-    }
-
-    if (!formData.user_name.trim()) {
-      newErrors.user_name = 'Username is required';
-    }
-
-    if (!formData.password.trim()) {
-      newErrors.password = 'Password is required';
-    }
-
-    if (!formData.role_id) {
-      newErrors.role_id = 'Role is required';
-    }
-
-    // Client is required for all users
-    if (!formData.client_id) {
-      newErrors.client_id = 'Client is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e = {};
+    if (!formData.first_name.trim()) e.first_name = 'First name is required';
+    if (!formData.last_name.trim()) e.last_name = 'Last name is required';
+    if (!formData.email.trim()) e.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) e.email = 'Email is invalid';
+    if (!formData.user_name.trim()) e.user_name = 'Username is required';
+    if (!formData.password.trim()) e.password = 'Password is required';
+    if (!formData.role_id) e.role_id = 'Role is required';
+    if (!formData.client_id) e.client_id = 'Client is required';
+    setErrors(e);
+    return !Object.keys(e).length;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     try {
-      // Prepare data for API
-      const createData = {
+      await createUser({
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
@@ -184,282 +107,96 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         password: formData.password,
         role_id: parseInt(formData.role_id),
         client_id: formData.client_id ? parseInt(formData.client_id) : null,
-        is_active: formData.is_active
-      };
-
-      await createUser(createData);
-      setFormData({
-        first_name: '',
-        last_name: '',
-        email: '',
-        user_name: '',
-        password: '!Ktest123',
-        role_id: '',
-        role_name: '',
-        client_id: currentUser?.role_name === 'CLIENT_ADMIN' ? currentUser.client_id : '',
-        is_active: true
+        is_active: formData.is_active,
       });
+      setFormData(INITIAL_FORM(currentUser));
       setErrors({});
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('Failed to create user:', error);
-      console.error('Error details:', error.response?.data);
-
-      // Extract error message from server response
-      let errorMessage = 'Failed to create user';
-
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      // Handle specific validation errors for individual fields
+      const msg = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to create user';
       if (error.response?.data?.details) {
         const fieldErrors = {};
-        error.response.data.details.forEach(detail => {
-          if (detail.path) {
-            fieldErrors[detail.path] = detail.msg || detail.message;
-          }
-        });
-
-        if (Object.keys(fieldErrors).length > 0) {
-          setErrors({ ...fieldErrors, submit: errorMessage });
-          return;
-        }
+        error.response.data.details.forEach(d => { if (d.path) fieldErrors[d.path] = d.msg || d.message; });
+        if (Object.keys(fieldErrors).length) { setErrors({ ...fieldErrors, submit: msg }); return; }
       }
-
-      // Handle common errors
-      if (errorMessage.includes('email already exists') || errorMessage.includes('duplicate') && errorMessage.includes('email')) {
-        setErrors({ email: 'A user with this email already exists', submit: errorMessage });
-      } else if (errorMessage.includes('username already exists') || errorMessage.includes('duplicate') && errorMessage.includes('username')) {
-        setErrors({ user_name: 'A user with this username already exists', submit: errorMessage });
-      } else {
-        setErrors({ submit: errorMessage });
-      }
+      if (msg.includes('email already exists')) setErrors({ email: 'A user with this email already exists', submit: msg });
+      else if (msg.includes('username already exists')) setErrors({ user_name: 'A user with this username already exists', submit: msg });
+      else setErrors({ submit: msg });
     }
   };
 
   const handleClose = () => {
-    setFormData({
-      first_name: '',
-      last_name: '',
-      email: '',
-      user_name: '',
-      password: '!Ktest123',
-      role_id: '',
-      role_name: '',
-      client_id: currentUser?.role_name === 'CLIENT_ADMIN' ? currentUser.client_id : '',
-      is_active: true
-    });
+    setFormData(INITIAL_FORM(currentUser));
     setErrors({});
     onClose();
   };
 
-  // Show all available roles from database - permissions will be enforced by backend
-  const getAvailableRoles = () => {
-    if (!roles.length) return [];
-
-    // Return all roles - let the backend enforce permissions based on role_permission table
-    return roles;
-  };
-
-  // Show all available clients from database - permissions will be enforced by backend
-  const getAvailableClients = () => {
-    if (!clients.length) return [];
-
-    // Return all clients - let the backend enforce permissions based on role_permission table
-    return clients;
-  };
+  const isDisabled = loading || loadingData;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="Add New User"
-      size="md"
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {errors.submit && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-700">{errors.submit}</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              First Name *
-            </label>
-            <input
-              type="text"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-                errors.first_name ? 'border-red-500' : 'border-gray-300'
-              }`}
-              disabled={loading || loadingData}
-            />
-            {errors.first_name && (
-              <p className="text-sm text-red-600 mt-1">{errors.first_name}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Last Name *
-            </label>
-            <input
-              type="text"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-                errors.last_name ? 'border-red-500' : 'border-gray-300'
-              }`}
-              disabled={loading || loadingData}
-            />
-            {errors.last_name && (
-              <p className="text-sm text-red-600 mt-1">{errors.last_name}</p>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email *
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.email ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.email && (
-            <p className="text-sm text-red-600 mt-1">{errors.email}</p>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add New User" size="md">
+      <form onSubmit={handleSubmit}>
+        <Stack gap="sm">
+          {errors.submit && (
+            <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">{errors.submit}</Alert>
           )}
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Username *
-          </label>
-          <input
-            type="text"
-            name="user_name"
-            value={formData.user_name}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.user_name ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.user_name && (
-            <p className="text-sm text-red-600 mt-1">{errors.user_name}</p>
-          )}
-        </div>
+          <SimpleGrid cols={2} spacing="sm">
+            <TextInput label="First Name" required value={formData.first_name}
+              onChange={(e) => setField('first_name', e.target.value)}
+              error={errors.first_name} disabled={isDisabled} />
+            <TextInput label="Last Name" required value={formData.last_name}
+              onChange={(e) => setField('last_name', e.target.value)}
+              error={errors.last_name} disabled={isDisabled} />
+          </SimpleGrid>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Temporary Password *
-          </label>
-          <input
-            type="password"
-            name="password"
+          <TextInput label="Email" required type="email" value={formData.email}
+            onChange={(e) => setField('email', e.target.value)}
+            error={errors.email} disabled={isDisabled} />
+
+          <TextInput label="Username" required value={formData.user_name}
+            onChange={(e) => setField('user_name', e.target.value)}
+            error={errors.user_name} disabled={isDisabled} />
+
+          <PasswordInput label="Temporary Password" required placeholder="Enter temporary password"
             value={formData.password}
-            onChange={handleChange}
-            placeholder="Enter temporary password"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-              errors.password ? 'border-red-500' : 'border-gray-300'
-            }`}
-            disabled={loading || loadingData}
-          />
-          {errors.password && (
-            <p className="text-sm text-red-600 mt-1">{errors.password}</p>
-          )}
-        </div>
+            onChange={(e) => setField('password', e.target.value)}
+            error={errors.password} disabled={isDisabled} />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Role *
-          </label>
-          <SearchableSelect
-            options={getAvailableRoles().map(role => ({
-              value: String(role.role_id),
-              label: role.role_name,
-            }))}
-            value={formData.role_id ? String(formData.role_id) : ''}
-            onChange={(v) => handleChange({ target: { name: 'role_id', value: v } })}
-            placeholder="Select a role"
-            disabled={loading || loadingData}
-            className={errors.role_id ? 'ring-1 ring-red-500 rounded-md' : ''}
-          />
-          {errors.role_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.role_id}</p>
-          )}
-        </div>
+          <div>
+            <SearchableSelect
+              label="Role *"
+              options={roles.map(r => ({ value: String(r.role_id), label: r.role_name }))}
+              value={formData.role_id ? String(formData.role_id) : ''}
+              onChange={(v) => setField('role_id', v || '')}
+              placeholder="Select a role"
+              disabled={isDisabled}
+            />
+            {errors.role_id && <p style={{ color: 'var(--mantine-color-red-6)', fontSize: 12, marginTop: 4 }}>{errors.role_id}</p>}
+          </div>
 
-        {/* Client selection - show for all roles since all users need client assignment */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Client *
-          </label>
-          <SearchableSelect
-            options={getAvailableClients().map(client => ({
-              value: String(client.client_id),
-              label: client.name,
-            }))}
-            value={formData.client_id ? String(formData.client_id) : ''}
-            onChange={(v) => handleChange({ target: { name: 'client_id', value: v } })}
-            placeholder="Select a client"
-            disabled={loading || loadingData}
-            className={errors.client_id ? 'ring-1 ring-red-500 rounded-md' : ''}
-          />
-          {errors.client_id && (
-            <p className="text-sm text-red-600 mt-1">{errors.client_id}</p>
-          )}
-        </div>
+          <div>
+            <SearchableSelect
+              label="Client *"
+              options={clients.map(c => ({ value: String(c.client_id), label: c.name }))}
+              value={formData.client_id ? String(formData.client_id) : ''}
+              onChange={(v) => setField('client_id', v || '')}
+              placeholder="Select a client"
+              disabled={isDisabled}
+            />
+            {errors.client_id && <p style={{ color: 'var(--mantine-color-red-6)', fontSize: 12, marginTop: 4 }}>{errors.client_id}</p>}
+          </div>
 
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            name="is_active"
-            checked={formData.is_active}
-            onChange={handleChange}
-            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            disabled={loading || loadingData}
-          />
-          <label className="ml-2 block text-sm text-gray-700">
-            Active User
-          </label>
-        </div>
+          <Checkbox label="Active User" checked={formData.is_active}
+            onChange={(e) => setField('is_active', e.target.checked)}
+            color="violet" disabled={isDisabled} />
 
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            disabled={loading || loadingData}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            disabled={loading || loadingData}
-          >
-            {loading && <LoadingSpinner size="sm" inline className="mr-2" />}
-            Create User
-          </button>
-        </div>
+          <Group justify="flex-end" pt="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Button variant="default" onClick={handleClose} disabled={isDisabled}>Cancel</Button>
+            <Button type="submit" color="violet" loading={loading} disabled={isDisabled}>Create User</Button>
+          </Group>
+        </Stack>
       </form>
     </Modal>
   );

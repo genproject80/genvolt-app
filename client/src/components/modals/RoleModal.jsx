@@ -1,449 +1,194 @@
-import React, { useState, useEffect } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
-import { XMarkIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import {
+  Modal, TextInput, Button, Group, Stack, Text, Loader, Center,
+  Checkbox, Alert, ScrollArea, ActionIcon,
+} from '@mantine/core';
+import { IconShieldCheck, IconInfoCircle } from '@tabler/icons-react';
+import AccessDeniedModal from '../common/AccessDeniedModal';
 import { useRole } from '../../context/RoleContext';
 import { useRolePermissions } from '../../hooks/usePermissions';
+
+const RESERVED = ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'CLIENT_ADMIN', 'CLIENT_USER'];
+
+const groupPermissions = (permissions) =>
+  permissions.reduce((groups, p) => {
+    let category = 'Other';
+    if (p.permission_name.includes('User') || p.permission_name.includes('Password')) category = 'User Management';
+    else if (p.permission_name.includes('Client')) category = 'Client Management';
+    else if (p.permission_name.includes('Device')) category = 'Device Management';
+    else if (p.permission_name.includes('Role') || p.permission_name.includes('role')) category = 'System Administration';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(p);
+    return groups;
+  }, {});
 
 const RoleModal = ({ isOpen, onClose, role = null, onSuccess }) => {
   const { createRole, updateRole, permissions, getAllPermissions, loading, error } = useRole();
   const { canCreateRole, canEditRole } = useRolePermissions();
-  
-  const [formData, setFormData] = useState({
-    role_name: '',
-    permission_ids: []
-  });
+
+  const isEditMode = Boolean(role);
+  const canPerformAction = isEditMode ? canEditRole : canCreateRole;
+
+  const [formData, setFormData] = useState({ role_name: '', permission_ids: [] });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditMode = Boolean(role);
-
-  // Initialize form data when modal opens or role changes
   useEffect(() => {
-    if (isOpen) {
-      if (isEditMode && role) {
-        setFormData({
-          role_name: role.role_name || '',
-          permission_ids: role.permissions ? role.permissions.map(p => p.permission_id) : []
-        });
-      } else {
-        setFormData({
-          role_name: '',
-          permission_ids: []
-        });
-      }
-      setFormErrors({});
-      
-      // Load permissions if not already loaded
-      if (!permissions.length) {
-        getAllPermissions();
-      }
-    }
-  }, [isOpen, role, isEditMode, getAllPermissions, permissions.length]);
-
-  const validateForm = () => {
-    const errors = {};
-
-    // Validate role name
-    if (!formData.role_name.trim()) {
-      errors.role_name = 'Role name is required';
-    } else if (formData.role_name.trim().length < 2) {
-      errors.role_name = 'Role name must be at least 2 characters';
-    } else if (formData.role_name.trim().length > 100) {
-      errors.role_name = 'Role name must be less than 100 characters';
-    } else if (!/^[a-zA-Z0-9\s_-]+$/.test(formData.role_name.trim())) {
-      errors.role_name = 'Role name can only contain letters, numbers, spaces, underscores, and hyphens';
-    }
-
-    // Check for reserved role names (only for new roles)
-    if (!isEditMode) {
-      const reservedNames = ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'CLIENT_ADMIN', 'CLIENT_USER'];
-      if (reservedNames.includes(formData.role_name.trim().toUpperCase())) {
-        errors.role_name = 'This role name is reserved and cannot be used';
-      }
-    }
-
-    // Validate permissions (optional but if provided should be valid)
-    if (formData.permission_ids.length > 50) {
-      errors.permission_ids = 'Cannot assign more than 50 permissions to a role';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Clear error when user starts typing
-    if (formErrors[name]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: undefined
-      }));
-    }
-  };
-
-  const handlePermissionChange = (permissionId) => {
-    setFormData(prev => {
-      const isSelected = prev.permission_ids.includes(permissionId);
-      const newPermissionIds = isSelected
-        ? prev.permission_ids.filter(id => id !== permissionId)
-        : [...prev.permission_ids, permissionId];
-      
-      return {
-        ...prev,
-        permission_ids: newPermissionIds
-      };
+    if (!isOpen) return;
+    setFormData({
+      role_name: isEditMode ? role.role_name || '' : '',
+      permission_ids: isEditMode && role.permissions ? role.permissions.map((p) => p.permission_id) : [],
     });
-    
-    // Clear permission errors
-    if (formErrors.permission_ids) {
-      setFormErrors(prev => ({
-        ...prev,
-        permission_ids: undefined
-      }));
-    }
+    setFormErrors({});
+    if (!permissions.length) getAllPermissions();
+  }, [isOpen, role, isEditMode]);
+
+  const validate = () => {
+    const errors = {};
+    const name = formData.role_name.trim();
+    if (!name) errors.role_name = 'Role name is required';
+    else if (name.length < 2) errors.role_name = 'Minimum 2 characters';
+    else if (name.length > 100) errors.role_name = 'Maximum 100 characters';
+    else if (!/^[a-zA-Z0-9\s_-]+$/.test(name)) errors.role_name = 'Letters, numbers, spaces, _ and - only';
+    else if (!isEditMode && RESERVED.includes(name.toUpperCase())) errors.role_name = 'This role name is reserved';
+    if (formData.permission_ids.length > 50) errors.permission_ids = 'Maximum 50 permissions';
+    setFormErrors(errors);
+    return !Object.keys(errors).length;
   };
 
-  const handleSelectAllPermissions = () => {
-    const allPermissionIds = permissions.map(p => p.permission_id);
-    setFormData(prev => ({
+  const togglePermission = (id) =>
+    setFormData((prev) => ({
       ...prev,
-      permission_ids: allPermissionIds
+      permission_ids: prev.permission_ids.includes(id)
+        ? prev.permission_ids.filter((x) => x !== id)
+        : [...prev.permission_ids, id],
     }));
-  };
-
-  const handleDeselectAllPermissions = () => {
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: []
-    }));
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validate()) return;
     setIsSubmitting(true);
-
     try {
-      const roleData = {
-        role_name: formData.role_name.trim(),
-        permission_ids: formData.permission_ids
-      };
-
-      let result;
-      if (isEditMode) {
-        result = await updateRole(role.role_id, { role_name: roleData.role_name });
-        // Note: Permission updates are handled separately in the PermissionModal
-      } else {
-        result = await createRole(roleData);
-      }
-
-      if (onSuccess) {
-        onSuccess(result);
-      }
-      
+      const data = { role_name: formData.role_name.trim(), permission_ids: formData.permission_ids };
+      const result = isEditMode
+        ? await updateRole(role.role_id, { role_name: data.role_name })
+        : await createRole(data);
+      onSuccess?.(result);
       onClose();
-    } catch (error) {
-      // Error is handled by context and will be displayed
-      console.error('Failed to save role:', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    if (!isSubmitting) {
-      onClose();
-    }
-  };
-
-  // Group permissions by category for better UX
-  const groupedPermissions = permissions.reduce((groups, permission) => {
-    // Simple categorization based on permission name
-    let category = 'Other';
-
-    if (permission.permission_name.includes('User') || permission.permission_name.includes('Password')) {
-      category = 'User Management';
-    } else if (permission.permission_name.includes('Client')) {
-      category = 'Client Management';
-    } else if (permission.permission_name.includes('Device')) {
-      category = 'Device Management';
-    } else if (permission.permission_name.includes('Role') || permission.permission_name.includes('role')) {
-      category = 'System Administration';
-    }
-
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(permission);
-
-    return groups;
-  }, {});
-
-  // Check permissions - prevent unauthorized access
-  const canPerformAction = isEditMode ? canEditRole : canCreateRole;
-
   if (!canPerformAction) {
     return (
-      <Transition appear show={isOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={handleClose}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-center align-middle shadow-xl transition-all">
-                  <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
-                    <XMarkIcon className="w-6 h-6 text-red-600" />
-                  </div>
-                  <Dialog.Title as="h3" className="text-lg font-medium text-gray-900 mb-2">
-                    Access Denied
-                  </Dialog.Title>
-                  <p className="text-sm text-gray-500 mb-6">
-                    You don't have permission to {isEditMode ? 'edit roles' : 'create new roles'}.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  >
-                    OK
-                  </button>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
+      <AccessDeniedModal
+        isOpen={isOpen}
+        onClose={onClose}
+        message={`You don't have permission to ${isEditMode ? 'edit' : 'create'} roles.`}
+      />
     );
   }
 
+  const grouped = groupPermissions(permissions);
+
   return (
-    <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={handleClose}>
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
-        </Transition.Child>
+    <Modal
+      opened={isOpen}
+      onClose={() => !isSubmitting && onClose()}
+      title={
+        <Group gap="sm">
+          <ActionIcon variant="light" color="violet" size="lg" radius="xl">
+            <IconShieldCheck size={18} />
+          </ActionIcon>
+          <Stack gap={0}>
+            <Text fw={600}>{isEditMode ? 'Edit Role' : 'Create New Role'}</Text>
+            <Text size="xs" c="dimmed">
+              {isEditMode ? 'Update the role name and basic settings' : 'Create a new role with permissions'}
+            </Text>
+          </Stack>
+        </Group>
+      }
+      size="lg"
+    >
+      {error && <Text c="red" size="sm" mb="sm">{error}</Text>}
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <ShieldCheckIcon className="h-6 w-6 text-indigo-600" />
-                    </div>
-                    <div className="ml-4">
-                      <Dialog.Title as="h3" className="text-lg font-medium text-gray-900">
-                        {isEditMode ? 'Edit Role' : 'Create New Role'}
-                      </Dialog.Title>
-                      <p className="text-sm text-gray-500">
-                        {isEditMode 
-                          ? 'Update the role name and basic settings' 
-                          : 'Create a new role with permissions'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleClose}
-                    disabled={isSubmitting}
-                    className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
+      <form onSubmit={handleSubmit}>
+        <Stack gap="md">
+          <TextInput
+            label="Role Name"
+            required
+            value={formData.role_name}
+            onChange={(e) => {
+              setFormData((p) => ({ ...p, role_name: e.target.value }));
+              if (formErrors.role_name) setFormErrors((p) => ({ ...p, role_name: undefined }));
+            }}
+            disabled={isSubmitting || loading}
+            placeholder="e.g. Content Manager"
+            error={formErrors.role_name}
+          />
 
-                {/* Error Display */}
-                {error && (
-                  <div className="mb-4 rounded-md bg-red-50 p-4">
-                    <div className="text-sm text-red-700">{error}</div>
-                  </div>
-                )}
+          {!isEditMode && (
+            <div>
+              <Group justify="space-between" mb="xs">
+                <Text size="sm" fw={500}>Permissions (Optional)</Text>
+                <Group gap="xs">
+                  <Button variant="subtle" size="xs" onClick={() => setFormData((p) => ({ ...p, permission_ids: permissions.map((x) => x.permission_id) }))}>Select All</Button>
+                  <Text c="dimmed">|</Text>
+                  <Button variant="subtle" size="xs" onClick={() => setFormData((p) => ({ ...p, permission_ids: [] }))}>Clear All</Button>
+                </Group>
+              </Group>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Role Name */}
-                  <div>
-                    <label htmlFor="role_name" className="block text-sm font-medium text-gray-700">
-                      Role Name *
-                    </label>
-                    <input
-                      type="text"
-                      id="role_name"
-                      name="role_name"
-                      required
-                      value={formData.role_name}
-                      onChange={handleInputChange}
-                      disabled={isSubmitting || loading}
-                      placeholder="Enter role name (e.g., Content Manager)"
-                      className={`mt-1 block w-full border rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                        formErrors.role_name 
-                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
-                          : 'border-gray-300'
-                      }`}
-                    />
-                    {formErrors.role_name && (
-                      <p className="mt-2 text-sm text-red-600">{formErrors.role_name}</p>
-                    )}
-                  </div>
-
-                  {/* Permissions (only for create mode) */}
-                  {!isEditMode && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Permissions (Optional)
-                        </label>
-                        <div className="flex space-x-2">
-                          <button
-                            type="button"
-                            onClick={handleSelectAllPermissions}
-                            className="text-xs text-indigo-600 hover:text-indigo-500"
-                          >
-                            Select All
-                          </button>
-                          <span className="text-gray-300">|</span>
-                          <button
-                            type="button"
-                            onClick={handleDeselectAllPermissions}
-                            className="text-xs text-indigo-600 hover:text-indigo-500"
-                          >
-                            Clear All
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {loading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
-                        </div>
-                      ) : (
-                        <div className="border border-gray-200 rounded-md p-4 max-h-64 overflow-y-auto">
-                          {Object.entries(groupedPermissions).map(([category, categoryPermissions]) => (
-                            <div key={category} className="mb-4 last:mb-0">
-                              <h4 className="text-sm font-medium text-gray-900 mb-2">{category}</h4>
-                              <div className="grid grid-cols-1 gap-2">
-                                {categoryPermissions.map((permission) => (
-                                  <label key={permission.permission_id} className="inline-flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={formData.permission_ids.includes(permission.permission_id)}
-                                      onChange={() => handlePermissionChange(permission.permission_id)}
-                                      className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                    />
-                                    <span className="ml-2 text-sm text-gray-700">
-                                      {permission.permission_name}
-                                    </span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
+              {loading ? (
+                <Center py="md"><Loader size="sm" color="violet" /></Center>
+              ) : (
+                <ScrollArea h={240} type="scroll" style={{ border: '1px solid var(--mantine-color-gray-3)', borderRadius: 8 }}>
+                  <Stack gap={0} p="sm">
+                    {Object.entries(grouped).map(([cat, catPerms]) => (
+                      <div key={cat} mb={8}>
+                        <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4}>{cat}</Text>
+                        <Stack gap={4} mb="sm">
+                          {catPerms.map((p) => (
+                            <Checkbox
+                              key={p.permission_id}
+                              checked={formData.permission_ids.includes(p.permission_id)}
+                              onChange={() => togglePermission(p.permission_id)}
+                              label={p.permission_name}
+                              size="sm"
+                              color="violet"
+                            />
                           ))}
-                        </div>
-                      )}
-                      
-                      {formData.permission_ids.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formData.permission_ids.length} permission(s) selected
-                        </p>
-                      )}
-                      
-                      {formErrors.permission_ids && (
-                        <p className="mt-2 text-sm text-red-600">{formErrors.permission_ids}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Note for edit mode */}
-                  {isEditMode && (
-                    <div className="rounded-md bg-blue-50 p-4">
-                      <div className="text-sm text-blue-700">
-                        <p className="font-medium">Note:</p>
-                        <p>To modify permissions for this role, use the "Manage Permissions" button from the role list.</p>
+                        </Stack>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </Stack>
+                </ScrollArea>
+              )}
 
-                  {/* Actions */}
-                  <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      disabled={isSubmitting}
-                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || loading || !canPerformAction}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                      title={!canPerformAction ? `You don't have permission to ${isEditMode ? 'edit' : 'create'} roles` : ''}
-                    >
-                      {isSubmitting ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          {isEditMode ? 'Updating...' : 'Creating...'}
-                        </div>
-                      ) : (
-                        isEditMode ? 'Update Role' : 'Create Role'
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
-        </div>
-      </Dialog>
-    </Transition>
+              {formData.permission_ids.length > 0 && (
+                <Text size="xs" c="dimmed" mt={4}>{formData.permission_ids.length} permission(s) selected</Text>
+              )}
+              {formErrors.permission_ids && <Text c="red" size="xs">{formErrors.permission_ids}</Text>}
+            </div>
+          )}
+
+          {isEditMode && (
+            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+              To modify permissions for this role, use the "Manage Permissions" button from the role list.
+            </Alert>
+          )}
+
+          <Group justify="flex-end" pt="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Button variant="default" onClick={() => !isSubmitting && onClose()} disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" color="violet" loading={isSubmitting} disabled={isSubmitting || loading}>
+              {isEditMode ? 'Update Role' : 'Create Role'}
+            </Button>
+          </Group>
+        </Stack>
+      </form>
+    </Modal>
   );
 };
 

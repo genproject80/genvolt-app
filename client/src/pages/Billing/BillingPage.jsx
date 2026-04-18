@@ -5,14 +5,14 @@ import { getPlans, getTransactions } from '../../services/subscriptionService';
 import SubscribePlanModal from '../../components/modals/SubscribePlanModal';
 import deviceService from '../../services/deviceService';
 import {
-  CreditCardIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  XCircleIcon,
-  ArrowPathIcon,
-  PauseCircleIcon,
-  PlayCircleIcon,
-} from '@heroicons/react/24/outline';
+  IconCreditCard,
+  IconCircleCheck,
+  IconAlertTriangle,
+  IconCircleX,
+  IconRefresh,
+  IconPlayerPause,
+  IconPlayerPlay,
+} from '@tabler/icons-react';
 
 const STATUS_STYLES = {
   ACTIVE:    'bg-green-100 text-green-800',
@@ -130,7 +130,7 @@ export default function BillingPage() {
           onClick={refreshSubscription}
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
         >
-          <ArrowPathIcon className="w-4 h-4" />
+          <IconRefresh className="w-4 h-4" />
           Refresh
         </button>
       </div>
@@ -139,7 +139,7 @@ export default function BillingPage() {
       {!loading && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <CreditCardIcon className="w-5 h-5 text-indigo-500" />
+            <IconCreditCard className="w-5 h-5 text-indigo-500" />
             Current Plan
           </h2>
 
@@ -188,7 +188,7 @@ export default function BillingPage() {
             </div>
           ) : (
             <div className="text-center py-6">
-              <XCircleIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <IconCircleX className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500 text-sm">No active subscription</p>
               <p className="text-gray-400 text-xs mt-1">Choose a plan below to get started</p>
             </div>
@@ -212,7 +212,7 @@ export default function BillingPage() {
               disabled={pausingAll}
               className="flex items-center gap-2 px-4 py-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-60"
             >
-              <PauseCircleIcon className="w-4 h-4" />
+              <IconPlayerPause className="w-4 h-4" />
               {pausingAll ? 'Pausing…' : 'Pause All Devices'}
             </button>
             <button
@@ -220,7 +220,7 @@ export default function BillingPage() {
               disabled={resumingAll}
               className="flex items-center gap-2 px-4 py-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-60"
             >
-              <PlayCircleIcon className="w-4 h-4" />
+              <IconPlayerPlay className="w-4 h-4" />
               {resumingAll ? 'Resuming…' : 'Resume All Devices'}
             </button>
           </div>
@@ -304,7 +304,7 @@ export default function BillingPage() {
                   <ul className="space-y-2 flex-1 mb-6">
                     {(plan.features || []).map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                        <CheckCircleIcon className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <IconCircleCheck className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                         {f}
                       </li>
                     ))}

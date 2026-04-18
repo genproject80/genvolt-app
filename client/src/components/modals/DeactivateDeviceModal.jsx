@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const DeactivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
@@ -33,7 +33,7 @@ const DeactivateDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
     <Modal isOpen={isOpen} onClose={handleClose} title="Deactivate Device" size="sm">
       <div className="space-y-4">
         <div className="flex items-center space-x-3 text-amber-600">
-          <ExclamationTriangleIcon className="w-6 h-6 flex-shrink-0" />
+          <IconAlertTriangle className="w-6 h-6 flex-shrink-0" />
           <p className="text-sm font-medium">The device will be disconnected from MQTT and denied future connections.</p>
         </div>
 

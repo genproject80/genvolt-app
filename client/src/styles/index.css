@@ -1,15 +1,31 @@
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
-
+/* @import rules must be first */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Mantine styles before Tailwind so Tailwind utilities can override */
+@import "@mantine/core/styles.css";
+@import "@mantine/notifications/styles.css";
+@import "@mantine/charts/styles.css";
+@import "@mantine/dates/styles.css";
+
+@import "tailwindcss";
+
+/* Tailwind v4: design tokens (replaces tailwind.config.js theme.extend) */
+@theme {
+  --color-primary-50: #f3f4f6;
+  --color-primary-100: #e5e7eb;
+  --color-primary-500: #6B46C1;
+  --color-primary-600: #553C9A;
+  --color-primary-700: #4C1D95;
+  --color-primary-800: #3B0764;
+  --color-primary-900: #2D1B69;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
 
 body {
   font-family: 'Inter', sans-serif;
 }
 
-/* Prevent iOS Safari from zooming on input/select focus (triggers when font-size < 16px).
-   Zoom causes the picker to appear disconnected from the element. */
+/* Prevent iOS Safari from zooming on input/select focus (triggers when font-size < 16px) */
 @media screen and (max-width: 768px) {
   input,
   select,
@@ -19,7 +35,6 @@ body {
   }
 }
 
-/* Custom styles for the IoT Dashboard */
 .login-container {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: 100vh;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, PencilIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { IconPlus, IconPencil, IconArchive } from '@tabler/icons-react';
 import {
   getAllInventory,
   createInventory,
@@ -130,7 +130,7 @@ export default function InventoryManagement() {
           onClick={openCreate}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
         >
-          <PlusIcon className="w-4 h-4" />
+          <IconPlus className="w-4 h-4" />
           New Model
         </button>
       </div>
@@ -193,7 +193,7 @@ export default function InventoryManagement() {
                         className="text-indigo-500 hover:text-indigo-700"
                         title="Edit"
                       >
-                        <PencilIcon className="w-4 h-4" />
+                        <IconPencil className="w-4 h-4" />
                       </button>
                       {entry.is_active ? (
                         <button
@@ -201,7 +201,7 @@ export default function InventoryManagement() {
                           className="text-red-400 hover:text-red-600"
                           title="Archive"
                         >
-                          <ArchiveBoxIcon className="w-4 h-4" />
+                          <IconArchive className="w-4 h-4" />
                         </button>
                       ) : (
                         <button

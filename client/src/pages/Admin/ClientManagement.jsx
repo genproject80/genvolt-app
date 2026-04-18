@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusIcon, PencilIcon, TrashIcon, ServerStackIcon } from '@heroicons/react/24/outline';
+import { IconPlus, IconPencil, IconTrash, IconServer, IconBuilding, IconCircleCheck, IconCpu, IconTrendingUp } from '@tabler/icons-react';
 import { useClient } from '../../context/ClientContext';
 import { useClientPermissions } from '../../hooks/useClientPermissions';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
@@ -186,7 +186,7 @@ const ClientManagement = () => {
             onClick={handleAddClient}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <PlusIcon className="w-5 h-5 mr-2" />
+            <IconPlus className="w-5 h-5 mr-2" />
             Add Client
           </button>
         )}
@@ -197,9 +197,7 @@ const ClientManagement = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-              </svg>
+              <IconBuilding className="w-6 h-6 text-blue-600" size={24} />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Total Clients</h3>
@@ -211,9 +209,7 @@ const ClientManagement = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex items-center">
             <div className="p-2 bg-green-100 rounded-lg">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
+              <IconCircleCheck className="w-6 h-6 text-green-600" size={24} />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Active Clients</h3>
@@ -225,9 +221,7 @@ const ClientManagement = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex items-center">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
-              </svg>
+              <IconCpu className="w-6 h-6 text-purple-600" size={24} />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Total Devices</h3>
@@ -239,9 +233,7 @@ const ClientManagement = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex items-center">
             <div className="p-2 bg-orange-100 rounded-lg">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-              </svg>
+              <IconTrendingUp className="w-6 h-6 text-orange-600" size={24} />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-semibold text-gray-900">Avg Devices/Client</h3>
@@ -370,7 +362,7 @@ const ClientManagement = () => {
                           className="text-blue-600 hover:text-blue-900"
                           title="Manage Devices"
                         >
-                          <ServerStackIcon className="w-4 h-4" />
+                          <IconServer className="w-4 h-4" />
                         </button>
                       )}
                       {canEditClient && (
@@ -379,7 +371,7 @@ const ClientManagement = () => {
                           className="text-indigo-600 hover:text-indigo-900"
                           title="Edit Client"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <IconPencil className="w-4 h-4" />
                         </button>
                       )}
                       {canDeleteClient && (
@@ -388,7 +380,7 @@ const ClientManagement = () => {
                           className="text-red-600 hover:text-red-900"
                           title="Delete Client"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          <IconTrash className="w-4 h-4" />
                         </button>
                       )}
                       {!canEditClient && !canDeleteClient && (

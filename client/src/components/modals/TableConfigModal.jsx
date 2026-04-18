@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SearchableSelect from '../common/SearchableSelect';
-import { XMarkIcon, ArrowLeftIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { IconX, IconArrowLeft, IconArrowRight, IconCheck } from '@tabler/icons-react';
 import { tableConfigService } from '../../services/tableConfigService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
@@ -190,7 +190,7 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
     <div className={`flex items-center gap-2 text-sm font-medium ${step >= n ? 'text-primary-700' : 'text-gray-400'}`}>
       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
         ${step > n ? 'bg-primary-600 text-white' : step === n ? 'bg-primary-100 text-primary-700 border border-primary-400' : 'bg-gray-100 text-gray-400'}`}>
-        {step > n ? <CheckIcon className="w-3.5 h-3.5" /> : n}
+        {step > n ? <IconCheck className="w-3.5 h-3.5" /> : n}
       </span>
       {label}
     </div>
@@ -214,7 +214,7 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
             </div>
           </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded">
-            <XMarkIcon className="w-5 h-5" />
+            <IconX className="w-5 h-5" />
           </button>
         </div>
 
@@ -456,7 +456,7 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
                 disabled={loading || columnsLoading}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <ArrowLeftIcon className="w-4 h-4" />
+                <IconArrowLeft className="w-4 h-4" />
                 Back
               </button>
             )}
@@ -476,7 +476,7 @@ const TableConfigModal = ({ mode = 'create', config: existingConfig, onClose, on
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
                 Next
-                <ArrowRightIcon className="w-4 h-4" />
+                <IconArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <button

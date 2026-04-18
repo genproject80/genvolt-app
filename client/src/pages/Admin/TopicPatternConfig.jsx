@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PencilIcon, ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconPencil, IconRefresh, IconAlertTriangle } from '@tabler/icons-react';
 import {
   getAllTopicConfigs,
   getClientTopicConfig,
@@ -118,7 +118,7 @@ export default function TopicPatternConfig() {
 
       {/* Warning banner */}
       <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 flex gap-2">
-        <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <IconAlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
         <span>
           Saving a config will immediately push updated topic paths to all active devices for this client and signal the Python subscriber to re-subscribe.
           <strong> Devices must reconnect to complete the transition.</strong>
@@ -156,7 +156,7 @@ export default function TopicPatternConfig() {
                       </div>
                       <div className="flex gap-2">
                         <button className="text-indigo-500 hover:text-indigo-700">
-                          <PencilIcon className="w-4 h-4" />
+                          <IconPencil className="w-4 h-4" />
                         </button>
                         {config && (
                           <button
@@ -164,7 +164,7 @@ export default function TopicPatternConfig() {
                             className="text-gray-400 hover:text-red-500"
                             title="Reset to defaults"
                           >
-                            <ArrowPathIcon className="w-4 h-4" />
+                            <IconRefresh className="w-4 h-4" />
                           </button>
                         )}
                       </div>

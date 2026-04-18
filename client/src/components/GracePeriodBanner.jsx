@@ -1,15 +1,10 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { ExclamationTriangleIcon, XCircleIcon } from '@heroicons/react/24/solid';
+import { IconAlertTriangle, IconCircleX } from '@tabler/icons-react';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useFeatureFlags } from '../context/FeatureFlagContext';
 
-/**
- * Renders a persistent banner at the top of the layout when the subscription
- * is in GRACE or EXPIRED state. Returns null for ACTIVE or no subscription.
- */
 export default function SubscriptionBanner() {
-  const { isGrace, isExpired, hasNoSub, daysRemainingInGrace, subscription, loading } = useSubscription();
+  const { isGrace, isExpired, daysRemainingInGrace, subscription, loading } = useSubscription();
   const { isPaymentsEnabled } = useFeatureFlags();
 
   if (loading || !isPaymentsEnabled || (!isGrace && !isExpired)) return null;
@@ -18,7 +13,7 @@ export default function SubscriptionBanner() {
     return (
       <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-yellow-800">
-          <ExclamationTriangleIcon className="w-4 h-4 flex-shrink-0 text-yellow-500" />
+          <IconAlertTriangle size={16} className="flex-shrink-0 text-yellow-500" />
           <span>
             <strong>Grace period active.</strong> Your{' '}
             <strong>{subscription?.plan_name}</strong> subscription has expired.
@@ -45,7 +40,7 @@ export default function SubscriptionBanner() {
     return (
       <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-red-800">
-          <XCircleIcon className="w-4 h-4 flex-shrink-0 text-red-500" />
+          <IconCircleX size={16} className="flex-shrink-0 text-red-500" />
           <span>
             <strong>Subscription expired.</strong> All your devices have been deactivated.
             Subscribe to reactivate them.

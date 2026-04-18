@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MagnifyingGlassIcon, ArrowDownTrayIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { IconSearch, IconDownload, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { deviceTestingService } from '../../services/deviceTestingService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
@@ -105,7 +105,7 @@ const GenericDataTable = ({ tableKey, onError }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <form onSubmit={handleSearch} className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               value={searchInput}
@@ -137,7 +137,7 @@ const GenericDataTable = ({ tableKey, onError }) => {
             disabled={exporting}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors disabled:opacity-50"
           >
-            <ArrowDownTrayIcon className="w-4 h-4" />
+            <IconDownload className="w-4 h-4" />
             {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         )}
@@ -199,7 +199,7 @@ const GenericDataTable = ({ tableKey, onError }) => {
               disabled={!meta.hasPrevious || loading}
               className="p-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ChevronLeftIcon className="w-4 h-4" />
+              <IconChevronLeft className="w-4 h-4" />
             </button>
             <span className="px-3 py-1 rounded border border-gray-300 bg-white font-medium text-gray-700">
               {meta.page} / {meta.totalPages}
@@ -209,7 +209,7 @@ const GenericDataTable = ({ tableKey, onError }) => {
               disabled={!meta.hasNext || loading}
               className="p-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ChevronRightIcon className="w-4 h-4" />
+              <IconChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>

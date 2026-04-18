@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, ArrowsRightLeftIcon, CheckCircleIcon, NoSymbolIcon, ArrowPathIcon, PauseCircleIcon, PlayCircleIcon } from '@heroicons/react/24/outline';
+import { IconPlus, IconPencil, IconTrash, IconAlertTriangle, IconArrowsRightLeft, IconCircleCheck, IconBan, IconRefresh, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react';
 import deviceService from '../../services/deviceService';
 import { getActiveInventory } from '../../services/inventoryService';
 import { useDevice } from '../../context/DeviceContext';
@@ -395,7 +395,7 @@ const DeviceManagement = () => {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
-          <ExclamationTriangleIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <IconAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
           <p className="text-gray-500">You don't have permission to view device information.</p>
         </div>
@@ -420,7 +420,7 @@ const DeviceManagement = () => {
             onClick={handleCreateDevice}
             className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
-            <PlusIcon className="w-5 h-5 mr-2" />
+            <IconPlus className="w-5 h-5 mr-2" />
             Add Device
           </button>
         )}
@@ -463,7 +463,7 @@ const DeviceManagement = () => {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-400 mr-2" />
+            <IconAlertTriangle className="w-5 h-5 text-red-400 mr-2" />
             <div>
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <p className="text-sm text-red-700 mt-1">{error}</p>
@@ -488,7 +488,7 @@ const DeviceManagement = () => {
               disabled={loadingPending}
               className="flex items-center text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50"
             >
-              <ArrowPathIcon className={`w-4 h-4 mr-1 ${loadingPending ? 'animate-spin' : ''}`} />
+              <IconRefresh className={`w-4 h-4 mr-1 ${loadingPending ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
@@ -535,7 +535,7 @@ const DeviceManagement = () => {
                           onClick={() => handleActivateDevice(device)}
                           className="flex items-center px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                         >
-                          <CheckCircleIcon className="w-3.5 h-3.5 mr-1" />
+                          <IconCircleCheck className="w-3.5 h-3.5 mr-1" />
                           Activate
                         </button>
                       )}
@@ -762,7 +762,7 @@ const DeviceManagement = () => {
                           className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
                           title="Edit Device"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <IconPencil className="w-4 h-4" />
                         </button>
                       )}
                       {canTransferDevice && (
@@ -771,7 +771,7 @@ const DeviceManagement = () => {
                           className="text-green-600 hover:text-green-900 cursor-pointer"
                           title="Transfer Device"
                         >
-                          <ArrowsRightLeftIcon className="w-4 h-4" />
+                          <IconArrowsRightLeft className="w-4 h-4" />
                         </button>
                       )}
                       {canRemoveDevice && (
@@ -780,7 +780,7 @@ const DeviceManagement = () => {
                           className="text-red-600 hover:text-red-900 cursor-pointer"
                           title="Delete Device"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          <IconTrash className="w-4 h-4" />
                         </button>
                       )}
                       {canOnboardDevice && device.activation_status === 'PENDING' && (
@@ -789,7 +789,7 @@ const DeviceManagement = () => {
                           className="text-green-600 hover:text-green-900 cursor-pointer"
                           title="Activate Device"
                         >
-                          <CheckCircleIcon className="w-4 h-4" />
+                          <IconCircleCheck className="w-4 h-4" />
                         </button>
                       )}
                       {canEditDevice && device.activation_status === 'ACTIVE' && (
@@ -798,7 +798,7 @@ const DeviceManagement = () => {
                           className="text-amber-600 hover:text-amber-900 cursor-pointer"
                           title="Deactivate Device"
                         >
-                          <NoSymbolIcon className="w-4 h-4" />
+                          <IconBan className="w-4 h-4" />
                         </button>
                       )}
                       {canEditDevice && device.activation_status === 'INACTIVE' && (
@@ -807,7 +807,7 @@ const DeviceManagement = () => {
                           className="text-blue-600 hover:text-blue-900 cursor-pointer"
                           title="Reactivate Device"
                         >
-                          <ArrowPathIcon className="w-4 h-4" />
+                          <IconRefresh className="w-4 h-4" />
                         </button>
                       )}
                       {/* Pause — ACTIVE + data_enabled=true/1 (not paused) */}
@@ -818,7 +818,7 @@ const DeviceManagement = () => {
                           className="text-amber-500 hover:text-amber-700 cursor-pointer disabled:opacity-40"
                           title="Pause device data collection"
                         >
-                          <PauseCircleIcon className="w-4 h-4" />
+                          <IconPlayerPause className="w-4 h-4" />
                         </button>
                       )}
                       {/* Resume — ACTIVE + data_enabled=0/false; CLIENT can resume own pauses, admins can resume any */}
@@ -829,7 +829,7 @@ const DeviceManagement = () => {
                           className="text-green-500 hover:text-green-700 cursor-pointer disabled:opacity-40"
                           title="Resume device data collection"
                         >
-                          <PlayCircleIcon className="w-4 h-4" />
+                          <IconPlayerPlay className="w-4 h-4" />
                         </button>
                       )}
                       {!canEditDevice && !canRemoveDevice && !canTransferDevice && (
@@ -969,7 +969,7 @@ const DeviceManagement = () => {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-4">
-              <ExclamationTriangleIcon className="w-6 h-6 text-yellow-500" />
+              <IconAlertTriangle className="w-6 h-6 text-yellow-500" />
               <h3 className="text-lg font-semibold text-gray-900">Subscription in Grace Period</h3>
             </div>
             <p className="text-sm text-gray-600 mb-6">

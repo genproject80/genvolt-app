@@ -608,8 +608,8 @@ const HyPureDashboard = () => {
                 {/* Runtime Pie */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                   <h3 className="text-sm font-semibold text-gray-600 mb-2">Runtime</h3>
-                  <div style={{ height: 120 }}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <div>
+                    <ResponsiveContainer width="100%" height={120} minWidth={0}>
                       <PieChart>
                         <Pie
                           data={runtimePieData}
@@ -651,8 +651,8 @@ const HyPureDashboard = () => {
                 ].map(({ title, key, color, unit }) => (
                   <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <h3 className="text-sm font-semibold text-gray-600 mb-3">{title}</h3>
-                    <div style={{ height: 200 }}>
-                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <div>
+                      <ResponsiveContainer width="100%" height={200} minWidth={0}>
                         <LineChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                           <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
@@ -674,8 +674,8 @@ const HyPureDashboard = () => {
                 ].map(({ title, key, color, unit }) => (
                   <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <h3 className="text-sm font-semibold text-gray-600 mb-3">{title}</h3>
-                    <div style={{ height: 200 }}>
-                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <div>
+                      <ResponsiveContainer width="100%" height={200} minWidth={0}>
                         <LineChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                           <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />

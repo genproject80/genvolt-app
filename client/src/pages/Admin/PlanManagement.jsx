@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, PencilIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { IconPlus, IconPencil, IconArchive } from '@tabler/icons-react';
 import { getAllPlans, createPlan, updatePlan, deactivatePlan } from '../../services/planService';
 
 const fmtPrice = (p) => `₹${parseFloat(p).toLocaleString('en-IN')}`;
@@ -121,7 +121,7 @@ export default function PlanManagement() {
           onClick={openCreate}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
         >
-          <PlusIcon className="w-4 h-4" />
+          <IconPlus className="w-4 h-4" />
           New Plan
         </button>
       </div>
@@ -175,7 +175,7 @@ export default function PlanManagement() {
                         className="text-indigo-500 hover:text-indigo-700"
                         title="Edit"
                       >
-                        <PencilIcon className="w-4 h-4" />
+                        <IconPencil className="w-4 h-4" />
                       </button>
                       {plan.is_active ? (
                         <button
@@ -183,7 +183,7 @@ export default function PlanManagement() {
                           className="text-red-400 hover:text-red-600"
                           title="Archive"
                         >
-                          <ArchiveBoxIcon className="w-4 h-4" />
+                          <IconArchive className="w-4 h-4" />
                         </button>
                       ) : (
                         <button

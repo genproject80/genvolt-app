@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const DeleteDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
@@ -41,7 +41,7 @@ const DeleteDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
     >
       <div className="space-y-4">
         <div className="flex items-center space-x-3 text-red-600">
-          <ExclamationTriangleIcon className="w-6 h-6" />
+          <IconAlertTriangle className="w-6 h-6" />
           <p className="text-sm font-medium">This action cannot be undone.</p>
         </div>
 

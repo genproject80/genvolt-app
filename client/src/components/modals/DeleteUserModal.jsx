@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import { useUser } from '../../context/UserContext';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const DeleteUserModal = ({ isOpen, onClose, user, onSuccess }) => {
@@ -40,7 +40,7 @@ const DeleteUserModal = ({ isOpen, onClose, user, onSuccess }) => {
         {/* Warning Icon and Message */}
         <div className="flex items-center space-x-3">
           <div className="flex-shrink-0">
-            <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+            <IconAlertTriangle className="w-8 h-8 text-red-500" />
           </div>
           <div>
             <h4 className="text-lg font-medium text-gray-900">

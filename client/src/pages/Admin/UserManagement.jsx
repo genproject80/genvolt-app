@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon, KeyIcon } from '@heroicons/react/24/outline';
+import { IconPlus, IconPencil, IconTrash, IconAlertTriangle, IconKey } from '@tabler/icons-react';
 import { useUser } from '../../context/UserContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { useAuth } from '../../context/AuthContext';
@@ -152,7 +152,7 @@ const UserManagement = () => {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
-          <ExclamationTriangleIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <IconAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
           <p className="text-gray-500">You don't have permission to view user information.</p>
         </div>
@@ -177,7 +177,7 @@ const UserManagement = () => {
             onClick={handleCreateUser}
             className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
-            <PlusIcon className="w-5 h-5 mr-2" />
+            <IconPlus className="w-5 h-5 mr-2" />
             Add User
           </button>
         )}
@@ -187,7 +187,7 @@ const UserManagement = () => {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-400 mr-2" />
+            <IconAlertTriangle className="w-5 h-5 text-red-400 mr-2" />
             <div>
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <p className="text-sm text-red-700 mt-1">{error}</p>
@@ -322,7 +322,7 @@ const UserManagement = () => {
                           className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
                           title="Edit User"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <IconPencil className="w-4 h-4" />
                         </button>
                       )}
                       {canResetPassword && (
@@ -331,7 +331,7 @@ const UserManagement = () => {
                           className="text-green-600 hover:text-green-900 cursor-pointer"
                           title="Reset Password"
                         >
-                          <KeyIcon className="w-4 h-4" />
+                          <IconKey className="w-4 h-4" />
                         </button>
                       )}
                       {canDeleteUser && user.user_id !== currentUser?.user_id && (
@@ -340,7 +340,7 @@ const UserManagement = () => {
                           className="text-red-600 hover:text-red-900 cursor-pointer"
                           title="Delete User"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          <IconTrash className="w-4 h-4" />
                         </button>
                       )}
                       {!canEditUser && !canDeleteUser && !canResetPassword && (

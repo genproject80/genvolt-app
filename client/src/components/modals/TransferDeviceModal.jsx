@@ -3,7 +3,7 @@ import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { clientService } from '../../services/clientService';
-import { ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import { IconArrowsRightLeft } from '@tabler/icons-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
@@ -110,7 +110,7 @@ const TransferDeviceModal = ({ isOpen, onClose, device, onSuccess }) => {
     >
       <div className="space-y-4">
         <div className="flex items-center space-x-3 text-blue-600 bg-blue-50 p-3 rounded-lg">
-          <ArrowsRightLeftIcon className="w-6 h-6" />
+          <IconArrowsRightLeft className="w-6 h-6" />
           <div className="flex-1">
             <p className="text-sm font-medium">Device Transfer</p>
             <p className="text-xs text-blue-500">

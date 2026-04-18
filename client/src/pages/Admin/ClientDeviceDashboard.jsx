@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeftIcon,
-  CheckCircleIcon,
-  NoSymbolIcon,
-  ArrowPathIcon,
-  PauseCircleIcon,
-  PlayCircleIcon,
-  CogIcon,
-} from '@heroicons/react/24/outline';
+  IconArrowLeft,
+  IconCircleCheck,
+  IconBan,
+  IconRefresh,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconSettings,
+} from '@tabler/icons-react';
 import { useDevice } from '../../context/DeviceContext';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
 import { clientService } from '../../services/clientService';
@@ -125,7 +125,7 @@ const ClientDeviceDashboard = () => {
           onClick={() => navigate(-1)}
           className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100"
         >
-          <ArrowLeftIcon className="w-5 h-5" />
+          <IconArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="text-xl font-semibold text-gray-900">
@@ -218,7 +218,7 @@ const ClientDeviceDashboard = () => {
                             className="p-1.5 rounded text-green-600 hover:bg-green-50 disabled:opacity-40"
                             title="Activate"
                           >
-                            <CheckCircleIcon className="w-4 h-4" />
+                            <IconCircleCheck className="w-4 h-4" />
                           </button>
                         )}
 
@@ -230,7 +230,7 @@ const ClientDeviceDashboard = () => {
                             className="p-1.5 rounded text-red-600 hover:bg-red-50 disabled:opacity-40"
                             title="Deactivate"
                           >
-                            <NoSymbolIcon className="w-4 h-4" />
+                            <IconBan className="w-4 h-4" />
                           </button>
                         )}
 
@@ -242,7 +242,7 @@ const ClientDeviceDashboard = () => {
                             className="p-1.5 rounded text-blue-600 hover:bg-blue-50 disabled:opacity-40"
                             title="Reactivate"
                           >
-                            <ArrowPathIcon className="w-4 h-4" />
+                            <IconRefresh className="w-4 h-4" />
                           </button>
                         )}
 
@@ -255,7 +255,7 @@ const ClientDeviceDashboard = () => {
                               className="p-1.5 rounded text-green-600 hover:bg-green-50 disabled:opacity-40"
                               title="Resume Data"
                             >
-                              <PlayCircleIcon className="w-4 h-4" />
+                              <IconPlayerPlay className="w-4 h-4" />
                             </button>
                           ) : (
                             <button
@@ -264,7 +264,7 @@ const ClientDeviceDashboard = () => {
                               className="p-1.5 rounded text-orange-600 hover:bg-orange-50 disabled:opacity-40"
                               title="Pause Data"
                             >
-                              <PauseCircleIcon className="w-4 h-4" />
+                              <IconPlayerPause className="w-4 h-4" />
                             </button>
                           )
                         )}
@@ -277,7 +277,7 @@ const ClientDeviceDashboard = () => {
                             className="p-1.5 rounded text-gray-600 hover:bg-gray-100 disabled:opacity-40"
                             title="Config & Credentials"
                           >
-                            <CogIcon className="w-4 h-4" />
+                            <IconSettings className="w-4 h-4" />
                           </button>
                         )}
                       </div>

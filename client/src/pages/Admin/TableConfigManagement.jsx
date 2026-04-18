@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  PlusIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
+  IconPlus,
+  IconPencil,
+  IconTrash,
+  IconAlertTriangle,
+} from '@tabler/icons-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { tableConfigService } from '../../services/tableConfigService';
 import TableConfigModal from '../../components/modals/TableConfigModal';
@@ -57,7 +57,7 @@ const TableConfigManagement = () => {
   if (!canManageDeviceTestingTables) {
     return (
       <div className="flex flex-col items-center justify-center min-h-64 text-center">
-        <ExclamationTriangleIcon className="w-12 h-12 text-yellow-400 mb-3" />
+        <IconAlertTriangle className="w-12 h-12 text-yellow-400 mb-3" />
         <h3 className="text-lg font-semibold text-gray-800">Access Denied</h3>
         <p className="text-sm text-gray-500 mt-1">Only SYSTEM_ADMIN can manage table configurations.</p>
       </div>
@@ -78,7 +78,7 @@ const TableConfigManagement = () => {
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
         >
-          <PlusIcon className="w-4 h-4" />
+          <IconPlus className="w-4 h-4" />
           Add New Table
         </button>
       </div>
@@ -143,14 +143,14 @@ const TableConfigManagement = () => {
                         className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
                         title="Edit"
                       >
-                        <PencilSquareIcon className="w-4 h-4" />
+                        <IconPencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setDeletingConfig(cfg)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Delete"
                       >
-                        <TrashIcon className="w-4 h-4" />
+                        <IconTrash className="w-4 h-4" />
                       </button>
                     </div>
                   </td>

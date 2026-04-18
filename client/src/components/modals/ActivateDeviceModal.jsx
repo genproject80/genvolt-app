@@ -3,7 +3,7 @@ import SearchableSelect from '../common/SearchableSelect';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import { clientService } from '../../services/clientService';
-import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { IconCircleCheck } from '@tabler/icons-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 /**
@@ -84,7 +84,7 @@ const ActivateDeviceModal = ({ isOpen, onClose, device, onSuccess, fixedClientId
     <Modal isOpen={isOpen} onClose={handleClose} title="Activate Device" size="md">
       <div className="space-y-4">
         <div className="flex items-start space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircleIcon className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+          <IconCircleCheck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
           <div>
             <p className="text-sm font-medium text-green-800">Activating device</p>
             <p className="text-sm text-green-700 mt-0.5">

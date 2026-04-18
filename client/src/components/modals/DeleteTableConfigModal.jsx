@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import { tableConfigService } from '../../services/tableConfigService';
 
 /**
@@ -33,7 +33,7 @@ const DeleteTableConfigModal = ({ config, onClose, onDeleted }) => {
         <div className="p-6">
           <div className="flex items-center gap-4 mb-4">
             <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full bg-red-100">
-              <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+              <IconAlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Delete Table Configuration</h3>

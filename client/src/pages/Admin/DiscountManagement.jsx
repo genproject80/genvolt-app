@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TagIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { IconTag, IconTrash } from '@tabler/icons-react';
 import {
   getDiscountHistory,
   getActiveDiscount,
@@ -111,7 +111,7 @@ export default function DiscountManagement() {
         {/* Create form */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <TagIcon className="w-5 h-5 text-indigo-500" />
+            <IconTag className="w-5 h-5 text-indigo-500" />
             Set Discount
           </h2>
 
@@ -198,7 +198,7 @@ export default function DiscountManagement() {
                 className="text-red-400 hover:text-red-600 mt-1"
                 title="Remove discount"
               >
-                <TrashIcon className="w-4 h-4" />
+                <IconTrash className="w-4 h-4" />
               </button>
             </div>
           ) : (
@@ -254,7 +254,7 @@ export default function DiscountManagement() {
                             onClick={() => handleDelete(d.discount_id)}
                             className="text-red-400 hover:text-red-600"
                           >
-                            <TrashIcon className="w-4 h-4" />
+                            <IconTrash className="w-4 h-4" />
                           </button>
                         )}
                       </td>

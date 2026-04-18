@@ -1,31 +1,40 @@
-import React, { useState } from 'react';
-import Sidebar from './Sidebar';
+import { AppShell } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import Header from './Header';
+import Sidebar from './Sidebar';
 import SubscriptionBanner from '../GracePeriodBanner';
 
+const NAVBAR_WIDTH = 256;
+const HEADER_HEIGHT = 60;
+
 const Layout = ({ children }) => {
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [navbarOpened, { toggle: toggleNavbar, close: closeNavbar }] = useDisclosure(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <Sidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
+    <AppShell
+      header={{ height: HEADER_HEIGHT }}
+      navbar={{
+        width: NAVBAR_WIDTH,
+        breakpoint: 'lg',
+        collapsed: { mobile: !navbarOpened },
+      }}
+      bg="gray.0"
+    >
+      <AppShell.Header>
+        <Header navbarOpened={navbarOpened} onToggleNavbar={toggleNavbar} />
+      </AppShell.Header>
 
-      {/* Header */}
-      <Header onMenuClick={() => setIsMobileSidebarOpen(true)} />
+      <AppShell.Navbar>
+        <Sidebar onNavigate={closeNavbar} />
+      </AppShell.Navbar>
 
-      {/* Subscription grace / expired banner — sits between header and content */}
-      <div className="lg:ml-64 pt-16">
+      <AppShell.Main>
         <SubscriptionBanner />
-      </div>
-
-      {/* Main Content Area */}
-      <main className="lg:ml-64 pt-4">
         <div className="px-4 py-4 sm:px-6 sm:py-6">
           {children}
         </div>
-      </main>
-    </div>
+      </AppShell.Main>
+    </AppShell>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getPlans, createOrder, verifyPayment } from '../../services/subscriptionService';
-import { CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { IconCircleCheck, IconX } from '@tabler/icons-react';
 
 const fmt = (amount) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
@@ -112,14 +112,14 @@ export default function SubscribePlanModal({ initialPlan = null, onClose, onSucc
             {success ? 'Payment Successful!' : 'Subscribe to a Plan'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <XMarkIcon className="w-5 h-5" />
+            <IconX className="w-5 h-5" />
           </button>
         </div>
 
         {success ? (
           /* Success state */
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-            <CheckCircleIcon className="w-16 h-16 text-green-500 mb-4" />
+            <IconCircleCheck className="w-16 h-16 text-green-500 mb-4" />
             <h3 className="text-xl font-bold text-gray-900 mb-2">Subscription Activated!</h3>
             <p className="text-gray-500 text-sm">
               Your <strong>{selectedPlan?.name}</strong> plan is now active. You can start
@@ -186,7 +186,7 @@ export default function SubscribePlanModal({ initialPlan = null, onClose, onSucc
                       <div className="mt-2 space-y-1">
                         {(plan.features || []).slice(0, 3).map((f, i) => (
                           <div key={i} className="flex items-center gap-1 text-xs text-gray-500">
-                            <CheckCircleIcon className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                            <IconCircleCheck className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                             {f}
                           </div>
                         ))}
