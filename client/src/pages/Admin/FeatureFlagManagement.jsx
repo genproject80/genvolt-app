@@ -57,7 +57,7 @@ export default function FeatureFlagManagement() {
       )}
 
       {/* Flag table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
