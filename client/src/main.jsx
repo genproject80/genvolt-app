@@ -1,9 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MantineProvider, createTheme } from '@mantine/core'
+import { DatesProvider } from '@mantine/dates'
 import { Notifications } from '@mantine/notifications'
 import App from './App'
 import '@mantine/charts/styles.css'
+import '@mantine/dates/styles.css'
 import './styles/index.css'
 
 const theme = createTheme({
@@ -29,8 +31,10 @@ const theme = createTheme({
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <MantineProvider theme={theme}>
-      <Notifications position="top-right" />
-      <App />
+      <DatesProvider settings={{ locale: 'en' }}>
+        <Notifications position="top-right" />
+        <App />
+      </DatesProvider>
     </MantineProvider>
   </React.StrictMode>,
 )
