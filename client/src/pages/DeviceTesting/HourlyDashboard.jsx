@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Table, Paper, ScrollArea, Center, Text } from '@mantine/core';
 import { deviceTestingService } from '../../services/deviceTestingService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 
-/**
- * Returns a Tailwind background class based on count.
- */
 const heatColor = (count) => {
   if (count === 0) return 'bg-gray-100 text-gray-400';
   if (count < 5) return 'bg-yellow-100 text-yellow-800';
@@ -14,11 +12,6 @@ const heatColor = (count) => {
   return 'bg-green-200 text-green-900';
 };
 
-/**
- * HourlyDashboard - 24-hour heatmap of device activity in IST.
- * Props:
- *   tableKey {string}
- */
 const HourlyDashboard = ({ tableKey }) => {
   const [data, setData] = useState([]);
   const [date, setDate] = useState('');
@@ -39,9 +32,7 @@ const HourlyDashboard = ({ tableKey }) => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [tableKey]);
+  useEffect(() => { fetchData(); }, [tableKey]);
 
   const handleApply = (e) => {
     e.preventDefault();
@@ -59,18 +50,12 @@ const HourlyDashboard = ({ tableKey }) => {
           onChange={(e) => setDate(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
-        <button
-          type="submit"
-          className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-        >
+        <button type="submit" className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors">
           Apply
         </button>
         {date && (
-          <button
-            type="button"
-            onClick={() => { setDate(''); }}
-            className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-          >
+          <button type="button" onClick={() => { setDate(''); }}
+            className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             Clear
           </button>
         )}
@@ -90,48 +75,50 @@ const HourlyDashboard = ({ tableKey }) => {
         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
-      ) : data.length === 0 ? (
-        <div className="py-16 text-center text-sm text-gray-500">No data found for the selected filter.</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full text-xs divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[140px]">Device ID</th>
-                {HOURS.map((h) => (
-                  <th key={h} className="px-2 py-2 text-center font-semibold text-gray-500 w-10">
-                    {h}
-                  </th>
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <ScrollArea>
+          {loading ? (
+            <Center py="xl"><LoadingSpinner /></Center>
+          ) : data.length === 0 ? (
+            <Center py="xl"><Text size="sm" c="dimmed">No data found for the selected filter.</Text></Center>
+          ) : (
+            <Table fz="xs" style={{ tableLayout: 'auto' }}>
+              <Table.Thead style={{ background: 'var(--mantine-color-gray-0)' }}>
+                <Table.Tr>
+                  <Table.Th style={{ minWidth: 140, position: 'sticky', left: 0, background: 'var(--mantine-color-gray-0)', zIndex: 1 }}>
+                    Device ID
+                  </Table.Th>
+                  {HOURS.map((h) => (
+                    <Table.Th key={h} style={{ textAlign: 'center', width: 40 }}>{h}</Table.Th>
+                  ))}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {data.map((row, idx) => (
+                  <Table.Tr key={idx}>
+                    <Table.Td style={{ minWidth: 140, position: 'sticky', left: 0, background: idx % 2 === 0 ? 'white' : 'var(--mantine-color-gray-0)', zIndex: 1, borderRight: '1px solid var(--mantine-color-gray-2)' }}>
+                      <Text size="xs" fw={500}>{row.device_id}</Text>
+                    </Table.Td>
+                    {HOURS.map((h) => {
+                      const count = row[`H${h}`] || 0;
+                      return (
+                        <Table.Td key={h} style={{ padding: '2px', textAlign: 'center' }}>
+                          <span
+                            className={`inline-block w-8 h-7 leading-7 rounded text-center font-semibold text-xs ${heatColor(count)}`}
+                            title={`Hour ${h}:00 IST — ${count} record${count !== 1 ? 's' : ''}`}
+                          >
+                            {count > 0 ? count : ''}
+                          </span>
+                        </Table.Td>
+                      );
+                    })}
+                  </Table.Tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {data.map((row, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-white z-10 min-w-[140px] border-r border-gray-100">
-                    {row.device_id}
-                  </td>
-                  {HOURS.map((h) => {
-                    const count = row[`H${h}`] || 0;
-                    return (
-                      <td key={h} className="px-0.5 py-1 text-center">
-                        <span
-                          className={`inline-block w-8 h-7 leading-7 rounded text-center font-semibold ${heatColor(count)}`}
-                          title={`Hour ${h}:00 IST — ${count} record${count !== 1 ? 's' : ''}`}
-                        >
-                          {count > 0 ? count : ''}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
+      </Paper>
 
       <p className="text-xs text-gray-400">All times are in IST (UTC+5:30).</p>
     </div>

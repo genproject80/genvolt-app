@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconPencil, IconTrash, IconServer, IconBuilding, IconCircleCheck, IconCpu, IconTrendingUp } from '@tabler/icons-react';
+import {
+  Table, Paper, ScrollArea, Center, Loader, Text, Group, Badge, ActionIcon, Tooltip,
+} from '@mantine/core';
 import { useClient } from '../../context/ClientContext';
 import { useClientPermissions } from '../../hooks/useClientPermissions';
 import { useDevicePermissions } from '../../hooks/useDevicePermissions';
@@ -9,59 +12,34 @@ import DeleteClientModal from '../../components/modals/DeleteClientModal';
 import { getAllSubscriptions } from '../../services/subscriptionService';
 import SearchableSelect from '../../components/common/SearchableSelect';
 
-const SUB_STATUS_STYLES = {
-  ACTIVE:    'bg-green-100 text-green-800',
-  GRACE:     'bg-yellow-100 text-yellow-800',
-  EXPIRED:   'bg-red-100 text-red-800',
-  CANCELLED: 'bg-gray-100 text-gray-600',
-  PENDING:   'bg-blue-100 text-blue-800',
+const SUB_STATUS_COLORS = {
+  ACTIVE: 'green', GRACE: 'yellow', EXPIRED: 'red', CANCELLED: 'gray', PENDING: 'blue',
 };
 
 const ClientManagement = () => {
   const navigate = useNavigate();
   const {
-    clients,
-    loading,
-    error,
-    pagination,
-    getAllClients,
-    getClientStats,
-    updateClient,
-    deleteClient,
-    clearError
+    clients, loading, error, pagination,
+    getAllClients, getClientStats, clearError
   } = useClient();
 
-  const {
-    canViewClient,
-    canCreateClient,
-    canEditClient,
-    canDeleteClient,
-    loading: permissionLoading
-  } = useClientPermissions();
-
+  const { canViewClient, canCreateClient, canEditClient, canDeleteClient } = useClientPermissions();
   const { canViewDevice } = useDevicePermissions();
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddModal, setShowAddModal]       = useState(false);
+  const [showEditModal, setShowEditModal]     = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [clientStats, setClientStats] = useState({
-    totalClients: 0,
-    activeClients: 0,
-    totalDevices: 0,
-    avgDevicesPerClient: 0
-  });
+  const [selectedClient, setSelectedClient]   = useState(null);
+  const [searchTerm, setSearchTerm]           = useState('');
+  const [statusFilter, setStatusFilter]       = useState('');
+  const [clientStats, setClientStats]         = useState({ totalClients: 0, activeClients: 0, totalDevices: 0, avgDevicesPerClient: 0 });
   const [subscriptionsMap, setSubscriptionsMap] = useState({});
 
   useEffect(() => {
     const loadData = async () => {
       await getAllClients({ includeInactive: true });
       const stats = await getClientStats();
-      if (stats) {
-        setClientStats(stats);
-      }
+      if (stats) setClientStats(stats);
     };
     loadData();
   }, [getAllClients, getClientStats]);
@@ -71,10 +49,7 @@ const ClientManagement = () => {
       .then((res) => {
         const map = {};
         (res?.data || []).forEach((sub) => {
-          // Keep the most recent non-cancelled subscription per client
-          if (!map[sub.client_id] || sub.status !== 'CANCELLED') {
-            map[sub.client_id] = sub;
-          }
+          if (!map[sub.client_id] || sub.status !== 'CANCELLED') map[sub.client_id] = sub;
         });
         setSubscriptionsMap(map);
       })
@@ -82,37 +57,19 @@ const ClientManagement = () => {
   }, []);
 
   const filteredClients = clients.filter(client => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = statusFilter === '' ||
       (statusFilter === 'active' && client.is_active) ||
       (statusFilter === 'inactive' && !client.is_active);
-    
     return matchesSearch && matchesStatus;
   });
-
-  const handleAddClient = () => {
-    setShowAddModal(true);
-  };
-
-  const handleEditClient = (client) => {
-    setSelectedClient(client);
-    setShowEditModal(true);
-  };
-
-  const handleDeleteClient = (client) => {
-    setSelectedClient(client);
-    setShowDeleteModal(true);
-  };
 
   const handleAddSuccess = async () => {
     await getAllClients({ includeInactive: true });
     const stats = await getClientStats();
-    if (stats) {
-      setClientStats(stats);
-    }
+    if (stats) setClientStats(stats);
   };
 
   const handleEditSuccess = async () => {
@@ -120,9 +77,7 @@ const ClientManagement = () => {
     setSelectedClient(null);
     await getAllClients({ includeInactive: true });
     const stats = await getClientStats();
-    if (stats) {
-      setClientStats(stats);
-    }
+    if (stats) setClientStats(stats);
   };
 
   const handleDeleteSuccess = async () => {
@@ -130,26 +85,15 @@ const ClientManagement = () => {
     setSelectedClient(null);
     await getAllClients({ includeInactive: true });
     const stats = await getClientStats();
-    if (stats) {
-      setClientStats(stats);
-    }
+    if (stats) setClientStats(stats);
   };
 
+  const formatDate = (d) => new Date(d).toLocaleDateString();
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  // Show access denied message if user cannot view clients
   if (!canViewClient) {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
           <p className="text-gray-500">You don't have permission to view client information.</p>
         </div>
@@ -157,25 +101,82 @@ const ClientManagement = () => {
     );
   }
 
+  const rows = filteredClients.map((client) => {
+    const sub = subscriptionsMap[client.client_id];
+    return (
+      <Table.Tr key={client.client_id}>
+        <Table.Td>
+          <Text size="sm" fw={500}>{client.name}</Text>
+          <Text size="sm" c="dimmed">{client.email}</Text>
+          <Text size="xs" c="dimmed">Created: {formatDate(client.created_at)}</Text>
+        </Table.Td>
+        <Table.Td>
+          <Text size="sm">{client.contact_person || 'N/A'}</Text>
+        </Table.Td>
+        <Table.Td>
+          <Text size="sm">{client.phone || 'N/A'}</Text>
+          <Text size="xs" c="dimmed">{client.Address || 'No address provided'}</Text>
+        </Table.Td>
+        <Table.Td>
+          <Badge color="violet" variant="light" size="sm">{client.device_count || 0} devices</Badge>
+        </Table.Td>
+        <Table.Td>
+          {sub ? (
+            <div>
+              <Text size="xs" fw={500}>{sub.plan_name}</Text>
+              <Badge color={SUB_STATUS_COLORS[sub.status] || 'gray'} variant="light" size="xs" mt={2}>{sub.status}</Badge>
+            </div>
+          ) : <Text size="xs" c="dimmed">No plan</Text>}
+        </Table.Td>
+        <Table.Td>
+          <Badge color={client.is_active ? 'green' : 'red'} variant="light" size="sm">
+            {client.is_active ? 'Active' : 'Inactive'}
+          </Badge>
+        </Table.Td>
+        <Table.Td>
+          <Group gap={4}>
+            {canViewDevice && (
+              <Tooltip label="Manage Devices" withArrow>
+                <ActionIcon variant="subtle" color="blue" size="sm"
+                  onClick={() => navigate(`/admin/clients/${client.client_id}/devices`)}>
+                  <IconServer size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {canEditClient && (
+              <Tooltip label="Edit Client" withArrow>
+                <ActionIcon variant="subtle" color="indigo" size="sm"
+                  onClick={() => { setSelectedClient(client); setShowEditModal(true); }}>
+                  <IconPencil size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {canDeleteClient && (
+              <Tooltip label="Delete Client" withArrow>
+                <ActionIcon variant="subtle" color="red" size="sm"
+                  onClick={() => { setSelectedClient(client); setShowDeleteModal(true); }}>
+                  <IconTrash size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {!canEditClient && !canDeleteClient && <Text size="xs" c="dimmed">No actions available</Text>}
+          </Group>
+        </Table.Td>
+      </Table.Tr>
+    );
+  });
+
   return (
     <div className="space-y-6">
-      {/* Error Display */}
+      {/* Error */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-          <span className="block sm:inline">{error}</span>
-          <button
-            className="absolute top-0 bottom-0 right-0 px-4 py-3"
-            onClick={clearError}
-          >
-            <span className="sr-only">Dismiss</span>
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
+          <span>{error}</span>
+          <button className="absolute top-0 bottom-0 right-0 px-4 py-3" onClick={clearError}>✕</button>
         </div>
       )}
 
-      {/* Header with Add Button */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Client Management</h2>
@@ -183,7 +184,7 @@ const ClientManagement = () => {
         </div>
         {canCreateClient && (
           <button
-            onClick={handleAddClient}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <IconPlus className="w-5 h-5 mr-2" />
@@ -192,58 +193,27 @@ const ClientManagement = () => {
         )}
       </div>
 
-      {/* Client Statistics */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <IconBuilding className="w-6 h-6 text-blue-600" size={24} />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-semibold text-gray-900">Total Clients</h3>
-              <p className="text-2xl font-bold text-blue-600">{clientStats.totalClients}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <IconCircleCheck className="w-6 h-6 text-green-600" size={24} />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-semibold text-gray-900">Active Clients</h3>
-              <p className="text-2xl font-bold text-green-600">{clientStats.activeClients}</p>
+        {[
+          { icon: IconBuilding,   color: 'text-blue-600',   bg: 'bg-blue-100',   label: 'Total Clients',      value: clientStats.totalClients },
+          { icon: IconCircleCheck,color: 'text-green-600',  bg: 'bg-green-100',  label: 'Active Clients',     value: clientStats.activeClients },
+          { icon: IconCpu,        color: 'text-purple-600', bg: 'bg-purple-100', label: 'Total Devices',      value: clientStats.totalDevices },
+          { icon: IconTrendingUp, color: 'text-orange-600', bg: 'bg-orange-100', label: 'Avg Devices/Client', value: clientStats.avgDevicesPerClient },
+        ].map(({ icon: Icon, color, bg, label, value }) => (
+          <div key={label} className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="flex items-center">
+              <div className={`p-2 ${bg} rounded-lg`}><Icon className={`w-6 h-6 ${color}`} size={24} /></div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">{label}</h3>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <IconCpu className="w-6 h-6 text-purple-600" size={24} />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-semibold text-gray-900">Total Devices</h3>
-              <p className="text-2xl font-bold text-purple-600">{clientStats.totalDevices}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <IconTrendingUp className="w-6 h-6 text-orange-600" size={24} />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-semibold text-gray-900">Avg Devices/Client</h3>
-              <p className="text-2xl font-bold text-orange-600">{clientStats.avgDevicesPerClient}</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Search and Filter */}
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
           <input
@@ -255,10 +225,7 @@ const ClientManagement = () => {
           />
         </div>
         <SearchableSelect
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-          ]}
+          options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]}
           value={statusFilter}
           onChange={setStatusFilter}
           placeholder="All Status"
@@ -266,175 +233,36 @@ const ClientManagement = () => {
         />
       </div>
 
-      {/* Clients Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Client
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contact Person
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contact Info
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Devices
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Subscription
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loading ? (
-              <tr>
-                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                  Loading clients...
-                </td>
-              </tr>
-            ) : filteredClients.length === 0 ? (
-              <tr>
-                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                  No clients found
-                </td>
-              </tr>
-            ) : (
-              filteredClients.map((client) => (
-                <tr key={client.client_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{client.name}</div>
-                      <div className="text-sm text-gray-500">{client.email}</div>
-                      <div className="text-xs text-gray-400">Created: {formatDate(client.created_at)}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{client.contact_person || 'N/A'}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-sm text-gray-900">{client.phone || 'N/A'}</div>
-                      <div className="text-xs text-gray-500">{client.Address || 'No address provided'}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                      {client.device_count || 0} devices
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {subscriptionsMap[client.client_id] ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-gray-800">
-                          {subscriptionsMap[client.client_id].plan_name}
-                        </span>
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full w-fit ${SUB_STATUS_STYLES[subscriptionsMap[client.client_id].status] || 'bg-gray-100 text-gray-600'}`}>
-                          {subscriptionsMap[client.client_id].status}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">No plan</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      client.is_active
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {client.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      {canViewDevice && (
-                        <button
-                          onClick={() => navigate(`/admin/clients/${client.client_id}/devices`)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Manage Devices"
-                        >
-                          <IconServer className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canEditClient && (
-                        <button
-                          onClick={() => handleEditClient(client)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                          title="Edit Client"
-                        >
-                          <IconPencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canDeleteClient && (
-                        <button
-                          onClick={() => handleDeleteClient(client)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Client"
-                        >
-                          <IconTrash className="w-4 h-4" />
-                        </button>
-                      )}
-                      {!canEditClient && !canDeleteClient && (
-                        <span className="text-gray-400 text-xs">No actions available</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Table */}
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <ScrollArea>
+          {loading ? (
+            <Center py="xl"><Loader size="sm" /></Center>
+          ) : filteredClients.length === 0 ? (
+            <Center py="xl"><Text size="sm" c="dimmed">No clients found</Text></Center>
+          ) : (
+            <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Client</Table.Th>
+                  <Table.Th>Contact Person</Table.Th>
+                  <Table.Th>Contact Info</Table.Th>
+                  <Table.Th>Devices</Table.Th>
+                  <Table.Th>Subscription</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>{rows}</Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
+      </Paper>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-700">
-          Showing <span className="font-medium">{Math.min(1, filteredClients.length)}</span> to{' '}
-          <span className="font-medium">{filteredClients.length}</span> of{' '}
-          <span className="font-medium">{filteredClients.length}</span> results
-        </div>
-        <div className="flex space-x-2">
-          <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
-            Previous
-          </button>
-          <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Add Client Modal */}
-      <AddClientModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={handleAddSuccess}
-      />
-
-      {/* Edit Client Modal */}
-      <AddClientModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        onSuccess={handleEditSuccess}
-        client={selectedClient}
-        mode="edit"
-      />
-
-      {/* Delete Client Modal */}
-      <DeleteClientModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onSuccess={handleDeleteSuccess}
-        client={selectedClient}
-      />
+      {/* Modals */}
+      <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSuccess={handleAddSuccess} />
+      <AddClientModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} onSuccess={handleEditSuccess} client={selectedClient} mode="edit" />
+      <DeleteClientModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} onSuccess={handleDeleteSuccess} client={selectedClient} />
     </div>
   );
 };

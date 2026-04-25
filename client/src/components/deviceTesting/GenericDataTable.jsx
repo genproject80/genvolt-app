@@ -1,47 +1,36 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IconSearch, IconDownload, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { IconSearch, IconDownload } from '@tabler/icons-react';
+import {
+  Table, Paper, ScrollArea, Center, Loader, Text, Badge, Group, Pagination, Code,
+} from '@mantine/core';
 import { deviceTestingService } from '../../services/deviceTestingService';
-import LoadingSpinner from '../common/LoadingSpinner';
 
 const PAGE_SIZE = 100;
 
-/**
- * Formats a cell value based on its column type.
- */
 const formatCell = (value, col) => {
-  if (value === null || value === undefined) return <span className="text-gray-400">—</span>;
+  if (value === null || value === undefined) return <Text component="span" size="sm" c="dimmed">—</Text>;
 
   if (col.type === 'json') {
     const str = typeof value === 'string' ? value : JSON.stringify(value);
     const preview = str.length > 120 ? str.slice(0, 120) + '…' : str;
-    return (
-      <span className="font-mono text-xs text-gray-600 break-all" title={str}>
-        {preview}
-      </span>
-    );
+    return <Code fz="xs" title={str} style={{ wordBreak: 'break-all' }}>{preview}</Code>;
   }
 
   if (col.type === 'datetime') {
-    return <span className="whitespace-nowrap text-gray-700">{String(value).slice(0, 19).replace('T', ' ')}</span>;
+    return <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{String(value).slice(0, 19).replace('T', ' ')}</Text>;
   }
 
   if (col.type === 'boolean') {
-    return value ? (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Yes</span>
-    ) : (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">No</span>
+    return (
+      <Badge color={value ? 'green' : 'gray'} variant="light" size="sm">
+        {value ? 'Yes' : 'No'}
+      </Badge>
     );
   }
 
-  return <span>{String(value)}</span>;
+  return <Text size="sm">{String(value)}</Text>;
 };
 
-/**
- * GenericDataTable - Reusable paginated table component driven by table config.
- * Props:
- *   tableKey   {string}  - The table_key from DeviceTesting_TableConfig
- *   onError    {fn}      - Callback receiving error messages
- */
 const GenericDataTable = ({ tableKey, onError }) => {
   const [data, setData] = useState([]);
   const [columns, setColumns] = useState([]);
@@ -75,13 +64,8 @@ const GenericDataTable = ({ tableKey, onError }) => {
     }
   }, [tableKey, page, search]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [tableKey, search]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { setPage(1); }, [tableKey, search]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -99,6 +83,17 @@ const GenericDataTable = ({ tableKey, onError }) => {
     }
   };
 
+  const rows = data.map((row, idx) => (
+    <Table.Tr key={idx}>
+      {columns.map((col) => (
+        <Table.Td key={col.field}>{formatCell(row[col.field], col)}</Table.Td>
+      ))}
+    </Table.Tr>
+  ));
+
+  const startRecord = meta ? ((meta.page - 1) * meta.limit) + 1 : 0;
+  const endRecord   = meta ? Math.min(meta.page * meta.limit, meta.total) : 0;
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -114,111 +109,64 @@ const GenericDataTable = ({ tableKey, onError }) => {
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
-          <button
-            type="submit"
-            className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-          >
+          <button type="submit" className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors">
             Search
           </button>
           {search && (
-            <button
-              type="button"
-              onClick={() => { setSearch(''); setSearchInput(''); }}
-              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
+            <button type="button" onClick={() => { setSearch(''); setSearchInput(''); }}
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
               Clear
             </button>
           )}
         </form>
 
         {config?.is_exportable && (
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors disabled:opacity-50"
-          >
+          <button onClick={handleExport} disabled={exporting}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors disabled:opacity-50">
             <IconDownload className="w-4 h-4" />
             {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         )}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <LoadingSpinner />
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {columns.map((col) => (
-                  <th
-                    key={col.field}
-                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
-                  >
-                    {col.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {data.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length || 1} className="px-4 py-12 text-center text-sm text-gray-500">
-                    {search ? 'No records match your search.' : 'No records found.'}
-                  </td>
-                </tr>
-              ) : (
-                data.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                    {columns.map((col) => (
-                      <td key={col.field} className="px-4 py-2.5 text-sm text-gray-900 align-top">
-                        {formatCell(row[col.field], col)}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <ScrollArea>
+          {loading ? (
+            <Center py="xl"><Loader size="sm" /></Center>
+          ) : data.length === 0 ? (
+            <Center py="xl">
+              <Text size="sm" c="dimmed">
+                {search ? 'No records match your search.' : 'No records found.'}
+              </Text>
+            </Center>
+          ) : (
+            <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  {columns.map((col) => (
+                    <Table.Th key={col.field}>{col.header}</Table.Th>
+                  ))}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>{rows}</Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
 
-      {/* Pagination */}
-      {meta && meta.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>
-            Showing {((meta.page - 1) * meta.limit) + 1}–{Math.min(meta.page * meta.limit, meta.total)} of{' '}
-            {meta.total.toLocaleString()} records
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={!meta.hasPrevious || loading}
-              className="p-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <IconChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-3 py-1 rounded border border-gray-300 bg-white font-medium text-gray-700">
-              {meta.page} / {meta.totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
-              disabled={!meta.hasNext || loading}
-              className="p-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <IconChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-      {meta && meta.totalPages <= 1 && meta.total > 0 && (
-        <div className="text-sm text-gray-500">
-          {meta.total.toLocaleString()} record{meta.total !== 1 ? 's' : ''}
-        </div>
-      )}
+        {meta && meta.totalPages > 1 && (
+          <Group justify="space-between" align="center" px="md" py="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Text size="sm" c="dimmed">
+              Showing {startRecord}–{endRecord} of {meta.total.toLocaleString()} records
+            </Text>
+            <Pagination total={meta.totalPages} value={page} onChange={setPage} size="sm" />
+          </Group>
+        )}
+        {meta && meta.totalPages <= 1 && meta.total > 0 && (
+          <Group px="md" py="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Text size="sm" c="dimmed">{meta.total.toLocaleString()} record{meta.total !== 1 ? 's' : ''}</Text>
+          </Group>
+        )}
+      </Paper>
     </div>
   );
 };

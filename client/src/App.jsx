@@ -31,6 +31,7 @@ import TopicPatternConfig from './pages/Admin/TopicPatternConfig';
 import ClientDeviceDashboard from './pages/Admin/ClientDeviceDashboard';
 import InventoryManagement from './pages/Admin/InventoryManagement';
 import FeatureFlagManagement from './pages/Admin/FeatureFlagManagement';
+import AuditLogs from './pages/Admin/AuditLogs';
 import BillingPage from './pages/Billing/BillingPage';
 import LoadingSpinner from './components/common/LoadingSpinner';
 
@@ -306,6 +307,17 @@ const AppRoutes = () => {
           <AdminOnlyRoute>
             <Layout>
               <FeatureFlagManagement />
+            </Layout>
+          </AdminOnlyRoute>
+        }
+      />
+
+      <Route
+        path="/admin/audit-logs"
+        element={
+          <AdminOnlyRoute>
+            <Layout>
+              <AuditLogs />
             </Layout>
           </AdminOnlyRoute>
         }

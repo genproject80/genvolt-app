@@ -13,6 +13,9 @@ import {
   IconPlayerPause,
   IconPlayerPlay,
 } from '@tabler/icons-react';
+import {
+  Table, Paper, ScrollArea, Center, Loader, Text, Badge, Group, Pagination,
+} from '@mantine/core';
 
 const STATUS_STYLES = {
   ACTIVE:    'bg-green-100 text-green-800',
@@ -22,11 +25,11 @@ const STATUS_STYLES = {
   PENDING:   'bg-blue-100 text-blue-800',
 };
 
-const TXN_STATUS_STYLES = {
-  COMPLETED: 'bg-green-100 text-green-800',
-  PENDING:   'bg-yellow-100 text-yellow-800',
-  FAILED:    'bg-red-100 text-red-800',
-  REFUNDED:  'bg-purple-100 text-purple-800',
+const TXN_STATUS_COLORS = {
+  COMPLETED: 'green',
+  PENDING:   'yellow',
+  FAILED:    'red',
+  REFUNDED:  'violet',
 };
 
 const fmt = (amount) =>
@@ -44,10 +47,10 @@ export default function BillingPage() {
   const [transactions, setTransactions] = useState([]);
   const [txnLoading, setTxnLoading]     = useState(true);
   const [txnMeta, setTxnMeta]           = useState({ total: 0, page: 1, totalPages: 1 });
+  const [txnPage, setTxnPage]           = useState(1);
   const [showModal, setShowModal]       = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  // Pause / Resume all devices
   const [pauseAllConfirm, setPauseAllConfirm] = useState(false);
   const [pausingAll, setPausingAll]           = useState(false);
   const [resumingAll, setResumingAll]         = useState(false);
@@ -62,13 +65,13 @@ export default function BillingPage() {
   useEffect(() => {
     if (!user?.client_id) return;
     setTxnLoading(true);
-    getTransactions(user.client_id, { page: 1, limit: 10 })
+    getTransactions(user.client_id, { page: txnPage, limit: 10 })
       .then((res) => {
         setTransactions(res.data || []);
         setTxnMeta(res.meta || {});
       })
       .finally(() => setTxnLoading(false));
-  }, [user?.client_id]);
+  }, [user?.client_id, txnPage]);
 
   const handleSelectPlan = (plan) => {
     setSelectedPlan(plan);
@@ -107,14 +110,24 @@ export default function BillingPage() {
   const handlePaymentSuccess = () => {
     setShowModal(false);
     refreshSubscription();
-    // Reload transactions
     if (user?.client_id) {
-      getTransactions(user.client_id, { page: 1, limit: 10 }).then((res) => {
-        setTransactions(res.data || []);
-        setTxnMeta(res.meta || {});
-      });
+      setTxnPage(1);
     }
   };
+
+  const txnRows = transactions.map((txn) => (
+    <Table.Tr key={txn.transaction_id}>
+      <Table.Td><Text size="xs" ff="monospace">{txn.invoice_number}</Text></Table.Td>
+      <Table.Td><Text size="sm">{fmtDate(txn.created_at)}</Text></Table.Td>
+      <Table.Td><Text size="sm" fw={500}>{fmt(txn.amount)}</Text></Table.Td>
+      <Table.Td><Text size="sm" tt="capitalize">{txn.payment_mode || '—'}</Text></Table.Td>
+      <Table.Td>
+        <Badge color={TXN_STATUS_COLORS[txn.status] || 'gray'} variant="light" size="sm">
+          {txn.status}
+        </Badge>
+      </Table.Td>
+    </Table.Tr>
+  ));
 
   return (
     <div className="space-y-8">
@@ -196,7 +209,7 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Service Controls — pause / resume all devices */}
+      {/* Service Controls */}
       {!loading && subscription?.status === 'ACTIVE' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Service Controls</h2>
@@ -231,7 +244,6 @@ export default function BillingPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-gray-900">Available Plans</h2>
-          {/* Monthly / Yearly toggle */}
           <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setBillingCycle('monthly')}
@@ -329,53 +341,40 @@ export default function BillingPage() {
       </div>
 
       {/* Payment history */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Payment History</h2>
-
-        {txnLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-          </div>
-        ) : transactions.length === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-8">No payment records yet</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <th className="pb-3 pr-4">Invoice</th>
-                  <th className="pb-3 pr-4">Date</th>
-                  <th className="pb-3 pr-4">Amount</th>
-                  <th className="pb-3 pr-4">Mode</th>
-                  <th className="pb-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {transactions.map((txn) => (
-                  <tr key={txn.transaction_id} className="text-sm text-gray-700">
-                    <td className="py-3 pr-4 font-mono text-xs">{txn.invoice_number}</td>
-                    <td className="py-3 pr-4">{fmtDate(txn.created_at)}</td>
-                    <td className="py-3 pr-4 font-medium">{fmt(txn.amount)}</td>
-                    <td className="py-3 pr-4 capitalize">{txn.payment_mode || '—'}</td>
-                    <td className="py-3">
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${TXN_STATUS_STYLES[txn.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {txn.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {txnMeta.totalPages > 1 && (
-              <p className="mt-4 text-xs text-gray-400 text-right">
-                Showing page 1 of {txnMeta.totalPages}
-              </p>
-            )}
-          </div>
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h2 className="text-base font-semibold text-gray-900">Payment History</h2>
+        </div>
+        <ScrollArea>
+          {txnLoading ? (
+            <Center py="xl"><Loader size="sm" /></Center>
+          ) : transactions.length === 0 ? (
+            <Center py="xl"><Text size="sm" c="dimmed">No payment records yet</Text></Center>
+          ) : (
+            <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Invoice</Table.Th>
+                  <Table.Th>Date</Table.Th>
+                  <Table.Th>Amount</Table.Th>
+                  <Table.Th>Mode</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>{txnRows}</Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
+        {txnMeta.totalPages > 1 && (
+          <Group justify="space-between" align="center" px="md" py="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+            <Text size="sm" c="dimmed">
+              Showing page {txnPage} of {txnMeta.totalPages}
+            </Text>
+            <Pagination total={txnMeta.totalPages} value={txnPage} onChange={setTxnPage} size="sm" />
+          </Group>
         )}
-      </div>
+      </Paper>
 
-      {/* Subscribe / Change plan modal */}
       {showModal && (
         <SubscribePlanModal
           initialPlan={selectedPlan}
@@ -384,7 +383,6 @@ export default function BillingPage() {
         />
       )}
 
-      {/* Pause all confirm */}
       {pauseAllConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">

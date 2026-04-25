@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import { useDevice } from '../../context/DeviceContext';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { Table, Paper, ScrollArea, Center, Text } from '@mantine/core';
 
 const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
   const { getDeviceTransferHistory } = useDevice();
   const [transferHistory, setTransferHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Load transfer history when modal opens
   useEffect(() => {
     if (isOpen && device) {
       loadTransferHistory();
@@ -17,13 +17,11 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
 
   const loadTransferHistory = async () => {
     if (!device?.id) return;
-
     try {
       setLoadingHistory(true);
       const history = await getDeviceTransferHistory(device.id);
       setTransferHistory(history?.transfers || []);
     } catch (error) {
-      console.error('Failed to load transfer history:', error);
       setTransferHistory([]);
     } finally {
       setLoadingHistory(false);
@@ -32,21 +30,21 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return new Date(dateString).toLocaleString();
   };
 
-  if (!device) {
-    return null;
-  }
+  if (!device) return null;
+
+  const historyRows = transferHistory.map((transfer, index) => (
+    <Table.Tr key={index}>
+      <Table.Td><Text size="sm">{formatDate(transfer.transfer_date || transfer.assignment_date)}</Text></Table.Td>
+      <Table.Td><Text size="sm">{transfer.seller_name || transfer.from_client || 'N/A'}</Text></Table.Td>
+      <Table.Td><Text size="sm">{transfer.buyer_name || transfer.to_client || 'N/A'}</Text></Table.Td>
+    </Table.Tr>
+  ));
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Device Details"
-      size="lg"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title="Device Details" size="lg">
       <div className="space-y-6">
         {/* Device Information */}
         <div>
@@ -68,9 +66,7 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                       {device.model_number}
                     </span>
-                  ) : (
-                    'N/A'
-                  )}
+                  ) : 'N/A'}
                 </p>
               </div>
               <div>
@@ -84,9 +80,7 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
                       {device.client_name}
                     </span>
-                  ) : (
-                    'No client assigned'
-                  )}
+                  ) : 'No client assigned'}
                 </p>
               </div>
               <div>
@@ -101,46 +95,26 @@ const DeviceDetailsModal = ({ isOpen, onClose, device }) => {
         <div>
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Transfer History</h3>
           {loadingHistory ? (
-            <div className="flex justify-center py-8">
-              <LoadingSpinner size="md" />
-            </div>
-          ) : transferHistory.length === 0 ? (
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-sm text-gray-600">No transfer history available</p>
-            </div>
+            <div className="flex justify-center py-8"><LoadingSpinner size="md" /></div>
           ) : (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      From Client
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      To Client
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {transferHistory.map((transfer, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(transfer.transfer_date || transfer.assignment_date)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {transfer.seller_name || transfer.from_client || 'N/A'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {transfer.buyer_name || transfer.to_client || 'N/A'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+              <ScrollArea>
+                {transferHistory.length === 0 ? (
+                  <Center py="md"><Text size="sm" c="dimmed">No transfer history available</Text></Center>
+                ) : (
+                  <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Date</Table.Th>
+                        <Table.Th>From Client</Table.Th>
+                        <Table.Th>To Client</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>{historyRows}</Table.Tbody>
+                  </Table>
+                )}
+              </ScrollArea>
+            </Paper>
           )}
         </div>
 

@@ -43,6 +43,7 @@ import discountRoutes from './routes/discountRoutes.js';
 import topicConfigRoutes from './routes/topicConfigRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
 import featureFlagRoutes from './routes/featureFlagRoutes.js';
+import auditRoutes from './routes/auditRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -185,6 +186,7 @@ app.use('/api/topic-config', topicConfigRoutes);
 app.use('/api/inventory', inventoryRoutes);
 // Feature flags (admin toggle + client read)
 app.use('/api/feature-flags', featureFlagRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 // MQTT hooks — called by EMQX broker, no JWT auth
 app.use('/api', mqttAuthRoutes);

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { IconPlus, IconPencil, IconTrash, IconAlertTriangle, IconKey } from '@tabler/icons-react';
+import {
+  Table, Paper, ScrollArea, Pagination, Center, Loader, Text, Group, Badge, ActionIcon, Tooltip,
+} from '@mantine/core';
 import { useUser } from '../../context/UserContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { useAuth } from '../../context/AuthContext';
@@ -12,142 +15,59 @@ import ResetPasswordModal from '../../components/modals/ResetPasswordModal';
 
 const UserManagement = () => {
   const {
-    users,
-    userStats,
-    loading,
-    error,
-    pagination,
-    getAllUsers,
-    getUserStats,
-    updateUserStatus,
-    clearError
+    users, userStats, loading, error, pagination,
+    getAllUsers, getUserStats, updateUserStatus, clearError
   } = useUser();
 
   const {
-    canViewUser,
-    canCreateUser,
-    canEditUser,
-    canDeleteUser,
-    canResetPassword,
-    canAccessUserManagement
+    canViewUser, canCreateUser, canEditUser, canDeleteUser,
+    canResetPassword, canAccessUserManagement
   } = useUserPermissions();
 
   const { user: currentUser } = useAuth();
 
-  // Local state for filters and search
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [searchTerm, setSearchTerm]   = useState('');
+  const [roleFilter, setRoleFilter]   = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAddModal, setShowAddModal]                   = useState(false);
+  const [showEditModal, setShowEditModal]                 = useState(false);
+  const [showDeleteModal, setShowDeleteModal]             = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Ref to prevent multiple concurrent API calls
   const isLoadingUsers = useRef(false);
-
-  // Memoize the access check to prevent unnecessary re-renders
   const hasAccess = canAccessUserManagement();
 
-  // Load users with current filters - memoized to prevent recreation
   const loadUsers = useCallback(async () => {
-    // Prevent multiple concurrent calls
-    if (isLoadingUsers.current) {
-      return;
-    }
-
+    if (isLoadingUsers.current) return;
     try {
       isLoadingUsers.current = true;
-
-      const options = {
-        page: currentPage,
-        limit: 10,
-        search: searchTerm,
-        sortBy: 'created_at',
-        sortOrder: 'desc'
-      };
-
-      await getAllUsers(options);
+      await getAllUsers({
+        page: currentPage, limit: 10,
+        search: searchTerm, sortBy: 'created_at', sortOrder: 'desc',
+      });
     } catch (err) {
-      console.error('🏭 UserManagement: Failed to load users:', err);
+      console.error('UserManagement: Failed to load users:', err);
     } finally {
       isLoadingUsers.current = false;
     }
   }, [currentPage, searchTerm, roleFilter, statusFilter, getAllUsers]);
 
-  // Load users on component mount and when filters change
-  useEffect(() => {
-    if (hasAccess) {
-      loadUsers();
-    }
-  }, [loadUsers, hasAccess]);
+  useEffect(() => { if (hasAccess) loadUsers(); }, [loadUsers, hasAccess]);
+  useEffect(() => { if (hasAccess) getUserStats(); }, [hasAccess]); // eslint-disable-line
 
-  // Load user stats only once on component mount
-  useEffect(() => {
-    if (hasAccess) {
-      getUserStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAccess]);
-
-  // Handle search with debouncing
-  const handleSearch = (value) => {
-    setSearchTerm(value);
-    setCurrentPage(1); // Reset to first page
-  };
-
-  // Handle filter changes
-  const handleRoleFilter = (value) => {
-    setRoleFilter(value);
-    setCurrentPage(1);
-  };
-
-  const handleStatusFilter = (value) => {
-    setStatusFilter(value);
-    setCurrentPage(1);
-  };
-
-  // Handle user actions
-  const handleCreateUser = () => {
-    if (canCreateUser) {
-      setShowAddModal(true);
-    }
-  };
-
-  const handleEditUser = (user) => {
-    if (canEditUser) {
-      setSelectedUser(user);
-      setShowEditModal(true);
-    }
-  };
-
-  const handleDeleteUser = (user) => {
-    if (canDeleteUser && user.user_id !== currentUser.user_id) {
-      setSelectedUser(user);
-      setShowDeleteModal(true);
-    }
-  };
-
-  const handleResetPassword = (user) => {
-    if (canResetPassword) {
-      setSelectedUser(user);
-      setShowResetPasswordModal(true);
-    }
-  };
+  const handleSearch       = (v) => { setSearchTerm(v); setCurrentPage(1); };
+  const handleRoleFilter   = (v) => { setRoleFilter(v); setCurrentPage(1); };
+  const handleStatusFilter = (v) => { setStatusFilter(v); setCurrentPage(1); };
 
   const handleToggleUserStatus = async (user) => {
     if (canEditUser && user.user_id !== currentUser.user_id) {
-      try {
-        await updateUserStatus(user.user_id, !user.is_active);
-      } catch (err) {
-        console.error('Failed to update user status:', err);
-      }
+      try { await updateUserStatus(user.user_id, !user.is_active); }
+      catch (err) { console.error('Failed to update user status:', err); }
     }
   };
 
-  // Permission check for entire page access
   if (!hasAccess) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -160,13 +80,81 @@ const UserManagement = () => {
     );
   }
 
-  if (loading && users.length === 0) {
-    return <LoadingSpinner />;
-  }
+  if (loading && users.length === 0) return <LoadingSpinner />;
+
+  const rows = users.map((user) => (
+    <Table.Tr key={user.user_id}>
+      <Table.Td>
+        <Text size="sm" fw={500}>
+          {user.first_name} {user.last_name}
+          {user.user_id === currentUser.user_id && (
+            <Text component="span" size="xs" c="blue" ml={6}>(You)</Text>
+          )}
+        </Text>
+        <Text size="sm" c="dimmed">{user.email}</Text>
+        <Text size="xs" c="dimmed">@{user.user_name}</Text>
+      </Table.Td>
+      <Table.Td>
+        <Badge color="blue" variant="light" size="sm">{user.role_name || 'Unknown'}</Badge>
+      </Table.Td>
+      <Table.Td>
+        {user.client_name
+          ? <Badge color="violet" variant="light" size="sm">{user.client_name}</Badge>
+          : <Text size="xs" c="dimmed">No Client</Text>}
+      </Table.Td>
+      <Table.Td>
+        <Badge
+          color={user.is_active ? 'green' : 'red'}
+          variant="light"
+          size="sm"
+          style={{ cursor: (canEditUser && user.user_id !== currentUser.user_id) ? 'pointer' : 'default' }}
+          onClick={() => handleToggleUserStatus(user)}
+        >
+          {user.is_active ? 'Active' : 'Inactive'}
+        </Badge>
+      </Table.Td>
+      <Table.Td>
+        <Text size="sm" c="dimmed">
+          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+        </Text>
+      </Table.Td>
+      <Table.Td>
+        <Group gap={4}>
+          {canEditUser && (
+            <Tooltip label="Edit User" withArrow>
+              <ActionIcon variant="subtle" color="indigo" size="sm"
+                onClick={() => { setSelectedUser(user); setShowEditModal(true); }}>
+                <IconPencil size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {canResetPassword && (
+            <Tooltip label="Reset Password" withArrow>
+              <ActionIcon variant="subtle" color="green" size="sm"
+                onClick={() => { setSelectedUser(user); setShowResetPasswordModal(true); }}>
+                <IconKey size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {canDeleteUser && user.user_id !== currentUser?.user_id && (
+            <Tooltip label="Delete User" withArrow>
+              <ActionIcon variant="subtle" color="red" size="sm"
+                onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }}>
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {!canEditUser && !canDeleteUser && !canResetPassword && (
+            <Text size="xs" c="dimmed">View only</Text>
+          )}
+        </Group>
+      </Table.Td>
+    </Table.Tr>
+  ));
 
   return (
     <div className="space-y-6">
-      {/* Header with Add Button */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
@@ -174,7 +162,7 @@ const UserManagement = () => {
         </div>
         {canCreateUser && (
           <button
-            onClick={handleCreateUser}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             <IconPlus className="w-5 h-5 mr-2" />
@@ -183,7 +171,7 @@ const UserManagement = () => {
         )}
       </div>
 
-      {/* Error Message */}
+      {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
@@ -191,18 +179,13 @@ const UserManagement = () => {
             <div>
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <p className="text-sm text-red-700 mt-1">{error}</p>
-              <button
-                onClick={clearError}
-                className="text-sm text-red-600 hover:text-red-500 underline mt-2"
-              >
-                Dismiss
-              </button>
+              <button onClick={clearError} className="text-sm text-red-600 hover:text-red-500 underline mt-2">Dismiss</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Search and Filter */}
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
           <input
@@ -237,207 +220,65 @@ const UserManagement = () => {
         />
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden  overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                User
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Client
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Login
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {users.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                  {loading ? 'Loading users...' : 'No users found'}
-                </td>
-              </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.user_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {user.first_name} {user.last_name}
-                        {user.user_id === currentUser.user_id && (
-                          <span className="ml-2 text-xs text-blue-600">(You)</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
-                      <div className="text-xs text-gray-400">@{user.user_name}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {user.role_name || 'Unknown'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {user.client_name ? (
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {user.client_name}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">No Client</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => handleToggleUserStatus(user)}
-                      disabled={!canEditUser || user.user_id === currentUser.user_id}
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer ${
-                        user.is_active
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                          : 'bg-red-100 text-red-800 hover:bg-red-200'
-                      } ${(!canEditUser || user.user_id === currentUser.user_id) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      {canEditUser && (
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
-                          title="Edit User"
-                        >
-                          <IconPencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canResetPassword && (
-                        <button
-                          onClick={() => handleResetPassword(user)}
-                          className="text-green-600 hover:text-green-900 cursor-pointer"
-                          title="Reset Password"
-                        >
-                          <IconKey className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canDeleteUser && user.user_id !== currentUser?.user_id && (
-                        <button
-                          onClick={() => handleDeleteUser(user)}
-                          className="text-red-600 hover:text-red-900 cursor-pointer"
-                          title="Delete User"
-                        >
-                          <IconTrash className="w-4 h-4" />
-                        </button>
-                      )}
-                      {!canEditUser && !canDeleteUser && !canResetPassword && (
-                        <span className="text-gray-400 text-xs">View only</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Table */}
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <ScrollArea>
+          {loading ? (
+            <Center py="xl"><Loader size="sm" /></Center>
+          ) : users.length === 0 ? (
+            <Center py="xl"><Text size="sm" c="dimmed">No users found</Text></Center>
+          ) : (
+            <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>User</Table.Th>
+                  <Table.Th>Role</Table.Th>
+                  <Table.Th>Client</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Created</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>{rows}</Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
+      </Paper>
 
       {/* Pagination */}
       {pagination && pagination.total > 0 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Showing{' '}
-            <span className="font-medium">
-              {(pagination.page - 1) * pagination.limit + 1}
-            </span>{' '}
-            to{' '}
-            <span className="font-medium">
-              {Math.min(pagination.page * pagination.limit, pagination.total)}
-            </span>{' '}
-            of <span className="font-medium">{pagination.total}</span> results
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setCurrentPage(pagination.page - 1)}
-              disabled={!pagination.hasPrev || loading}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-2 text-sm text-gray-700">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(pagination.page + 1)}
-              disabled={!pagination.hasNext || loading}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Group justify="space-between" align="center">
+          <Text size="sm" c="dimmed">
+            Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
+          </Text>
+          <Pagination
+            total={pagination.totalPages}
+            value={currentPage}
+            onChange={setCurrentPage}
+            size="sm"
+          />
+        </Group>
       )}
 
       {/* Modals */}
-      <AddUserModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={() => {
-          // Refresh users list after successful creation
-          loadUsers();
-        }}
-      />
-
+      <AddUserModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSuccess={loadUsers} />
       <EditUserModal
         isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setSelectedUser(null);
-        }}
+        onClose={() => { setShowEditModal(false); setSelectedUser(null); }}
         user={selectedUser}
-        onSuccess={() => {
-          // Refresh users list after successful update
-          loadUsers();
-        }}
+        onSuccess={loadUsers}
       />
-
       <ResetPasswordModal
         isOpen={showResetPasswordModal}
-        onClose={() => {
-          setShowResetPasswordModal(false);
-          setSelectedUser(null);
-        }}
+        onClose={() => { setShowResetPasswordModal(false); setSelectedUser(null); }}
         user={selectedUser}
-        onSuccess={() => {
-          // Optionally refresh users list after password reset
-          loadUsers();
-        }}
+        onSuccess={loadUsers}
       />
-
       <DeleteUserModal
         isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setSelectedUser(null);
-        }}
+        onClose={() => { setShowDeleteModal(false); setSelectedUser(null); }}
         user={selectedUser}
-        onSuccess={() => {
-          // Refresh users list after successful deletion
-          loadUsers();
-        }}
+        onSuccess={loadUsers}
       />
     </div>
   );

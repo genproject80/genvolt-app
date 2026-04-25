@@ -21,6 +21,7 @@ import {
   IconServer,
   IconArchive,
   IconFlag,
+  IconClipboardData,
 } from '@tabler/icons-react';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
@@ -227,6 +228,10 @@ const Sidebar = ({ onNavigate }) => {
 
                 {isAdmin && (
                   <SubNavItem to="/admin/feature-flags" icon={IconFlag} label="Feature Flags" onClick={onNavigate} />
+                )}
+
+                {isAdmin && (
+                  <SubNavItem to="/admin/audit-logs" icon={IconClipboardData} label="Audit Logs" onClick={onNavigate} />
                 )}
 
                 {canManageDeviceTestingTables && (

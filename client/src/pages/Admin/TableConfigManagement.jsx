@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { IconPlus, IconPencil, IconTrash, IconAlertTriangle } from '@tabler/icons-react';
 import {
-  IconPlus,
-  IconPencil,
-  IconTrash,
-  IconAlertTriangle,
-} from '@tabler/icons-react';
+  Table, Paper, ScrollArea, Center, Loader, Text, Badge, Group, ActionIcon, Tooltip, Switch, Code,
+} from '@mantine/core';
 import { usePermissions } from '../../hooks/usePermissions';
 import { tableConfigService } from '../../services/tableConfigService';
 import TableConfigModal from '../../components/modals/TableConfigModal';
@@ -13,13 +11,13 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const TableConfigManagement = () => {
   const { canManageDeviceTestingTables, loading: permLoading } = usePermissions();
-  const [configs, setConfigs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [configs, setConfigs]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingConfig, setEditingConfig] = useState(null);
-  const [deletingConfig, setDeletingConfig] = useState(null);
-  const [togglingId, setTogglingId] = useState(null);
+  const [editingConfig, setEditingConfig]     = useState(null);
+  const [deletingConfig, setDeletingConfig]   = useState(null);
+  const [togglingId, setTogglingId]           = useState(null);
 
   const loadConfigs = async () => {
     setLoading(true);
@@ -34,25 +32,16 @@ const TableConfigManagement = () => {
     }
   };
 
-  useEffect(() => {
-    if (canManageDeviceTestingTables) loadConfigs();
-  }, [canManageDeviceTestingTables]);
+  useEffect(() => { if (canManageDeviceTestingTables) loadConfigs(); }, [canManageDeviceTestingTables]);
 
   const handleToggle = async (config) => {
     setTogglingId(config.config_id);
-    try {
-      await tableConfigService.toggleConfig(config.config_id);
-      await loadConfigs();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to toggle configuration');
-    } finally {
-      setTogglingId(null);
-    }
+    try { await tableConfigService.toggleConfig(config.config_id); await loadConfigs(); }
+    catch (err) { setError(err.response?.data?.message || 'Failed to toggle configuration'); }
+    finally { setTogglingId(null); }
   };
 
-  if (permLoading) {
-    return <div className="flex items-center justify-center min-h-64"><LoadingSpinner /></div>;
-  }
+  if (permLoading) return <div className="flex items-center justify-center min-h-64"><LoadingSpinner /></div>;
 
   if (!canManageDeviceTestingTables) {
     return (
@@ -64,14 +53,49 @@ const TableConfigManagement = () => {
     );
   }
 
+  const rows = configs.map((cfg) => (
+    <Table.Tr key={cfg.config_id}>
+      <Table.Td><Text size="sm" fw={500}>{cfg.display_name}</Text></Table.Td>
+      <Table.Td><Code fz="xs">{cfg.table_key}</Code></Table.Td>
+      <Table.Td><Text size="sm" c="dimmed">{cfg.table_name}</Text></Table.Td>
+      <Table.Td>
+        <Text size="sm" c="dimmed">
+          {Array.isArray(cfg.column_config) ? cfg.column_config.length : '—'}
+        </Text>
+      </Table.Td>
+      <Table.Td><Text size="sm" c="dimmed">{cfg.sort_order}</Text></Table.Td>
+      <Table.Td>
+        <Switch
+          checked={cfg.is_active}
+          onChange={() => handleToggle(cfg)}
+          disabled={togglingId === cfg.config_id}
+          size="sm"
+        />
+      </Table.Td>
+      <Table.Td>
+        <Group gap={4} justify="flex-end">
+          <Tooltip label="Edit" withArrow>
+            <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => setEditingConfig(cfg)}>
+              <IconPencil size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Delete" withArrow>
+            <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeletingConfig(cfg)}>
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Table.Td>
+    </Table.Tr>
+  ));
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Table Configuration</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage which database tables appear in Device Testing. Changes take effect immediately — no deployment needed.
+            Manage which database tables appear in Device Testing. Changes take effect immediately.
           </p>
         </div>
         <button
@@ -87,104 +111,41 @@ const TableConfigManagement = () => {
         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
-        ) : configs.length === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-500">
-            No table configurations yet. Click "Add New Table" to get started.
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Display Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Table Key</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">DB Table</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Columns</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Order</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {configs.map((cfg) => (
-                <tr key={cfg.config_id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{cfg.display_name}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{cfg.table_key}</code>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{cfg.table_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {Array.isArray(cfg.column_config) ? cfg.column_config.length : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{cfg.sort_order}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleToggle(cfg)}
-                      disabled={togglingId === cfg.config_id}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                        cfg.is_active ? 'bg-primary-600' : 'bg-gray-200'
-                      } ${togglingId === cfg.config_id ? 'opacity-50' : ''}`}
-                      title={cfg.is_active ? 'Active – click to disable' : 'Inactive – click to enable'}
-                    >
-                      <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                          cfg.is_active ? 'translate-x-4' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setEditingConfig(cfg)}
-                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
-                        title="Edit"
-                      >
-                        <IconPencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeletingConfig(cfg)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <IconTrash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+        <ScrollArea>
+          {loading ? (
+            <Center py="xl"><Loader size="sm" /></Center>
+          ) : configs.length === 0 ? (
+            <Center py="xl">
+              <Text size="sm" c="dimmed">No table configurations yet. Click "Add New Table" to get started.</Text>
+            </Center>
+          ) : (
+            <Table striped highlightOnHover verticalSpacing="sm" fz="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Display Name</Table.Th>
+                  <Table.Th>Table Key</Table.Th>
+                  <Table.Th>DB Table</Table.Th>
+                  <Table.Th>Columns</Table.Th>
+                  <Table.Th>Order</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th ta="right">Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>{rows}</Table.Tbody>
+            </Table>
+          )}
+        </ScrollArea>
+      </Paper>
 
-      {/* Modals */}
       {showCreateModal && (
-        <TableConfigModal
-          mode="create"
-          onClose={() => setShowCreateModal(false)}
-          onSaved={loadConfigs}
-        />
+        <TableConfigModal mode="create" onClose={() => setShowCreateModal(false)} onSaved={loadConfigs} />
       )}
-
       {editingConfig && (
-        <TableConfigModal
-          mode="edit"
-          config={editingConfig}
-          onClose={() => setEditingConfig(null)}
-          onSaved={() => { setEditingConfig(null); loadConfigs(); }}
-        />
+        <TableConfigModal mode="edit" config={editingConfig} onClose={() => setEditingConfig(null)} onSaved={() => { setEditingConfig(null); loadConfigs(); }} />
       )}
-
       {deletingConfig && (
-        <DeleteTableConfigModal
-          config={deletingConfig}
-          onClose={() => setDeletingConfig(null)}
-          onDeleted={() => { setDeletingConfig(null); loadConfigs(); }}
-        />
+        <DeleteTableConfigModal config={deletingConfig} onClose={() => setDeletingConfig(null)} onDeleted={() => { setDeletingConfig(null); loadConfigs(); }} />
       )}
     </div>
   );
